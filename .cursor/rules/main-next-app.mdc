@@ -1,0 +1,49 @@
+---
+description: Next 16 + React 19 App Router：目录分层与渲染策略（单机 src/ 仓库）
+globs: src/**/*.{ts,tsx}
+alwaysApply: false
+---
+
+# Next 应用结构与分层
+
+本仓库为 **Next.js 16** + **React 19**、**App Router**，采用 **`src/`**：**`src/app`** 负责路由与可选 **`src/app/api` HTTP 端点**，其余模块与 **`src/app` 同级**，路径别名 **`@/*` → `src/*`**。
+
+## Next 16 / App Router：渲染与缓存（相对优先级）
+
+| 优先级 | 概念 | 说明 |
+|--------|------|------|
+| **高** | **Server Components 默认** | 无 `"use client"` 的 `page`/`layout` 尽量保持服务端组件：敏感逻辑、大数据拼装、纯展示放服务端，减少下发 JS。 |
+| **高** | **CSR 边界** | 仅交互、浏览器 API、第三方仅客户端 SDK 等必须 **`"use client"`**；客户端子树尽量**小**、靠下，避免整页客户端化。 |
+| **高** | **Route Handlers（`src/app/api`）** | HTTP 路由保持职责单一；重业务、跨资源事务、复杂数据处理优先集中在**专用服务端模块**或外部服务，避免在单个路由里堆砌编排逻辑。 |
+| **高** | **`loading.tsx` / `error.tsx`** | 路由级加载与错误 UI 优于页面内零散 spin；可与 Suspense 配合。 |
+| **中** | **动态 vs 静态** | `export const dynamic`、`fetch` 缓存策略按路由明确意图；需会话/鉴权的路由通常 **dynamic**。 |
+| **低** | **开发构建** | 以 `next dev` 默认行为为准。 |
+
+## React 19（客户端区域）
+
+在 **`"use client"`** 组件中，对非紧急 UI 更新优先 **`startTransition`**，避免阻塞主交互。
+
+## `src/app/*`：路由与 Server Actions
+
+| 路径 | 职责 |
+|------|------|
+| **`src/app/`** | App Router：`page`、`layout`、`loading`、`error` 等。 |
+| **`src/app/api/`** | Route Handlers（`/api/*` HTTP）。 |
+| **`src/app/actions/`** | Server Actions（`"use server"`；客户端按文件路径引用，如 `@/app/actions/...`）。 |
+
+## `src/*`（与 `app` 同级）：共享模块（按需演进）
+
+| 路径 | 职责 |
+|------|------|
+| **`src/proxy.ts`** | 若使用 Next 的请求拦截入口：**字面量导出 `config.matcher`**；具体逻辑宜拆到 **`src/proxy/`** 或同级模块，便于单测。未使用时可不添加。 |
+| **`src/components/`** | 通用 UI；需交互的组件标 **`"use client"`**。`@/components/...`。 |
+| **`src/hooks/`** | 仅浏览器或依赖浏览器 API 的 hook。`@/hooks/...`。 |
+| **`src/utils/`** | 工具函数；注意与 **`src/lib`** 的边界：**勿**形成把服务端依赖意外打进客户端 bundle 的宽泛 barrel。 |
+| **`src/types/`** | 共享类型与必要的 `*.d.ts`。**`typeRoots`** 可包含 `./src/types`（若在 `tsconfig` 中配置）。 |
+| **`src/lib/`** | 服务端能力（会话、缓存客户端、仅限服务端的 SDK 封装等）。**客户端禁止** `import … from "@/lib"` 的粗粒度 barrel 若会导致打入仅服务端模块；按需细路径引用或拆分 `lib/client` 与 `lib/server`。 |
+| **`src/config/`** | 环境变量、运行时常量等与运行环境相关的配置；客户端代码只引用对其安全的子集路径。 |
+
+## 协作约定
+
+- **聚合导出**：可为 **`src/components/index.ts`、`src/hooks/index.ts`** 等维护按需导出；**`src/app/actions/*`** 按 **`"use server"` 文件**直接引用更清晰。
+- **服务端独占符号**：会话、密钥、仅供 Route Handler / Server Action 使用的封装放在 **`src/lib` 或服务端目录**，并避免从未标记 `"use client"` 的树上方向下泄漏。
