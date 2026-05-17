@@ -58,12 +58,14 @@ model Conversation {
 
   /// 列表标题，可由首条消息或手动更新
   title     String    @default("新对话")
+  /// 侧边栏置顶（置顶项排在列表最前）
+  pinned    Boolean   @default(false)
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
 
   messages Message[]
 
-  @@index([userId, updatedAt])
+  @@index([userId, pinned, updatedAt])
 }
 
 /// 单轮消息（同属一个 Conversation）

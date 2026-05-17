@@ -5,17 +5,19 @@ export type ConversationListItem = {
   title: string;
   preview: string;
   updatedAt: string;
+  pinned: boolean;
 };
 
-/** 侧边栏对话列表（仅当前登录用户名下的会话，与 GET /api/conversations 一致） */
+/** 侧边栏对话列表（仅当前登录用户名下的会话，与 GET /api/conversations 一致）；置顶靠前，其余按更新时间 */
 export async function getSidebarConversations(userId: string): Promise<ConversationListItem[]> {
   const conversations = await prisma.conversation.findMany({
     where: { userId },
-    orderBy: { updatedAt: "desc" },
+    orderBy: [{ pinned: "desc" }, { updatedAt: "desc" }],
     take: 100,
     select: {
       id: true,
       title: true,
+      pinned: true,
       updatedAt: true,
       messages: {
         orderBy: { createdAt: "desc" },
@@ -33,6 +35,7 @@ export async function getSidebarConversations(userId: string): Promise<Conversat
       title: c.title || "新对话",
       preview: preview || "",
       updatedAt: c.updatedAt.toISOString(),
+      pinned: c.pinned,
     };
   });
 }

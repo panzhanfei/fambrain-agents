@@ -2,13 +2,27 @@
 
 import type { ConversationListItem } from "@/lib/get-sidebar-conversations";
 import Link from "next/link";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 
 type ChatMessage = {
   id: string;
   role: "user" | "assistant";
   content: string;
 };
+
+type PatchConversationOk = {
+  id: string;
+  title: string;
+  pinned: boolean;
+  updatedAt: string;
+};
+
+function sortConversationsForSidebar(items: ConversationListItem[]): ConversationListItem[] {
+  return [...items].sort((a, b) => {
+    if (a.pinned !== b.pinned) return a.pinned ? -1 : 1;
+    return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
+  });
+}
 
 const SUGGESTIONS = [
   "AI Agent 的核心工作原理是什么？",
@@ -68,6 +82,37 @@ function IconMic({ className }: { className?: string }) {
   );
 }
 
+/** 侧边栏置顶（星标） */
+function IconPin({ active, className }: { active?: boolean; className?: string }) {
+  return (
+    <svg
+      className={className}
+      width={17}
+      height={17}
+      viewBox="0 0 24 24"
+      fill={active ? "currentColor" : "none"}
+      stroke="currentColor"
+      strokeWidth="1.75"
+      strokeLinejoin="round"
+      aria-hidden
+    >
+      <path d="M12 2.7 14.02 9.06l7.06.61-5.41 4.62 1.71 6.93L12 18.56l-6.39 4.67 1.71-6.93-5.41-4.61 7.06-.61L12 2.7z" />
+    </svg>
+  );
+}
+
+function IconEditTitle({ className }: { className?: string }) {
+  return (
+    <svg className={className} width={17} height={17} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="m15.2 6.9 3.9-4L21 3l-.9 2-3.9 4M13 10l8-9-5-5-8 9v5h5Z"
+      />
+    </svg>
+  );
+}
+
 async function fetchJson<T>(url: string): Promise<{ ok: true; data: T } | { ok: false; error: string }> {
   try {
     const res = await fetch(url);
@@ -85,6 +130,92 @@ async function fetchJson<T>(url: string): Promise<{ ok: true; data: T } | { ok: 
     return { ok: true, data };
   } catch {
     return { ok: false, error: "网络错误" };
+  }
+}
+
+async function consumeSse(
+  stream: ReadableStream<Uint8Array>,
+  handle: (event: string, payload: unknown) => void,
+): Promise<void> {
+  const reader = stream.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+
+      while (true) {
+        const idx = buffer.indexOf("\n\n");
+        if (idx < 0) break;
+        const raw = buffer.slice(0, idx);
+        buffer = buffer.slice(idx + 2);
+
+        let eventName = "message";
+        let dataPayload = "";
+
+        const lines = raw.split("\n").filter(Boolean);
+        for (const ln of lines) {
+          if (ln.startsWith("event:")) eventName = ln.slice("event:".length).trim();
+          else if (ln.startsWith("data:"))
+            dataPayload = ln.slice("data:".length).trim();
+        }
+
+        if (dataPayload) {
+          let parsed: unknown = dataPayload;
+          try {
+            parsed = JSON.parse(dataPayload);
+          } catch {
+            //
+          }
+          handle(eventName, parsed);
+        }
+      }
+    }
+  } finally {
+    reader.releaseLock();
+  }
+}
+
+async function mutateJson<B, R>(
+  url: string,
+  method: "POST" | "PATCH",
+  body: B,
+): Promise<{ ok: true; data: R } | { ok: false; error: string; status: number }> {
+  try {
+    const res = await fetch(url, {
+      method,
+      headers: { "Content-Type": "application/json" },
+      credentials: "same-origin",
+      body: JSON.stringify(body),
+    });
+
+    let parsed: unknown = null;
+    try {
+      parsed = await res.json();
+    } catch {
+      //
+    }
+
+    let msg = `${res.status}`;
+    if (
+      parsed &&
+      typeof parsed === "object" &&
+      "error" in parsed &&
+      typeof (parsed as { error?: unknown }).error === "string"
+    ) {
+      msg = (parsed as { error: string }).error;
+    }
+
+    if (!res.ok) {
+      return { ok: false, error: msg, status: res.status };
+    }
+
+    return { ok: true, data: parsed as R };
+  } catch {
+    return { ok: false, error: "网络错误", status: 0 };
   }
 }
 
@@ -116,6 +247,17 @@ export function ChatShell({ initialConversations, viewer }: ChatShellProps) {
   const [messagesRetryTick, setMessagesRetryTick] = useState(0);
 
   const [draft, setDraft] = useState("");
+  /** 最近一次发送出错（文案已入库但助手失败时为模型错误提示） */
+  const [sendError, setSendError] = useState<string | null>(null);
+  const [sendBusy, setSendBusy] = useState(false);
+
+  const pendingUserTempIdRef = useRef<string | null>(null);
+  const messagesScrollRef = useRef<HTMLDivElement | null>(null);
+  const [thinkingPanelVisible, setThinkingPanelVisible] = useState(false);
+  const [streamThinking, setStreamThinking] = useState("");
+  const [streamAnswerPreview, setStreamAnswerPreview] = useState("");
+  const [editingSidebarId, setEditingSidebarId] = useState<string | null>(null);
+  const [editSidebarTitleDraft, setEditSidebarTitleDraft] = useState("");
 
   const loadConversations = useCallback(async () => {
     await Promise.resolve();
@@ -129,6 +271,64 @@ export function ChatShell({ initialConversations, viewer }: ChatShellProps) {
       setListError(result.error);
       setConversations([]);
     }
+  }, []);
+
+  const patchConversation = useCallback(
+    async (id: string, body: { title?: string; pinned?: boolean }): Promise<boolean> => {
+      const result = await mutateJson<typeof body, unknown>(`/api/conversations/${id}`, "PATCH", body);
+      if (!result.ok) {
+        setListError(result.error);
+        return false;
+      }
+      await loadConversations();
+      return true;
+    },
+    [loadConversations],
+  );
+
+  /** 置顶：先改本地顺序与状态，失败再回滚 */
+  const togglePinOptimistic = useCallback(async (id: string) => {
+    let snapshot: ConversationListItem[] = [];
+    let nextPinned = false;
+    let found = false;
+
+    setListError(null);
+
+    setConversations((prev) => {
+      const t = prev.find((c) => c.id === id);
+      if (!t) return prev;
+      found = true;
+      snapshot = prev.map((c) => ({ ...c }));
+      nextPinned = !t.pinned;
+      return sortConversationsForSidebar(
+        prev.map((c) => (c.id === id ? { ...c, pinned: nextPinned } : c)),
+      );
+    });
+
+    if (!found) return;
+
+    const result = await mutateJson<{ pinned: boolean }, PatchConversationOk>(
+      `/api/conversations/${id}`,
+      "PATCH",
+      { pinned: nextPinned },
+    );
+
+    if (!result.ok) {
+      setConversations(snapshot);
+      setListError(result.error);
+      return;
+    }
+
+    const data = result.data;
+    setConversations((cur) =>
+      sortConversationsForSidebar(
+        cur.map((c) =>
+          c.id === id
+            ? { ...c, title: data.title, pinned: data.pinned, updatedAt: data.updatedAt }
+            : c,
+        ),
+      ),
+    );
   }, []);
 
   /** 首轮有数据且无「新会话」偏好时，默认打开最近一条会话 */
@@ -159,6 +359,10 @@ export function ChatShell({ initialConversations, viewer }: ChatShellProps) {
         return;
       }
 
+      if (sendBusy) {
+        return;
+      }
+
       setMessagesLoading(true);
       setMessagesError(null);
 
@@ -180,7 +384,31 @@ export function ChatShell({ initialConversations, viewer }: ChatShellProps) {
     return () => {
       cancelled = true;
     };
-  }, [activeConversationId, messagesRetryTick]);
+  }, [activeConversationId, messagesRetryTick, sendBusy]);
+
+  /** 生成中跟随最新一行：外层列表滚到底，避免正文/思考长高后仍卡在旧位置 */
+  useLayoutEffect(() => {
+    if (messagesLoading) return;
+    const el = messagesScrollRef.current;
+    if (!el) return;
+    const streaming =
+      sendBusy &&
+      (thinkingPanelVisible ||
+        Boolean(streamThinking.trim()) ||
+        Boolean(streamAnswerPreview.trim()));
+    if (!streaming && messages.length === 0) return;
+
+    requestAnimationFrame(() => {
+      el.scrollTop = el.scrollHeight;
+    });
+  }, [
+    messages,
+    streamThinking,
+    streamAnswerPreview,
+    sendBusy,
+    thinkingPanelVisible,
+    messagesLoading,
+  ]);
 
   const activeConversation = conversations.find((c) => c.id === activeConversationId) ?? null;
 
@@ -189,28 +417,163 @@ export function ChatShell({ initialConversations, viewer }: ChatShellProps) {
     setActiveConversationId(null);
     setMessages([]);
     setMessagesError(null);
+    setSendError(null);
+    setStreamThinking("");
+    setStreamAnswerPreview("");
+    setThinkingPanelVisible(false);
+    pendingUserTempIdRef.current = null;
+    setEditingSidebarId(null);
+    setEditSidebarTitleDraft("");
     setDraft("");
   }, []);
 
-  const sendMessage = useCallback(() => {
+  const sendMessage = useCallback(async () => {
     const trimmed = draft.trim();
-    if (!trimmed) return;
+    if (!trimmed || sendBusy) return;
 
-    const userMsg: ChatMessage = {
-      id: crypto.randomUUID(),
-      role: "user",
-      content: trimmed,
-    };
+    setSendBusy(true);
+    setSendError(null);
+    setStreamThinking("");
+    setStreamAnswerPreview("");
+    setThinkingPanelVisible(false);
 
-    setMessages((prev) => [...prev, userMsg]);
-    setDraft("");
-  }, [draft]);
+    const tempUserId = `temp:${crypto.randomUUID()}`;
+    pendingUserTempIdRef.current = tempUserId;
+
+    try {
+      let convId = activeConversationId;
+
+      if (!convId) {
+        const created = await mutateJson<Record<string, unknown>, { id: string }>(
+          "/api/conversations",
+          "POST",
+          {},
+        );
+        if (!created.ok) {
+          setSendError(created.error);
+          pendingUserTempIdRef.current = null;
+          return;
+        }
+        convId = created.data.id;
+      }
+
+      setDraft("");
+      setPreferEmptySession(false);
+      setActiveConversationId(convId);
+
+      setMessages((prev) => [...prev, { id: tempUserId, role: "user", content: trimmed }]);
+
+      type MetaPayload = {
+        userMessage: ChatMessage;
+      };
+
+      const res = await fetch(`/api/conversations/${convId}/messages`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "same-origin",
+        body: JSON.stringify({ content: trimmed, stream: true }),
+      });
+
+      if (!res.ok) {
+        let msg = `${res.status}`;
+        try {
+          const raw = await res.json();
+          if (raw?.error && typeof raw.error === "string") msg = raw.error;
+        } catch {
+          //
+        }
+        setSendError(msg);
+        pendingUserTempIdRef.current = null;
+        setMessages((prev) => prev.filter((m) => m.id !== tempUserId));
+        await loadConversations();
+        setMessagesRetryTick((n) => n + 1);
+        return;
+      }
+
+      if (!res.body) {
+        setSendError("无法读取服务器流");
+        pendingUserTempIdRef.current = null;
+        setMessages((prev) => prev.filter((m) => m.id !== tempUserId));
+        await loadConversations();
+        setMessagesRetryTick((n) => n + 1);
+        return;
+      }
+
+      let streamFatal: string | null = null;
+
+      await consumeSse(res.body, (event, payload) => {
+        if (event === "meta" && payload && typeof payload === "object" && payload !== null) {
+          const p = payload as MetaPayload;
+          if (typeof p.userMessage?.id === "string") {
+            pendingUserTempIdRef.current = null;
+            const real = p.userMessage;
+            setMessages((prev) => prev.map((m) => (m.id === tempUserId ? real : m)));
+          }
+        }
+
+        if (event === "thinking" && payload && typeof payload === "object" && payload !== null) {
+          const t = (payload as { text?: string }).text;
+          if (typeof t === "string" && t.trim()) {
+            setThinkingPanelVisible(true);
+            setStreamThinking(t);
+          }
+        }
+
+        if (event === "assistant" && payload && typeof payload === "object" && payload !== null) {
+          const t = (payload as { text?: string }).text;
+          if (typeof t === "string") {
+            setThinkingPanelVisible(false);
+            setStreamThinking("");
+            setStreamAnswerPreview(t);
+          }
+        }
+
+        if (event === "done" && payload && typeof payload === "object" && payload !== null) {
+          pendingUserTempIdRef.current = null;
+          setThinkingPanelVisible(false);
+          setStreamThinking("");
+          setStreamAnswerPreview("");
+        }
+
+        if (event === "error" && payload && typeof payload === "object" && payload !== null) {
+          const e = (payload as { error?: string }).error;
+          streamFatal = typeof e === "string" ? e : "模型出错";
+        }
+      });
+
+      if (streamFatal) {
+        setSendError(streamFatal);
+      }
+
+      await loadConversations();
+      setMessagesRetryTick((n) => n + 1);
+    } catch {
+      setSendError("网络错误");
+      pendingUserTempIdRef.current = null;
+      setMessages((prev) => prev.filter((m) => m.id !== tempUserId));
+      await loadConversations();
+      setMessagesRetryTick((n) => n + 1);
+    } finally {
+      setSendBusy(false);
+      setThinkingPanelVisible(false);
+      setStreamThinking("");
+      setStreamAnswerPreview("");
+      pendingUserTempIdRef.current = null;
+    }
+  }, [activeConversationId, draft, loadConversations, sendBusy]);
 
   const applySuggestion = (text: string) => {
     setDraft(text);
+    setSendError(null);
   };
 
-  const showingEmptyLanding = activeConversationId == null && !messagesLoading && messages.length === 0;
+  const isFreshNewChatUi =
+    activeConversationId == null && !messagesLoading && messages.length === 0;
+
+  /** 新开对话且尚未选定会话时的欢迎区 */
+  const showingEmptyLanding = isFreshNewChatUi && !sendBusy;
+  /** 首条消息已发出、会话尚在创建或模型推理中 */
+  const sendingFirstOnNewChat = isFreshNewChatUi && sendBusy;
 
   return (
     <div className="flex h-dvh bg-[#f3f4f6] text-[#1f2937]">
@@ -250,25 +613,112 @@ export function ChatShell({ initialConversations, viewer }: ChatShellProps) {
           ) : (
             conversations.map((c) => {
               const selected = activeConversationId === c.id;
+              const editing = editingSidebarId === c.id;
               return (
-                <li key={c.id}>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setPreferEmptySession(false);
-                      setActiveConversationId(c.id);
-                    }}
-                    className={[
-                      "flex w-full flex-col rounded-xl px-3 py-2.5 text-left transition-colors",
-                      selected ? "bg-white shadow-sm ring-1 ring-black/[0.04]" : "hover:bg-black/[0.03]",
-                    ].join(" ")}
-                  >
-                    <span className="line-clamp-1 text-[14px] font-medium text-[#111827]">{c.title}</span>
-                    <span className="mt-0.5 line-clamp-1 text-[12px] text-[#9ca3af]">
-                      {c.preview || "暂无消息"}
-                      <span className="text-[11px] text-[#bdbdbd]"> · {formatListTime(c.updatedAt)}</span>
-                    </span>
-                  </button>
+                <li key={c.id} className="group relative">
+                  {editing ? (
+                    <form
+                      className="flex flex-col gap-2 rounded-xl border border-[#e5e7eb] bg-white px-2.5 py-2 shadow-sm"
+                      onSubmit={(e) => {
+                        e.preventDefault();
+                        const t = editSidebarTitleDraft.trim();
+                        if (!t) return;
+                        void (async () => {
+                          const ok = await patchConversation(c.id, { title: t });
+                          if (ok) setEditingSidebarId(null);
+                        })();
+                      }}
+                    >
+                      <input
+                        value={editSidebarTitleDraft}
+                        onChange={(e) => setEditSidebarTitleDraft(e.target.value)}
+                        className="w-full rounded-lg border border-[#e5e7eb] px-2 py-1.5 text-[13px] text-[#111827] outline-none focus:border-[#4f46e5]"
+                        autoFocus
+                        maxLength={512}
+                      />
+                      <div className="flex justify-end gap-2">
+                        <button
+                          type="button"
+                          className="rounded-lg px-2 py-1 text-[12px] text-[#6b7280] hover:bg-[#f3f4f6]"
+                          onClick={() => setEditingSidebarId(null)}
+                        >
+                          取消
+                        </button>
+                        <button
+                          type="submit"
+                          className="rounded-lg bg-[#4f46e5] px-2.5 py-1 text-[12px] font-medium text-white hover:bg-[#4338ca]"
+                        >
+                          保存
+                        </button>
+                      </div>
+                    </form>
+                  ) : (
+                    <div
+                      className={[
+                        "flex items-stretch gap-0.5 rounded-xl transition-colors",
+                        selected ? "bg-white shadow-sm ring-1 ring-black/[0.04]" : "hover:bg-black/[0.03]",
+                      ].join(" ")}
+                    >
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setEditingSidebarId(null);
+                          setPreferEmptySession(false);
+                          setActiveConversationId(c.id);
+                        }}
+                        className="min-w-0 flex-1 px-3 py-2.5 text-left"
+                      >
+                        <span className="flex items-center gap-1.5">
+                          {c.pinned ? (
+                            <IconPin
+                              active
+                              className="shrink-0 text-amber-500"
+                            />
+                          ) : null}
+                          <span className="line-clamp-1 text-[14px] font-medium text-[#111827]">{c.title}</span>
+                        </span>
+                        <span className="mt-0.5 block line-clamp-1 text-[12px] text-[#9ca3af]">
+                          {c.preview || "暂无消息"}
+                          <span className="text-[11px] text-[#bdbdbd]">
+                            {" "}
+                            · {formatListTime(c.updatedAt)}
+                          </span>
+                        </span>
+                      </button>
+                      <div className="flex shrink-0 flex-col justify-center gap-0.5 pr-1 opacity-100 sm:opacity-0 sm:group-hover:opacity-100">
+                        <button
+                          type="button"
+                          aria-label={c.pinned ? "取消置顶" : "置顶"}
+                          title={c.pinned ? "取消置顶" : "置顶"}
+                          onClick={(ev) => {
+                            ev.preventDefault();
+                            ev.stopPropagation();
+                            void togglePinOptimistic(c.id);
+                          }}
+                          className={[
+                            "rounded-lg p-1.5 hover:bg-black/[0.06]",
+                            c.pinned ? "text-amber-500" : "text-[#9ca3af] hover:text-amber-500",
+                          ].join(" ")}
+                        >
+                          <IconPin active={c.pinned} className="mx-auto" />
+                        </button>
+                        <button
+                          type="button"
+                          aria-label="修改标题"
+                          title="修改标题"
+                          onClick={(ev) => {
+                            ev.preventDefault();
+                            ev.stopPropagation();
+                            setEditingSidebarId(c.id);
+                            setEditSidebarTitleDraft(c.title);
+                          }}
+                          className="rounded-lg p-1.5 text-[#9ca3af] hover:bg-black/[0.06] hover:text-[#4f46e5]"
+                        >
+                          <IconEditTitle className="mx-auto text-[15px]" />
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </li>
               );
             })
@@ -323,9 +773,30 @@ export function ChatShell({ initialConversations, viewer }: ChatShellProps) {
             >
               <IconPlus />
             </button>
-            <div className="ml-1 flex flex-col justify-center leading-tight">
-              <span className="text-[15px] font-semibold text-[#111827]">
-                {activeConversation?.title ?? "新对话"}
+            <div className="ml-1 flex min-w-0 flex-1 flex-col justify-center leading-tight">
+              <span className="flex min-w-0 items-center gap-1">
+                <span className="truncate text-[15px] font-semibold text-[#111827]">
+                  {activeConversation?.pinned ? (
+                    <span className="mr-1 inline-block align-middle text-amber-500" title="已置顶">
+                      <IconPin active className="inline align-[-3px]" />
+                    </span>
+                  ) : null}
+                  {activeConversation?.title ?? "新对话"}
+                </span>
+                {activeConversationId ? (
+                  <button
+                    type="button"
+                    aria-label="修改标题"
+                    className="shrink-0 rounded-md p-1 text-[#9ca3af] hover:bg-black/[0.06] hover:text-[#4f46e5]"
+                    onClick={() => {
+                      if (!activeConversationId) return;
+                      setEditingSidebarId(activeConversationId);
+                      setEditSidebarTitleDraft(activeConversation?.title ?? "");
+                    }}
+                  >
+                    <IconEditTitle />
+                  </button>
+                ) : null}
               </span>
               <span className="hidden text-[11px] text-[#9ca3af] sm:block">
                 内容由 AI 生成，请仔细甄别
@@ -341,7 +812,11 @@ export function ChatShell({ initialConversations, viewer }: ChatShellProps) {
         </header>
 
         <div className="flex min-h-0 flex-1 flex-col">
-          {showingEmptyLanding ? (
+          {sendingFirstOnNewChat ? (
+            <div className="flex flex-1 items-center justify-center px-6 pb-[18vh] text-[14px] text-[#9ca3af]">
+              正在写入会话并调用模型…
+            </div>
+          ) : showingEmptyLanding ? (
             <div className="flex flex-1 flex-col items-center justify-center px-6 pb-[18vh]">
               <h1 className="text-center text-[26px] font-semibold tracking-tight text-[#111827] sm:text-[30px]">
                 有什么我能帮你的吗？
@@ -380,7 +855,7 @@ export function ChatShell({ initialConversations, viewer }: ChatShellProps) {
               <p className="mt-2 text-[14px] text-[#9ca3af]">该会话暂无消息</p>
             </div>
           ) : (
-            <div className="flex-1 overflow-y-auto px-4 py-6 sm:px-8">
+            <div ref={messagesScrollRef} className="flex-1 overflow-y-auto px-4 py-6 sm:px-8">
               <ul className="mx-auto flex max-w-3xl flex-col gap-4">
                 {messages.map((m) => (
                   <li
@@ -399,22 +874,50 @@ export function ChatShell({ initialConversations, viewer }: ChatShellProps) {
                     </div>
                   </li>
                 ))}
+                {thinkingPanelVisible && streamThinking.trim() ? (
+                  <li className="flex justify-start">
+                    <div className="max-w-[90%] rounded-2xl border border-amber-200/90 bg-amber-50 px-4 py-3 text-[15px] leading-relaxed shadow-sm">
+                      <div className="text-[11px] font-semibold uppercase tracking-wide text-amber-800">
+                        思考过程
+                      </div>
+                      <pre className="mt-2 max-h-[min(40vh,320px)] overflow-y-auto whitespace-pre-wrap text-[13px] text-amber-950/90">
+                        {streamThinking}
+                      </pre>
+                    </div>
+                  </li>
+                ) : null}
+                {sendBusy && streamAnswerPreview ? (
+                  <li className="flex justify-start">
+                    <div className="max-w-[85%] rounded-2xl border border-[#e5e7eb] bg-[#f9fafb] px-4 py-2.5 text-[15px] leading-relaxed text-[#374151] whitespace-pre-wrap">
+                      {streamAnswerPreview}
+                    </div>
+                  </li>
+                ) : null}
               </ul>
             </div>
           )}
 
           <div className="shrink-0 border-t border-[#f3f4f6] bg-white px-4 pb-6 pt-4 sm:px-8">
             <div className="mx-auto max-w-3xl rounded-[22px] border border-[#e8e8e8] bg-[#fafafa] shadow-sm">
+              {sendError ? (
+                <div className="border-b border-red-100 px-4 py-2 text-[13px] text-red-600">{sendError}</div>
+              ) : null}
               <textarea
                 value={draft}
-                onChange={(e) => setDraft(e.target.value)}
-                placeholder="发消息或输入 '/' 选择技能"
+                onChange={(e) => {
+                  setDraft(e.target.value);
+                  if (sendError) setSendError(null);
+                }}
+                disabled={sendBusy}
+                placeholder={
+                  sendBusy ? "生成回复中…" : "发消息或输入 '/' 选择技能（Enter 发送，Shift+Enter 换行）"
+                }
                 rows={3}
-                className="block w-full resize-none bg-transparent px-4 pb-2 pt-3 text-[15px] text-[#111827] outline-none placeholder:text-[#a1a1aa]"
+                className="block w-full resize-none bg-transparent px-4 pb-2 pt-3 text-[15px] text-[#111827] outline-none placeholder:text-[#a1a1aa] disabled:opacity-50"
                 onKeyDown={(e) => {
                   if (e.key === "Enter" && !e.shiftKey) {
                     e.preventDefault();
-                    sendMessage();
+                    void sendMessage();
                   }
                 }}
               />
@@ -440,11 +943,11 @@ export function ChatShell({ initialConversations, viewer }: ChatShellProps) {
                 </div>
                 <button
                   type="button"
-                  onClick={sendMessage}
-                  disabled={!draft.trim()}
+                  onClick={() => void sendMessage()}
+                  disabled={!draft.trim() || sendBusy}
                   className="rounded-full bg-[#4f46e5] px-4 py-1.5 text-[13px] font-medium text-white disabled:opacity-40"
                 >
-                  发送
+                  {sendBusy ? "发送中…" : "发送"}
                 </button>
                 <button
                   type="button"
