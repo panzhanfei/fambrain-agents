@@ -3,6 +3,7 @@
 import type { ConversationListItem } from "@/lib/get-sidebar-conversations";
 import Link from "next/link";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { flushSync } from "react-dom";
 
 type ChatMessage = {
   id: string;
@@ -16,6 +17,17 @@ type PatchConversationOk = {
   pinned: boolean;
   updatedAt: string;
 };
+
+function isPatchConversationPayload(v: unknown): v is PatchConversationOk {
+  if (!v || typeof v !== "object") return false;
+  const o = v as Record<string, unknown>;
+  return (
+    typeof o.id === "string" &&
+    typeof o.title === "string" &&
+    typeof o.pinned === "boolean" &&
+    typeof o.updatedAt === "string"
+  );
+}
 
 function sortConversationsForSidebar(items: ConversationListItem[]): ConversationListItem[] {
   return [...items].sort((a, b) => {
@@ -115,7 +127,7 @@ function IconEditTitle({ className }: { className?: string }) {
 
 async function fetchJson<T>(url: string): Promise<{ ok: true; data: T } | { ok: false; error: string }> {
   try {
-    const res = await fetch(url);
+    const res = await fetch(url, { cache: "no-store" });
     if (!res.ok) {
       let msg = `${res.status}`;
       try {
@@ -189,6 +201,7 @@ async function mutateJson<B, R>(
       method,
       headers: { "Content-Type": "application/json" },
       credentials: "same-origin",
+      cache: "no-store",
       body: JSON.stringify(body),
     });
 
@@ -294,15 +307,17 @@ export function ChatShell({ initialConversations, viewer }: ChatShellProps) {
 
     setListError(null);
 
-    setConversations((prev) => {
-      const t = prev.find((c) => c.id === id);
-      if (!t) return prev;
-      found = true;
-      snapshot = prev.map((c) => ({ ...c }));
-      nextPinned = !t.pinned;
-      return sortConversationsForSidebar(
-        prev.map((c) => (c.id === id ? { ...c, pinned: nextPinned } : c)),
-      );
+    flushSync(() => {
+      setConversations((prev) => {
+        const t = prev.find((c) => c.id === id);
+        if (!t) return prev;
+        found = true;
+        snapshot = prev.map((c) => ({ ...c }));
+        nextPinned = !t.pinned;
+        return sortConversationsForSidebar(
+          prev.map((c) => (c.id === id ? { ...c, pinned: nextPinned } : c)),
+        );
+      });
     });
 
     if (!found) return;
@@ -314,12 +329,22 @@ export function ChatShell({ initialConversations, viewer }: ChatShellProps) {
     );
 
     if (!result.ok) {
-      setConversations(snapshot);
+      flushSync(() => {
+        setConversations(snapshot);
+      });
       setListError(result.error);
       return;
     }
 
     const data = result.data;
+    if (!isPatchConversationPayload(data)) {
+      flushSync(() => {
+        setConversations(snapshot);
+      });
+      setListError("置顶同步失败，请刷新页面");
+      return;
+    }
+
     setConversations((cur) =>
       sortConversationsForSidebar(
         cur.map((c) =>

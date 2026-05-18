@@ -22,7 +22,9 @@ export async function GET() {
     }
 
     const body = await getSidebarConversations(session.userId);
-    return NextResponse.json(body);
+    return NextResponse.json(body, {
+      headers: { "Cache-Control": "private, no-store, max-age=0" },
+    });
   } catch (e) {
     console.error(e);
     return NextResponse.json({ error: "加载对话列表失败" }, { status: 500 });

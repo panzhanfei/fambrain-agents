@@ -60,6 +60,11 @@ export function forbiddenIfUntrustedMutation(req: Request): NextResponse | null 
   }
 
   if (process.env.NODE_ENV === "production") {
+    /** 部分环境（反向代理、部分客户端）会省略 Origin/Referer；Sec-Fetch-Site 由浏览器设置且脚本无法伪造 */
+    const secFetchSite = headers.get("sec-fetch-site")?.toLowerCase() ?? "";
+    if (secFetchSite === "same-origin") {
+      return null;
+    }
     return NextResponse.json({ error: "缺少来源校验信息" }, { status: 403 });
   }
 
