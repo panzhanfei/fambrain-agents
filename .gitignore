@@ -21,6 +21,9 @@ package-lock.json
 # production
 /build
 
+# personal knowledge corpus (resume, originals — keep local only)
+/src/doc/
+
 # misc
 .DS_Store
 *.pem

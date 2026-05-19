@@ -82,6 +82,50 @@ pnpm run dev
 
 **里程碑：** 用户提问 → 意图识别 → 检索 → 分析 → 回答。
 
+#### P0 编排流程图
+
+入口接线员只输出 **JSON 路由决策**；**进哪个 Agent 由服务端编排器查表决定**（见 `src/agents/IntakeCoordinator/prompt.ts` 中的 `IntakeRoutingDecision`），不是模型在回复里写「下一个 Agent 名字」。
+
+```mermaid
+flowchart TD
+  A[用户消息] --> B[IntakeCoordinator<br/>入口接线员]
+  B --> C{解析 JSON<br/>parseIntakeDecision}
+
+  C -->|intent = clarify<br/>需澄清| D[返回 clarifyingQuestion<br/>澄清提问]
+  C -->|intent = chitchat / out_of_scope<br/>且存在 briefReply| E[返回 briefReply<br/>简短回复]
+  C -->|needsRetrieval = true<br/>需要查库| F[KnowledgeManager<br/>知识管理员]
+  C -->|intent = direct_answer<br/>且无 briefReply| G[InformationAnalyst<br/>信息分析师]
+
+  F --> G
+  G --> H[返回最终回答<br/>assistant 消息入库]
+```
+
+#### 路由字段中英对照（IntakeCoordinator 输出）
+
+| 英文字段 | 中文名 | 含义 | 典型去向 |
+|----------|--------|------|----------|
+| `intent` | 意图类型 | 用户想干什么（查库回答 / 直接答 / 澄清 / 闲聊 / 拒答） | 编排器分支 |
+| `needsRetrieval` | 是否需要检索 | `true` 时必须走知识管理员查 `src/doc` | → KnowledgeManager |
+| `searchQuery` | 检索查询句 | 去掉寒暄后的检索关键词句，供假 RAG / 向量检索 | → KnowledgeManager 入参 |
+| `subTasks` | 子任务列表 | 复杂问题拆成多句，便于分步检索或分析 | → KnowledgeManager / InformationAnalyst |
+| `topics` | 主题标签 | 如 `resume`、`aky`、`sentinel`，用于过滤语料范围 | → KnowledgeManager 入参 |
+| `language` | 回复语言 | `zh` / `en` / `mixed` | → InformationAnalyst 入参 |
+| `confidence` | 置信度 | 0–1，对意图与检索句把握程度（可观测、可降级） | 日志 / 后续策略 |
+| `clarifyingQuestion` | **澄清提问** | 信息不足时，向用户追问**一个**关键问题（如「指哪个项目？」） | **直接返回用户**，不进下游 Agent |
+| `briefReply` | **简短回复** | 寒暄、拒答或无需查库时的极短回复（≤80 字） | **直接返回用户**，不进下游 Agent |
+
+#### 编排分支（服务端 `routeAfterIntake` 逻辑）
+
+| 条件 | 调用的 Agent | 用户看到什么 |
+|------|----------------|--------------|
+| `intent === "clarify"` 且 `clarifyingQuestion` 有值 | 无（结束） | 澄清提问 |
+| `intent` 为 `chitchat` / `out_of_scope` 且 `briefReply` 有值 | 无（结束） | 简短回复 |
+| `needsRetrieval === true` | KnowledgeManager → InformationAnalyst | 分析师归纳后的最终回答（应带引用片段） |
+| `needsRetrieval === false` 且无 `briefReply` | InformationAnalyst（`hits` 为空） | 不查库的通用长答 |
+| 其余 | 优先 `briefReply`，否则兜底提示 | 简短说明或请用户补充 |
+
+实现位置（规划）：`src/lib/chat/pipeline.ts` 解析 JSON 并按上表调用；`POST /api/conversations/[id]/messages` 只把 **InformationAnalyst 输出**或 **澄清提问 / 简短回复** 写入助手消息。
+
 ### P1 — Week 2：深度与可靠性
 
 | 英文名 | 中文名 | 职责 |
