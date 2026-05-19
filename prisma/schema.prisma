@@ -39,6 +39,8 @@ model User {
   displayName String
   /// 与家庭主账号/本人的关系说明，例如：配偶、父亲、大女儿
   relationToPrincipal String
+  /// 个人知识库语料归属用户 id；为空则使用本人 id。家庭成员可指向主角账号。
+  corpusUserId String?
 
   role      UserRole   @default(MEMBER)
   status    UserStatus @default(PENDING)

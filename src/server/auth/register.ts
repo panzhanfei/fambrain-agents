@@ -62,6 +62,15 @@ export async function registerUser(
   const status = isBootstrapFirstUser ? UserStatus.ACTIVE : UserStatus.PENDING;
   const passwordHash = await hashPassword(password);
 
+  const principal =
+    !isBootstrapFirstUser
+      ? await prisma.user.findFirst({
+          where: { role: UserRole.ADMIN, status: UserStatus.ACTIVE },
+          orderBy: { createdAt: "asc" },
+          select: { id: true },
+        })
+      : null;
+
   try {
     const user = await prisma.user.create({
       data: {
@@ -72,6 +81,7 @@ export async function registerUser(
         relationToPrincipal,
         role,
         status,
+        corpusUserId: principal?.id ?? null,
       },
       select: { id: true },
     });

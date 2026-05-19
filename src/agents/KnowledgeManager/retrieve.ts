@@ -9,6 +9,12 @@ import {
 import { ChatOllama } from "@langchain/ollama";
 
 import { getAgentsConfig } from "@/agents/config";
+import { logAgentIn, logAgentOut } from "@/agents/shared/agent-log";
+
+import {
+  listCorpusScanRoots,
+  SCAN_FOLDERS,
+} from "@/lib/knowledge/doc-paths";
 
 import {
   prompt,
@@ -16,9 +22,6 @@ import {
   type KnowledgeManagerInput,
   type KnowledgeRetrievalResult,
 } from "./prompt";
-
-const DOC_ROOT = path.join(process.cwd(), "src/doc");
-const SCAN_FOLDERS = ["experience", "projects", "personal"] as const;
 const MAX_CANDIDATES = 12;
 const MAX_HITS = 5;
 const EXCERPT_MAX = 320;
@@ -30,13 +33,25 @@ const llm = new ChatOllama({
   model: ollama.models.intakeCoordinator,
 });
 
-/** 从查询句、主题等文本里拆出用于匹配的小写关键词 */
+const CJK_RUN = /^[\u4e00-\u9fff]+$/;
+
+/** 从查询句、主题等文本里拆出用于匹配的小写关键词（含中文二元切分，便于口语短问） */
 function tokenize(...parts: string[]): string[] {
   const raw = parts.join(" ").toLowerCase();
-  const tokens = raw
+  const segments = raw
     .split(/[^a-z0-9\u4e00-\u9fff]+/i)
     .filter((t) => t.length >= 2);
-  return [...new Set(tokens)];
+
+  const expanded: string[] = [];
+  for (const t of segments) {
+    expanded.push(t);
+    if (CJK_RUN.test(t) && t.length > 2) {
+      for (let i = 0; i < t.length - 1; i++) {
+        expanded.push(t.slice(i, i + 2));
+      }
+    }
+  }
+  return [...new Set(expanded)];
 }
 
 /** 从 Markdown 正文取标题：首个 `# ` 行，否则用文件名 */
@@ -75,7 +90,15 @@ async function listMarkdownFiles(dir: string): Promise<string[]> {
     const name = String(ent.name);
     const full = path.join(dir, name);
     if (ent.isDirectory()) {
-      if (name === "originals" || name === "images") continue;
+      if (
+        name === "originals" ||
+        name === "images" ||
+        name === "vault" ||
+        name === "corpus" ||
+        name === "sources"
+      ) {
+        continue;
+      }
       files.push(...(await listMarkdownFiles(full)));
     } else if (ent.isFile() && name.endsWith(".md")) {
       files.push(full);
@@ -90,10 +113,11 @@ function toRepoPath(absPath: string): string {
 }
 
 /**
- * 在 src/doc 下按关键词预扫候选段落（P0 假 RAG）。
- * 编排器可先调此方法，再把结果填入 KnowledgeManagerInput.candidates。
+ * 在 `src/doc/users/<corpusUserId>/corpus/` 下按关键词预扫候选段落（P0 假 RAG）。
+ * 过渡：users/id 直下或 src/doc 根下扁平目录；不扫描 vault。
  */
 export async function scanDocCandidates(
+  corpusUserId: string,
   searchQuery: string,
   topics: string[] = [],
   subTasks: string[] = []
@@ -104,27 +128,30 @@ export async function scanDocCandidates(
   type Scored = KnowledgeManagerInput["candidates"][number] & { score: number };
 
   const scored: Scored[] = [];
+  const scanRoots = await listCorpusScanRoots(corpusUserId, listMarkdownFiles);
 
-  for (const folder of SCAN_FOLDERS) {
-    const root = path.join(DOC_ROOT, folder);
-    for (const abs of await listMarkdownFiles(root)) {
-      const body = await readFile(abs, "utf8").catch(() => "");
-      if (!body) continue;
+  for (const { root: corpusRoot } of scanRoots) {
+    for (const folder of SCAN_FOLDERS) {
+      const dir = path.join(corpusRoot, folder);
+      for (const abs of await listMarkdownFiles(dir)) {
+        const body = await readFile(abs, "utf8").catch(() => "");
+        if (!body) continue;
 
-      const repoPath = toRepoPath(abs);
-      const haystack = `${repoPath} ${body}`.toLowerCase();
-      let score = 0;
-      for (const t of tokens) {
-        if (haystack.includes(t)) score += 1;
+        const repoPath = toRepoPath(abs);
+        const haystack = `${repoPath} ${body}`.toLowerCase();
+        let score = 0;
+        for (const t of tokens) {
+          if (haystack.includes(t)) score += 1;
+        }
+        if (score === 0) continue;
+
+        scored.push({
+          path: repoPath,
+          title: titleFromMarkdown(path.basename(abs), body),
+          body: body.slice(0, 4000),
+          score,
+        });
       }
-      if (score === 0) continue;
-
-      scored.push({
-        path: repoPath,
-        title: titleFromMarkdown(path.basename(abs), body),
-        body: body.slice(0, 4000),
-        score,
-      });
     }
   }
 
@@ -174,10 +201,14 @@ function textFromResponse(content: AIMessage["content"]): string {
 
 /** 不调模型：按关键词为 candidates 打分并组装检索结果 */
 function retrieveByKeywords(
-  searchQuery: string,
+  input: Pick<KnowledgeManagerInput, "searchQuery" | "topics" | "subTasks">,
   candidates: KnowledgeManagerInput["candidates"]
 ): KnowledgeRetrievalResult {
-  const tokens = tokenize(searchQuery);
+  const tokens = tokenize(
+    input.searchQuery,
+    ...input.topics,
+    ...input.subTasks
+  );
   if (candidates.length === 0 || tokens.length === 0) {
     return { hits: [], coverage: "none", notes: null };
   }
@@ -251,25 +282,51 @@ function normalizeResult(
   return { hits, coverage, notes };
 }
 
+/** LLM 未产出有效 hits 时，回退到关键词检索结果 */
+function coalesceRetrieval(
+  primary: KnowledgeRetrievalResult,
+  fallback: KnowledgeRetrievalResult
+): KnowledgeRetrievalResult {
+  if (primary.hits.length > 0) return primary;
+  return fallback.hits.length > 0 ? fallback : primary;
+}
+
 /**
  * 知识检索主入口：补全 candidates → 尝试 Ollama 精排 → 失败则关键词回退。
  */
 export async function retrieveKnowledge(
   input: KnowledgeManagerInput
 ): Promise<KnowledgeRetrievalResult> {
+  logAgentIn("KnowledgeManager", "检索请求", {
+    corpusUserId: input.corpusUserId,
+    searchQuery: input.searchQuery,
+    topics: input.topics,
+    subTasks: input.subTasks,
+    candidatesProvided: input.candidates.length,
+  });
+
   const candidates =
     input.candidates.length > 0
       ? input.candidates
       : await scanDocCandidates(
+          input.corpusUserId,
           input.searchQuery,
           input.topics,
           input.subTasks
         );
 
-  const keywordFallback = retrieveByKeywords(input.searchQuery, candidates);
+  logAgentOut("KnowledgeManager", "预扫候选（摘要）", {
+    corpusUserId: input.corpusUserId,
+    candidateCount: candidates.length,
+    paths: candidates.map((c) => c.path),
+  });
+
+  const keywordFallback = retrieveByKeywords(input, candidates);
 
   if (candidates.length === 0) {
-    return { hits: [], coverage: "none", notes: null };
+    const empty = { hits: [], coverage: "none" as const, notes: null };
+    logAgentOut("KnowledgeManager", "检索结果（无候选）", empty);
+    return empty;
   }
 
   const payload: KnowledgeManagerInput = { ...input, candidates };
@@ -281,9 +338,19 @@ export async function retrieveKnowledge(
     ]);
     const text = textFromResponse(ai.content);
     const parsed = parseJsonObject<KnowledgeRetrievalResult>(text);
-    if (!parsed) return keywordFallback;
-    return normalizeResult(parsed, keywordFallback);
-  } catch {
+    const result = coalesceRetrieval(
+      !parsed
+        ? keywordFallback
+        : normalizeResult(parsed, keywordFallback),
+      keywordFallback
+    );
+    logAgentOut("KnowledgeManager", "检索结果", result);
+    return result;
+  } catch (e) {
+    logAgentOut("KnowledgeManager", "检索结果（LLM 失败，关键词回退）", {
+      error: e instanceof Error ? e.message : String(e),
+      result: keywordFallback,
+    });
     return keywordFallback;
   }
 }

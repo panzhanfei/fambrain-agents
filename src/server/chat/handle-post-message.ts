@@ -1,5 +1,5 @@
 import { runAgentStream } from "@/agents/orchestrator";
-import type { DbChatTurn } from "@/agents/types";
+import type { AgentPipelineContext, DbChatTurn } from "@/agents/types";
 import { encodeSseEvent, sseResponse } from "@/lib/chat/sse";
 import {
   appendAssistantMessage,
@@ -25,6 +25,7 @@ export function createPostMessageStreamResponse(options: {
   userContent: string;
   conversationTitle: string;
   history: DbChatTurn[];
+  pipelineContext: AgentPipelineContext;
 }): Response {
   const readable = new ReadableStream<Uint8Array>({
     async start(controller) {
@@ -59,7 +60,7 @@ export function createPostMessageStreamResponse(options: {
           { role: "user", content: options.userContent },
         ];
 
-        const gen = runAgentStream(historyWithUser);
+        const gen = runAgentStream(historyWithUser, options.pipelineContext);
         let pipelineResult: { answer: string } | undefined;
 
         while (true) {

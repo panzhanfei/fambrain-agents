@@ -72,6 +72,7 @@ pnpm run dev
 | `OLLAMA_MODEL_INTAKE_COORDINATOR` | 否 | 仅入口接线员专用模型；不配则等于 `OLLAMA_MODEL` |
 | `OLLAMA_MODEL_EMBED` | 否 | 嵌入模型（P2 向量检索预留）；默认 `nomic-embed-text` |
 | `OLLAMA_STREAM_THINK` | 否 | 流式是否请求 thinking；不支持时服务端会自动降级重试 |
+| `FAMBRAIN_CORPUS_USER_ID` | 否 | 强制所有登录用户检索 `src/doc/users/<此 userId>/`；不设则按用户表 `corpusUserId` 或本人 id |
 
 单机内存限流不适用于多副本；上生产请在前端网关或 Redis 等侧做统一限流。
 
@@ -90,7 +91,7 @@ pnpm run dev
 | `src/app/api/conversations/[id]/messages/route.ts` | GET 历史；POST 鉴权后委托 `handle-post-message` |
 | `src/lib/chat/sse.ts` | SSE 帧编码 |
 | `src/actions/auth.ts` | 登录/注册 Server Actions |
-| `src/doc/` | 个人知识库 Markdown（experience / projects / personal） |
+| `src/doc/users/<userId>/corpus/` | 可检索履历 Markdown；`vault/` 为私人原件；见 `src/doc/users/README.md` |
 
 **约定：** `src/agents/*` 不直接访问数据库；编排层不把中间 Agent 输出写入 `messages`。
 

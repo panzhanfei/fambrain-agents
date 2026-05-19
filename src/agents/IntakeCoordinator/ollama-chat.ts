@@ -6,6 +6,7 @@ import {
 import { ChatOllama } from "@langchain/ollama";
 
 import { getAgentsConfig } from "@/agents/config";
+import { logAgentIn, logAgentOut } from "@/agents/shared/agent-log";
 import { prompt } from "./prompt";
 
 import type { DbChatTurn } from "@/agents/types";
@@ -50,13 +51,22 @@ export async function completeIntakeCoordinator(
   history: DbChatTurn[]
 ): Promise<string> {
   const recent = history.length > 40 ? history.slice(-40) : history;
+
+  logAgentIn("IntakeCoordinator", "对话历史（最近轮次）", {
+    turnCount: recent.length,
+    turns: recent.map((t) => ({ role: t.role, content: t.content })),
+  });
+
   const ai = await llm.invoke([
     new SystemMessage(prompt),
     ...recent.map(turnToMessage),
   ]);
 
-  return (
+  const raw =
     textFromResponse(ai.content) ||
-    "（模型未返回助手文本：请确认 Ollama 已启动且模型已拉取）"
-  );
+    "（模型未返回助手文本：请确认 Ollama 已启动且模型已拉取）";
+
+  logAgentOut("IntakeCoordinator", "路由 JSON（原始）", raw);
+
+  return raw;
 }

@@ -1,4 +1,5 @@
 import { getAgentsConfig } from "@/agents/config";
+import { logAgentIn, logAgentOut } from "@/agents/shared/agent-log";
 import { streamOllamaNative } from "@/agents/shared/ollama-native-stream";
 
 import {
@@ -24,6 +25,8 @@ export async function* streamAnalyzeInformation(
 ): AsyncGenerator<AnalystStreamChunk, InformationAnalystResult> {
   const fallback = buildFallbackAnswer(input);
   const { ollama } = getAgentsConfig();
+
+  logAgentIn("InformationAnalyst", "分析请求", input);
 
   try {
     const messages = [
@@ -53,8 +56,13 @@ export async function* streamAnalyzeInformation(
       yield { type: "assistant", text: result.answer };
     }
 
+    logAgentOut("InformationAnalyst", "分析结果（解析后）", result);
     return result;
-  } catch {
+  } catch (e) {
+    logAgentOut("InformationAnalyst", "分析结果（异常回退）", {
+      error: e instanceof Error ? e.message : String(e),
+      result: fallback,
+    });
     yield { type: "assistant", text: fallback.answer };
     return fallback;
   }

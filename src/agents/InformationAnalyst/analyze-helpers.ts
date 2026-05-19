@@ -29,7 +29,7 @@ export function buildFallbackAnswer(
     const answer =
       language === "en"
         ? "No relevant content was found in the personal knowledge base for your question. Try naming a specific company or project, or add the matching doc under src/doc first."
-        : "当前个人知识库中没有检索到与你问题直接相关的内容。你可以补充具体公司、项目名称，或先在 doc 中完善对应文档后再问。";
+        : "当前个人知识库中没有检索到与你问题直接相关的内容。你可以补充具体公司、项目名称，或先在 src/doc/users/<语料归属账号>/corpus 下完善对应文档后再问。";
     return {
       answer,
       citations: [],

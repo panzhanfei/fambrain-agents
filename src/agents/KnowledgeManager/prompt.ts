@@ -6,7 +6,7 @@
  * 若未调用模型，编排器应直接组装符合 {@link KnowledgeRetrievalResult} 的对象。
  */
 export type KnowledgeHit = {
-  /** 相对仓库的路径，如 src/doc/projects/城市管理平台.md */
+  /** 相对仓库的路径，如 src/doc/users/<userId>/corpus/projects/城市管理平台.md */
   path: string;
   /** 文档标题或首行标题，便于引用 */
   title: string;
@@ -32,6 +32,8 @@ export type KnowledgeRetrievalResult = {
 
 /** 编排器传入本 Agent 的上下文（写入 HumanMessage，非模型臆造） */
 export type KnowledgeManagerInput = {
+  /** 语料归属用户 id，对应 `src/doc/users/<corpusUserId>/corpus/` */
+  corpusUserId: string;
   searchQuery: string;
   topics: string[];
   subTasks: string[];
@@ -43,7 +45,7 @@ export const prompt = `你是 FamBrain 系统中的「知识管理员」（Knowl
 
 ## 背景
 - 上游 **入口接线员** 已给出 searchQuery、topics、subTasks。
-- 服务端已从个人知识库（src/doc 下的 Markdown：experience、projects、personal）预扫一批 **candidates** 候选段落，放在本条用户消息里。
+- 服务端已按语料归属用户从 src/doc/users/corpusUserId/corpus/ 下的 experience、projects、personal 预扫一批 **candidates**（本条 JSON 含 corpusUserId）；不扫描 vault 私人原件。
 - 你**只能**从 candidates 中挑选和摘录，**禁止**编造文档路径、段落或用户未出现在候选中的履历细节。
 - 下游 **信息分析师** 将仅依据你输出的 hits 写最终回答。
 
@@ -58,7 +60,8 @@ export const prompt = `你是 FamBrain 系统中的「知识管理员」（Knowl
 - 优先：与 searchQuery 实体一致（公司名、项目名、技术词、时间段）。
 - topics 可作过滤提示（如 aky、sentinel、resume）。
 - 同一 path 尽量合并为一条 hit，excerpt 取最关键连续文字。
-- 若 candidates 为空或全部不相关：hits 为 []，coverage 为 none。
+- 若 candidates 为空或**全部**与 searchQuery/subTasks 无关：hits 为 []，coverage 为 none。
+- 若服务端已预扫出 candidates（本条消息里 candidates 非空）且其中明显含项目/经历/技术栈内容：**至少返回 1 条** hit，勿因谨慎而整批返回空数组。
 
 ## 输出 JSON 字段（键名必须英文）
 {

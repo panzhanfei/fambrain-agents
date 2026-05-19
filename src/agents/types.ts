@@ -4,6 +4,15 @@ export type DbChatTurn = {
   content: string;
 };
 
+/** 编排上下文：由 HTTP 层注入，Agent 不直接读 session */
+export type AgentPipelineContext = {
+  /** 当前登录用户 */
+  actorUserId: string;
+  /** 本次检索 `src/doc/users/<corpusUserId>/corpus/` 使用的语料归属用户 */
+  corpusUserId: string;
+  displayName: string;
+};
+
 /** Orchestrator 向 HTTP 层推送的流式事件 */
 export type AgentStreamEvent =
   | { type: "step"; name: "intake" | "retrieval" | "analyst"; status: "running" | "done" }

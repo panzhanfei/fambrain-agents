@@ -3,6 +3,7 @@ import { conversationIdSchema, postConversationMessageBodySchema } from "@/lib/s
 import { forbiddenIfUntrustedMutation } from "@/lib/security/same-origin";
 import { rejectIfPayloadTooLarge } from "@/lib/security/request-limits";
 import { createPostMessageStreamResponse } from "@/server/chat/handle-post-message";
+import { resolveCorpusUserId } from "@/server/knowledge/resolve-corpus-user";
 import {
   findOwnedConversation,
   listConversationMessages,
@@ -114,12 +115,18 @@ export async function POST(
 
     const rows = await listConversationMessages(conversationId);
     const history = toModelHistory(rows);
+    const corpusUserId = await resolveCorpusUserId(session.userId);
 
     return createPostMessageStreamResponse({
       conversationId,
       userContent: content,
       conversationTitle: conversation.title,
       history,
+      pipelineContext: {
+        actorUserId: session.userId,
+        corpusUserId,
+        displayName: session.displayName,
+      },
     });
   } catch (e) {
     console.error(e);

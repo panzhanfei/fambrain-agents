@@ -13,7 +13,9 @@
     "db:migrate": "prisma migrate dev",
     "db:studio": "prisma studio",
     "db:push": "prisma db push",
-    "rebuild:native": "pnpm rebuild better-sqlite3"
+    "rebuild:native": "pnpm rebuild better-sqlite3",
+    "doc:migrate-to-user": "node scripts/migrate-doc-to-corpus-user.mjs",
+    "doc:migrate-layout": "node scripts/migrate-doc-layout.mjs"
   },
   "dependencies": {
     "@langchain/core": "^1.1.46",
