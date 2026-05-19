@@ -199,7 +199,35 @@ flowchart TD
 
 以下内容用于对齐技术选型与踩坑清单；**每落实一条对策，把对应项从 `- [ ]` 改成 `- [x]`** 即可跟踪进度。
 
-### 一、核心技术栈
+**图例：** **✅** = 已在仓库代码或运行链路中使用（含部分落地，见「落地说明」）；**⬜** = 规划/学习对比，尚未接入 FamBrain 业务代码。
+
+### 零、技术选型总表（17 项）
+
+| 序号 | 技术名称 | 所属类别 | 核心作用 | 落地 | 落地说明（FamBrain / agent） |
+|------|----------|----------|----------|------|------------------------------|
+| 1 | LangChain | AI 基础核心框架 | 模型调用、提示词管理、自定义工具、基础链式任务、基础会话；Agent 底层基座 | ✅ | `ChatOllama`、`SystemMessage`/`HumanMessage`（入口接线员、知识管理员）；`DynamicTool`/`bindTools`/Memory **未用** |
+| 2 | LangGraph | 多 Agent 编排框架 | 状态图工作流：节点流转、条件分支、循环、多 Agent 状态与协作调度 | ⬜ | P0 为 `runPipelineStream` 手写编排；P1 计划迁入 `StateGraph` + 事实核查回退 |
+| 3 | LlamaIndex | RAG 专业框架 | 文档索引、分片策略、检索优化、知识库搭建 | ⬜ | P0 自写 `scanDocCandidates` 关键词预扫；计划与 Chroma 配合 |
+| 4 | ChromaDB | 向量数据库 | 存储 Embedding，语义相似度检索，RAG + 记忆检索底层 | ⬜ | README 曾写 Chroma/LanceDB；`OLLAMA_MODEL_EMBED` 已预留，**无入库/检索代码** |
+| 5 | Ollama | 本地模型调用 | 本地离线跑开源模型，无第三方 API | ✅ | `OLLAMA_*` 配置；`ChatOllama` + `streamOllamaNative`（信息分析师流式/thinking） |
+| 6 | Zod | 结构化数据校验 | Schema 约束，规范 LLM/API 输出，减少解析失败 | ✅ | 注册/会话等 `src/lib/schemas/*`；Agent 路由 JSON 仍为 `parseIntakeDecision` 手写解析，**可逐步 Zod 化** |
+| 7 | Mem0 | 高级记忆管理 | 长期语义记忆、跨会话留存、记忆筛选 | ⬜ | 多轮仅靠 DB `messages` 拼进 prompt |
+| 8 | Docling | 文档解析 | MD/PDF/DOC 等预处理，RAG 上游解析 | ⬜ | 对应规划角色 **文档解析师**；语料在 `users/<id>/vault/` |
+| 9 | Vercel AI SDK | 轻量化 AI SDK | 流式、多模型统一调用；对比 LangChain 写法 | ⬜ | 当前为自研 SSE（`src/lib/chat/sse.ts`）+ LangChain/Ollama |
+| 10 | Agno | 轻量多 Agent 框架 | 轻量角色化 Agent；对比 LangGraph | ⬜ | 学习/对比项，未引入依赖 |
+| 11 | LangMem | 记忆增强组件 | 记忆压缩、会话摘要，缓解 Token 溢出 | ⬜ | 未用；README 坑点中的 SummaryBuffer 为同类方向 |
+| 12 | LangSmith | 链路追踪调试 | 可视化执行链，定位工具/检索/卡死问题 | ⬜ | 未配置；调试用 `agents/shared/agent-log.ts` |
+| 13 | Pino | 日志框架 | 结构化运行日志，追溯 Agent 执行与异常 | ⬜ | 未用；当前 `console` + `agent-log` |
+| 14 | p-limit | 异步并发控制 | 限制并发，避免竞态与过载 | ⬜ | 业务代码未直接使用 |
+| 15 | TypeBox | 轻量结构校验 | 高性能 TS 校验，作 Zod 替代学习 | ⬜ | 未用 |
+| 16 | MCP SDK | 模型上下文协议 | 标准化上下文/工具交互，跟进行业规范 | ⬜ | 未接入应用；IDE 侧 MCP 与仓库代码无关 |
+| 17 | Recall | 轻量 RAG 检索库 | 轻量检索方案，对比 LlamaIndex | ⬜ | 学习/对比项，未引入 |
+
+**统计（随实现更新）：** ✅ **3 项**全量接入（Ollama、Zod 应用层、LangChain 核心调用）；LangChain 子能力、RAG、编排、记忆、观测等见下文 **§一～§五** 分项表与 **8 个 Agent** 路线图。
+
+**与下文关系：** **§一** 展开序号 1～5 相关技术点；**§二 / 二（补）** 为坑点；**多 Agent 路线图** 为 8 个角色分工。
+
+### 一、核心技术栈（分项展开）
 
 #### 1. LangChain（Agent 的「工具箱」）
 
@@ -232,7 +260,7 @@ flowchart TD
 |--------|-------------------|
 | SimpleDirectoryReader | 加载本地 Markdown 文档 |
 | VectorStoreIndex | 文档分块、Embedding、建索引 |
-| Chroma / LanceDB | 存储向量，提供语义检索 |
+| ChromaDB / LanceDB | 存储向量，提供语义检索（总表序号 4） |
 | asRetriever() | Agent 通过检索器查询知识库 |
 | HyDE / 混合检索 | 提升检索准确率（可选进阶） |
 
@@ -348,7 +376,7 @@ flowchart TD
 | 可观测性 | streamEvents、前端调试面板 | 推理黑盒 |
 | **P0 已落地** | `runPipelineStream`、关键词 RAG、`coalesceRetrieval`、`agent-log` | P0-1～10（见上表）；假 RAG、JSON 路由、空 hits 回退 |
 
-**小结：** 18 个坑点为 **LangGraph / 全量 Agent 族谱** 的通用清单；**二（补）P0 表** 为当前仓库 **三 Agent 闭环** 已踩实坑。面试可先讲 P0 表 5～6 条（如 P0-1/3/5/9），再带「全量还有意图漂移、事实核查循环等，见路线图 P1/P2」。
+**小结：** **技术选型总表（17 项）** 为完整栈清单（✅/⬜）；18 个坑点为 **LangGraph / 全量 Agent 族谱** 的通用清单；**二（补）P0 表** 为当前仓库 **三 Agent 闭环** 已踩实坑。面试可先讲 **17 项里已 ✅ 的 3 项 + P0 表** 5～6 条，再带「其余见 P1/P2 路线图」。
 
 ---
 
