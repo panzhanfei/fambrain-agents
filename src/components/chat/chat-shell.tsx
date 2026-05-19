@@ -520,7 +520,7 @@ export function ChatShell({ initialConversations, viewer }: ChatShellProps) {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "same-origin",
-        body: JSON.stringify({ content: trimmed, stream: true }),
+        body: JSON.stringify({ content: trimmed }),
       });
 
       if (!res.ok) {
@@ -557,6 +557,19 @@ export function ChatShell({ initialConversations, viewer }: ChatShellProps) {
             pendingUserTempIdRef.current = null;
             const real = p.userMessage;
             setMessages((prev) => prev.map((m) => (m.id === tempUserId ? real : m)));
+          }
+        }
+
+        if (event === "step" && payload && typeof payload === "object" && payload !== null) {
+          const p = payload as { name?: string; status?: string };
+          if (p.status === "running" && typeof p.name === "string") {
+            const labels: Record<string, string> = {
+              intake: "理解问题…",
+              retrieval: "检索知识库…",
+              analyst: "整理回答…",
+            };
+            setThinkingPanelVisible(true);
+            setStreamThinking(labels[p.name] ?? "处理中…");
           }
         }
 

@@ -1,6 +1,6 @@
 # FamBrain / Agent
 
-基于 **Next.js（App Router）** 的家庭协作型对话应用骨架：内置注册登录、账号审核、会话与消息的数据模型，以及聊天界面。**多 Agent + RAG 流水线按阶段迭代中**（见下文路线图）。
+基于 **Next.js（App Router）** 的家庭协作型对话应用：注册登录、成员审核、会话与消息持久化，以及 **P0 多 Agent 聊天闭环**（意图路由 → 知识库检索 → 归纳回答，SSE 流式）。向量检索、LangGraph、事实核查等见路线图 P1/P2。
 
 ## 技术栈
 
@@ -24,17 +24,20 @@ cp .env.example .env
 # 生产环境请务必设置足够长的 JWT_SECRET（见下表）
 pnpm run db:migrate
 pnpm run db:generate
+# 本地对话依赖 Ollama，请先安装并拉取模型，例如：
+#   ollama pull qwen2.5:14b
 pnpm run dev
 ```
 
-浏览器访问 [http://localhost:3000](http://localhost:3000)。
+浏览器访问 [http://localhost:3000](http://localhost:3000)。聊天需本机 **[Ollama](https://ollama.com/)** 已启动，且 `.env` 中 `OLLAMA_BASE_URL` / `OLLAMA_MODEL` 与本地已拉取模型一致。
 
 **pnpm 10+** 若安装后提示需批准依赖的构建脚本（如 `prisma`、`better-sqlite3`），在本仓库根目录执行一次 `pnpm approve-builds` 并按提示勾选即可；`package.json` 里已配置 `pnpm.onlyBuiltDependencies` 作为允许构建的名单，新开环境仍可能需要你本地确认一次。
 
 **better-sqlite3：** 若运行时报 `Could not locate the bindings file`，在项目根执行 `pnpm run rebuild:native`（等同 `pnpm rebuild better-sqlite3`），必要时先执行 `pnpm approve-builds` 允许该包跑安装脚本。
 
 - **首个注册用户**会成为 `ADMIN`；其余成员默认 `PENDING`，需具备「成员审核」权限的账号在 `/admin/users` 通过后变为 `ACTIVE` 才可进入主界面。
-- **聊天区**：侧栏会话与历史消息来自数据库；输入框发送目前仅在浏览器内追加用户消息，**尚未**接入消息持久化接口与模型回复——这将由后续 Agent 编排接入。
+- **聊天区**：侧栏会话与历史来自数据库；发送消息走 `POST /api/conversations/:id/messages`（**SSE 流式**），经 **Orchestrator → Pipeline → 三个 Worker Agent** 生成回复，**仅将最终 assistant 正文落库**（中间路由/检索结果在内存传递，不写 `messages` 表）。
+- **登录/注册表单**使用 `src/actions/auth.ts`（Server Actions）；业务逻辑在 `src/server/auth/`，与 REST API 共用。
 
 ## 脚本（pnpm）
 
@@ -64,9 +67,32 @@ pnpm run dev
 | `TRUST_PROXY_HEADERS` | 否 | 设为 `true` 时信任 `X-Forwarded-*`（反向代理场景） |
 | `SECURITY_ENABLE_HSTS` | 否 | 设为 `true` 时在响应头启用 HSTS |
 | `FAMBRAIN_MEMBERSHIP_AUDIT_ID_SUFFIX` | 否 | 身份证号后缀匹配则拥有「审核成员」权限；不设则用代码内默认值 |
-| `OLLAMA_BASE_URL` / `OLLAMA_MODEL` | 预留 | 本地模型服务（接入 Agent 时使用）；当前业务代码未读取 |
+| `OLLAMA_BASE_URL` | 建议 | 默认 `http://127.0.0.1:11434`；对话与 Agent 均通过此地址访问 Ollama |
+| `OLLAMA_MODEL` | 建议 | 默认 `qwen2.5:14b`；Intake / Analyst 等未单独配置时使用 |
+| `OLLAMA_MODEL_INTAKE_COORDINATOR` | 否 | 仅入口接线员专用模型；不配则等于 `OLLAMA_MODEL` |
+| `OLLAMA_MODEL_EMBED` | 否 | 嵌入模型（P2 向量检索预留）；默认 `nomic-embed-text` |
+| `OLLAMA_STREAM_THINK` | 否 | 流式是否请求 thinking；不支持时服务端会自动降级重试 |
 
 单机内存限流不适用于多副本；上生产请在前端网关或 Redis 等侧做统一限流。
+
+## 代码结构（P0）
+
+| 路径 | 职责 |
+|------|------|
+| `src/agents/orchestrator/` | **对话唯一入口** `runAgentStream(history)` |
+| `src/agents/pipeline/` | 编排：`parseIntakeDecision`、`runPipelineStream`（`step` 进度事件） |
+| `src/agents/IntakeCoordinator/` | 入口接线员（路由 JSON） |
+| `src/agents/KnowledgeManager/` | 知识管理员（关键词扫描 `src/doc`，可选 LLM 精排） |
+| `src/agents/InformationAnalyst/` | 信息分析师（流式 `thinking` + `assistant`，终稿 JSON 解析） |
+| `src/agents/config/` | Ollama 等运行时配置（读环境变量） |
+| `src/server/db/conversation-messages.ts` | 会话消息的 **唯一** Prisma 访问层 |
+| `src/server/chat/handle-post-message.ts` | 存用户消息 → 调 Orchestrator → SSE → 存 assistant |
+| `src/app/api/conversations/[id]/messages/route.ts` | GET 历史；POST 鉴权后委托 `handle-post-message` |
+| `src/lib/chat/sse.ts` | SSE 帧编码 |
+| `src/actions/auth.ts` | 登录/注册 Server Actions |
+| `src/doc/` | 个人知识库 Markdown（experience / projects / personal） |
+
+**约定：** `src/agents/*` 不直接访问数据库；编排层不把中间 Agent 输出写入 `messages`。
 
 ## 多 Agent 路线图（产品里程碑）
 
@@ -80,7 +106,7 @@ pnpm run dev
 | `KnowledgeManager` | 知识管理员 | 检索知识库，返回相关片段（RAG 检索） |
 | `InformationAnalyst` | 信息分析师 | 对检索结果分析、归纳并回答 |
 
-**里程碑：** 用户提问 → 意图识别 → 检索 → 分析 → 回答。
+**里程碑：** 用户提问 → 意图识别 → 检索 → 分析 → 回答。（**当前版本已实现**，检索为 P0 关键词扫描，非向量库。）
 
 #### P0 编排流程图
 
@@ -114,17 +140,34 @@ flowchart TD
 | `clarifyingQuestion` | **澄清提问** | 信息不足时，向用户追问**一个**关键问题（如「指哪个项目？」） | **直接返回用户**，不进下游 Agent |
 | `briefReply` | **简短回复** | 寒暄、拒答或无需查库时的极短回复（≤80 字） | **直接返回用户**，不进下游 Agent |
 
-#### 编排分支（服务端 `routeAfterIntake` 逻辑）
+#### 编排分支（`src/agents/pipeline/run-stream.ts`）
 
 | 条件 | 调用的 Agent | 用户看到什么 |
 |------|----------------|--------------|
 | `intent === "clarify"` 且 `clarifyingQuestion` 有值 | 无（结束） | 澄清提问 |
 | `intent` 为 `chitchat` / `out_of_scope` 且 `briefReply` 有值 | 无（结束） | 简短回复 |
-| `needsRetrieval === true` | KnowledgeManager → InformationAnalyst | 分析师归纳后的最终回答（应带引用片段） |
+| `needsRetrieval === true` | KnowledgeManager → InformationAnalyst | 分析师归纳后的最终回答（JSON 内可含 `citations`） |
 | `needsRetrieval === false` 且无 `briefReply` | InformationAnalyst（`hits` 为空） | 不查库的通用长答 |
 | 其余 | 优先 `briefReply`，否则兜底提示 | 简短说明或请用户补充 |
 
-实现位置（规划）：`src/lib/chat/pipeline.ts` 解析 JSON 并按上表调用；`POST /api/conversations/[id]/messages` 只把 **InformationAnalyst 输出**或 **澄清提问 / 简短回复** 写入助手消息。
+#### 流式 SSE 事件（`POST .../messages`）
+
+对外**仅流式**；Route 将 Orchestrator 事件编码为 SSE：
+
+| `event` | 含义 |
+|---------|------|
+| `meta` | 用户消息已落库（含真实 `id`） |
+| `step` | 编排进度：`intake` / `retrieval` / `analyst`，`status` 为 `running` \| `done` |
+| `thinking` | 信息分析师调用模型时的推理流（若模型/Ollama 支持） |
+| `assistant` | 面向用户的正文增量（流结束后以解析后的 `answer` 写入 DB） |
+| `done` | 流结束，含 user/assistant 消息 id 与终稿 `content` |
+| `error` | 模型或编排失败 |
+
+#### P0 自测建议
+
+1. 「你好」→ 短回复（闲聊 / `briefReply`）。  
+2. 「城管平台用了什么技术」→ 出现 step「检索知识库…」→ 最终回答；刷新后历史仅一问一答两条。  
+3. Ollama 未启动时应收到 `error` 事件，用户消息仍可能已保存。
 
 ### P1 — Week 2：深度与可靠性
 
@@ -236,7 +279,7 @@ flowchart TD
 
 #### 流式输出与可观测性（1）
 
-- [ ] **#18 推理黑盒** — **触发：** 用户只看到最终回答，不知道 Agent 为什么这么回答 — **对策：** 前端实时展示各 Agent 思考过程、工具调用、Token 消耗、来源引用
+- [x] **#18 推理黑盒（P0 部分）** — **已做：** SSE `step` 展示 intake/检索/分析阶段；`thinking` 展示末环模型推理流 — **待做：** Token 统计、引用列表 UI、完整调试面板（P1）
 
 ### 三、面试总览表
 

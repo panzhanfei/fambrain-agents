@@ -34,11 +34,9 @@ export const createMessageSchema = z.object({
   metadata: messageMetadataSchema,
 });
 
-/** POST /api/conversations/:id/messages — 追加一条用户提问并触发模型回复 */
+/** POST /api/conversations/:id/messages — 追加用户提问并以 SSE 流式返回助手回复 */
 export const postConversationMessageBodySchema = z.object({
   content: messageContentSchema,
-  /** 为 true 时返回 `text/event-stream`（SSE），便于展示思考与流式正文 */
-  stream: z.boolean().optional().default(false),
 });
 
 export const listMessagesQuerySchema = z.object({

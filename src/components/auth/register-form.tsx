@@ -1,5 +1,6 @@
 "use client";
 
+import { registerAction } from "@/actions/auth";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
@@ -19,38 +20,20 @@ export function RegisterForm({ hintBootstrap }: { hintBootstrap: boolean }) {
     setErr(null);
     setLoading(true);
     try {
-      const res = await fetch("/api/auth/register", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          username: username.trim(),
-          password,
-          nationalId: nationalId.trim(),
-          displayName: displayName.trim(),
-          relationToPrincipal: relationToPrincipal.trim(),
-        }),
+      const result = await registerAction({
+        username: username.trim(),
+        password,
+        nationalId: nationalId.trim(),
+        displayName: displayName.trim(),
+        relationToPrincipal: relationToPrincipal.trim(),
       });
 
-      const bodyUnknown: unknown = await res.json();
-
-      if (!res.ok) {
-        let msg = "注册失败";
-        if (
-          typeof bodyUnknown === "object" &&
-          bodyUnknown &&
-          "error" in bodyUnknown &&
-          typeof (bodyUnknown as { error?: string }).error === "string"
-        ) {
-          msg = (bodyUnknown as { error: string }).error;
-        }
-        setErr(msg);
+      if (!result.ok) {
+        setErr(result.error);
         return;
       }
 
-      const body = bodyUnknown as {
-        redirect?: string;
-      };
-      router.push(body.redirect ?? "/pending");
+      router.push(result.redirect);
       router.refresh();
     } finally {
       setLoading(false);

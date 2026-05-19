@@ -1,5 +1,6 @@
 "use client";
 
+import { loginAction } from "@/actions/auth";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
@@ -16,27 +17,15 @@ export function LoginForm() {
     setErr(null);
     setLoading(true);
     try {
-      const res = await fetch("/api/auth/login", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          username: username.trim(),
-          password,
-        }),
+      const result = await loginAction({
+        username: username.trim(),
+        password,
       });
-      if (!res.ok) {
-        let msg = "登录失败";
-        try {
-          const body = await res.json();
-          if (body?.error && typeof body.error === "string") msg = body.error;
-        } catch {
-          //
-        }
-        setErr(msg);
+      if (!result.ok) {
+        setErr(result.error);
         return;
       }
-      const body = (await res.json()) as { redirect?: string };
-      router.push(body.redirect ?? "/");
+      router.push(result.redirect);
       router.refresh();
     } finally {
       setLoading(false);

@@ -8,10 +8,9 @@ import { ChatOllama } from "@langchain/ollama";
 import { getAgentsConfig } from "@/agents/config";
 import { prompt } from "./prompt";
 
-export type DbChatTurn = {
-  role: "user" | "assistant" | "system";
-  content: string;
-};
+import type { DbChatTurn } from "@/agents/types";
+
+export type { DbChatTurn };
 
 const { ollama } = getAgentsConfig();
 

@@ -1,7 +1,6 @@
 import { getAgentsConfig } from "@/agents/config";
-import { prompt } from "@/agents/IntakeCoordinator/prompt";
 
-type HistoryRow = { role: string; content: string };
+type ChatMessage = { role: string; content: string };
 
 function mergeIncremental(acc: string, chunk: unknown): string {
   if (typeof chunk !== "string" || chunk.length === 0) return acc;
@@ -9,14 +8,11 @@ function mergeIncremental(acc: string, chunk: unknown): string {
   return acc + chunk;
 }
 
-function buildMessages(history: HistoryRow[]): { role: string; content: string }[] {
-  const recent = history.length > 40 ? history.slice(-40) : history;
-  return [{ role: "system", content: prompt }, ...recent.map((h) => ({ role: h.role, content: h.content }))];
-}
-
 function formatOllamaError(raw: string, status: number, baseUrl: string): string {
   const t = raw.trim();
-  if (!t) return `Ollama 无响应正文（HTTP ${status}），请检查服务是否已启动、OLLAMA_BASE_URL 是否为 ${baseUrl}`;
+  if (!t) {
+    return `Ollama 无响应正文（HTTP ${status}），请检查服务是否已启动、OLLAMA_BASE_URL 是否为 ${baseUrl}`;
+  }
   try {
     const j = JSON.parse(t) as { error?: unknown };
     if (typeof j.error === "string" && j.error.length > 0) return j.error;
@@ -26,35 +22,37 @@ function formatOllamaError(raw: string, status: number, baseUrl: string): string
   return t.length > 600 ? `${t.slice(0, 600)}…` : t;
 }
 
+export type OllamaStreamChunk =
+  | { kind: "thinking"; fullText: string }
+  | { kind: "content"; fullText: string };
+
 /**
- * 直连 Ollama `/api/chat` 流式（NDJSON）。带 `think` 时若被拒（不少模型/旧 Ollama），自动再试一次不带 `think`。
+ * 直连 Ollama `/api/chat` 流式 NDJSON（供 InformationAnalyst 等需要 thinking 的场景）。
  */
-export async function streamOllamaChat(options: {
-  history: HistoryRow[];
-  /** 是否首选 thinking；失败后自动降级为纯流式正文 */
-  think: boolean;
+export async function* streamOllamaNative(options: {
+  messages: ChatMessage[];
+  think?: boolean;
+  model?: string;
   signal?: AbortSignal;
-  onThinking: (fullThinking: string) => void;
-  onContent: (fullContent: string) => void;
-}): Promise<{ thinking: string; content: string }> {
+}): AsyncGenerator<OllamaStreamChunk> {
   const { ollama } = getAgentsConfig();
-  const messages = buildMessages(options.history);
   const baseUrl = ollama.baseUrl;
+  const model = options.model ?? ollama.models.intakeCoordinator;
+  const preferThink = options.think ?? ollama.streamThink;
 
   const post = (useThink: boolean) =>
     fetch(ollama.chatEndpoint, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        model: ollama.models.intakeCoordinator,
-        messages,
+        model,
+        messages: options.messages,
         stream: true,
         ...(useThink ? { think: true } : {}),
       }),
       signal: options.signal,
     });
 
-  const preferThink = options.think;
   let res = await post(preferThink);
 
   if ((!res.ok || !res.body) && preferThink) {
@@ -64,7 +62,7 @@ export async function streamOllamaChat(options: {
       const err2 = await res.text().catch(() => "");
       throw new Error(
         formatOllamaError(err2, res.status, baseUrl) ||
-          `${formatOllamaError(errText, res.status, baseUrl)}（已尝试关闭 thinking 仍失败）`,
+          `${formatOllamaError(errText, res.status, baseUrl)}（已尝试关闭 thinking 仍失败）`
       );
     }
   } else if (!res.ok || !res.body) {
@@ -84,6 +82,7 @@ export async function streamOllamaChat(options: {
     buffer += decoder.decode(value, { stream: true });
     const lines = buffer.split("\n");
     buffer = lines.pop() ?? "";
+
     for (const line of lines) {
       if (!line.trim()) continue;
       let chunk: { message?: { thinking?: unknown; content?: unknown } };
@@ -97,14 +96,14 @@ export async function streamOllamaChat(options: {
         const next = mergeIncremental(thinkingAcc, m.thinking);
         if (next !== thinkingAcc) {
           thinkingAcc = next;
-          options.onThinking(thinkingAcc);
+          yield { kind: "thinking", fullText: thinkingAcc };
         }
       }
       if (m?.content !== undefined) {
         const next = mergeIncremental(contentAcc, m.content);
         if (next !== contentAcc) {
           contentAcc = next;
-          options.onContent(contentAcc);
+          yield { kind: "content", fullText: contentAcc };
         }
       }
     }
@@ -112,20 +111,20 @@ export async function streamOllamaChat(options: {
 
   if (buffer.trim()) {
     try {
-      const chunk = JSON.parse(buffer) as { message?: { thinking?: unknown; content?: unknown } };
+      const chunk = JSON.parse(buffer) as {
+        message?: { thinking?: unknown; content?: unknown };
+      };
       const m = chunk.message;
       if (m?.thinking !== undefined) {
         thinkingAcc = mergeIncremental(thinkingAcc, m.thinking);
-        options.onThinking(thinkingAcc);
+        yield { kind: "thinking", fullText: thinkingAcc };
       }
       if (m?.content !== undefined) {
         contentAcc = mergeIncremental(contentAcc, m.content);
-        options.onContent(contentAcc);
+        yield { kind: "content", fullText: contentAcc };
       }
     } catch {
       //
     }
   }
-
-  return { thinking: thinkingAcc, content: contentAcc.trim() };
 }
