@@ -244,6 +244,22 @@ flowchart TD
 | qwen2.5:14b | 重量 Agent（入口接线员、信息分析师、内容摘要师） |
 | nomic-embed-text | 文本向量化，存入向量库 |
 
+#### 5. P0 已落地（FamBrain 三 Agent，非 LangGraph）
+
+当前仓库 **已实现** 的 Agent 技术点（面试可讲「我们先跑通最小闭环」）：
+
+| 技能点 | 代码位置 | 在 Agent 中的用途 |
+|--------|----------|-------------------|
+| `runAgentStream` + `runPipelineStream` | `src/agents/orchestrator/`、`pipeline/run-stream.ts` | **服务端编排**：模型只出 JSON/片段，**进哪个 Agent 由代码查表**，不在回复里写「下一个 Agent 名」 |
+| `parseIntakeDecision` / `defaultIntakeDecision` | `pipeline/parse-intake.ts` | 解析 Intake 路由 JSON；失败时保守默认 `retrieve_and_answer` |
+| `completeIntakeCoordinator` | `IntakeCoordinator/ollama-chat.ts` | `invoke` 一次，SystemMessage + 历史 → 路由 JSON |
+| `scanDocCandidates` + `retrieveKnowledge` | `KnowledgeManager/retrieve.ts` | P0 **关键词假 RAG**：预扫 candidates → 可选 LLM 精排 → **关键词回退** |
+| `coalesceRetrieval` | 同上 | LLM 返回合法但 `hits: []` 时，**合并关键词命中**，避免有候选却交白卷 |
+| `tokenize`（含中文二元切分） | 同上 | 预扫与回退 **必须用同一套 token**（`searchQuery` + `topics` + `subTasks`） |
+| `streamAnalyzeInformation` | `InformationAnalyst/stream.ts` | 流式 `thinking` + `assistant`；终稿 JSON 解析，失败走 `buildFallbackAnswer` |
+| `logAgentIn` / `logAgentOut` | `agents/shared/agent-log.ts` | 调试三板斧：路由 JSON → 候选/命中 → 分析师终稿 |
+| `AgentPipelineContext` | `agents/types.ts`、messages API | 注入 `corpusUserId`（查哪份语料）；**不等于** Actor 身份消歧（见 P0 坑表） |
+
 ### 二、核心坑点清单（18 个，可勾选）
 
 #### 推理与规划（4）
@@ -280,7 +296,45 @@ flowchart TD
 
 #### 流式输出与可观测性（1）
 
-- [x] **#18 推理黑盒（P0 部分）** — **已做：** SSE `step` 展示 intake/检索/分析阶段；`thinking` 展示末环模型推理流 — **待做：** Token 统计、引用列表 UI、完整调试面板（P1）
+- [x] **#18 推理黑盒（P0 部分）** — **已做：** SSE `step` 展示 intake/检索/分析阶段；`thinking` 展示末环模型推理流；服务端 `agent-log` 打 Intake/KM/Pipeline — **待做：** Token 统计、引用列表 UI、完整调试面板（P1）
+
+### 二（补）、P0 三 Agent 实践踩坑（FamBrain 实装，可勾选）
+
+> 以下来自 **P0 联调真实 bad case**（2026-05）。对策以 **prompt + 编排兜底** 为主，系统功能（权限、vault 下载）另表不计入 Agent 主线。  
+> 落实后把 **状态** 改为 `已缓解` / `已解决`，或勾选 `- [x]`。
+
+#### 技能 ↔ 职责边界（Agent 合同，先背这张）
+
+| Agent | 只负责 | 禁止 |
+|--------|--------|------|
+| IntakeCoordinator | `intent`、`searchQuery`、`topics`、`subTasks` | 写长答案、编造履历、决定「下一个 Agent 名字」 |
+| KnowledgeManager | 从 **candidates** 选 `hits`（path / excerpt / relevance） | 对用户说话、归纳终稿、编造未出现在候选中的事实 |
+| InformationAnalyst | 据 `hits` 写 `answer` + `citations`；`insufficientEvidence` 时明说无据 | 无 `hits` 时按训练数据编造经历 |
+
+#### P0 踩坑表
+
+| ID | 环节 | 现象 | 根因 | 对策（Agent 向） | 状态 |
+|----|------|------|------|------------------|------|
+| P0-1 | Intake | 「我的名字」→ `clarify`，问「哪段经历里的姓名」 | 小模型过度套用「笼统/澄清」示例；未遵守「个人信息必检索」 | prompt：收紧 `clarify` 边界 + 示例 4（姓名→`retrieve_and_answer`）；默认倾向查库 | 已缓解（prompt） |
+| P0-2 | Intake | `confidence` 很高但路由明显错了 | 模型**过度自信**，字段不可信 | 关键分支用代码规则 + `parse` 失败走 `defaultIntakeDecision`；勿只看 `confidence` | 已缓解 |
+| P0-3 | KM | 预扫 `candidateCount>0`，最终 `hits:[]`、`coverage:none` | ① 回退只 `tokenize(searchQuery)`，与预扫 token 不一致；② 中文整句 token 匹配不到正文；③ LLM 返回空 `hits` 仍采纳 | ① 回退与预扫同一套 token（含 topics/subTasks）；② 中文长词二元切分；③ `coalesceRetrieval` 回退关键词 | 已解决（代码） |
+| P0-4 | KM | LLM 精排「谨慎」整批不选 | prompt 鼓励空数组；模型怕编造 | prompt：candidates 非空且相关时**至少 1 条** hit；代码空结果回退 | 已缓解 |
+| P0-5 | 编排 | 以为模型在回复里指定下游 Agent | 误解职责 | **路由表在 `run-stream.ts`**，Intake 只产 JSON 字段 | 已解决（架构） |
+| P0-6 | Analyst | 有 candidates/hits 仍说「知识库未检索到」 | `hits` 未传入 Analyst，或上游已空 | 看 `agent-log` 链：Pipeline 决策 → KM 结果 → Analyst 输入；对齐 `analystInput.hits` | 待回归 |
+| P0-7 | Prompt | few-shot 带偏（如「那个项目呢」→ clarify） | 示例与短口语问法分布不一致 | 为高频问法补 **正向示例**；负例写清「何时不要 clarify」 | 进行中 |
+| P0-8 | 多 Agent | Intake / KM / Analyst **职责串台** | 单 Agent prompt 包打天下 | 严守上表「合同」；终稿只在 Analyst | 持续 |
+| P0-9 | RAG P0 | 把关键词检索当语义检索用 | P0 无向量，只有子串匹配 | `searchQuery` 写**实体+技术词**；Intake 补全指代；P2 再换向量 | 已知限制 |
+| P0-10 | 上下文 | `corpusUserId` 与「我是谁」混淆 | 检索指向**语料主人**；登录者 `displayName` 未注入 Agent | 问称呼：应用 session 或 `direct_answer`；问履历：走 corpus；**勿混在一个字段里** | 待做（Agent 注入） |
+
+#### P0 调试 checklist（每轮对话）
+
+- [ ] Intake 原始 JSON 是否合理（`intent` / `searchQuery` / `needsRetrieval`）
+- [ ] KM 预扫 `paths` 是否有内容；`hits` 是否非空（若 candidates 有料）
+- [ ] Analyst 输入里 `hits` / `coverage` 是否与 KM 一致
+- [ ] 终稿是否出现候选中不存在的公司、项目、日期（幻觉）
+- [ ] 换模型复现：区分 prompt 问题 vs 模型能力问题（`OLLAMA_MODEL` / `OLLAMA_MODEL_INTAKE_COORDINATOR`）
+
+**与上表 #1～#18 的关系：** P0-1 ≈ #1 意图误判；P0-3～4 ≈ #5/#7 工具输出不可信；P0-9 ≈ 检索策略限制；P0-10 ≈ #15 信息不对称（语料归属 vs 提问者）。
 
 ### 三、面试总览表
 
@@ -292,8 +346,9 @@ flowchart TD
 | 多 Agent 协作 | LangGraph Command、interrupt、条件回退 | 重复输出、协商死循环、发言混乱、信息不对称 |
 | 记忆管理 | ConversationSummaryBufferMemory、共享状态 | 关键信息遗忘、上下文污染 |
 | 可观测性 | streamEvents、前端调试面板 | 推理黑盒 |
+| **P0 已落地** | `runPipelineStream`、关键词 RAG、`coalesceRetrieval`、`agent-log` | P0-1～10（见上表）；假 RAG、JSON 路由、空 hits 回退 |
 
-**小结：** 18 个坑点对应 LangGraph 状态图控制、LangChain 工具封装、向量库验证、记忆策略与流式可观测。**面试不必逐条背诵**，选 5～6 个最熟的讲透，其余可带一句「还踩过 XX、YY，都有对应工程化手段」。
+**小结：** 18 个坑点为 **LangGraph / 全量 Agent 族谱** 的通用清单；**二（补）P0 表** 为当前仓库 **三 Agent 闭环** 已踩实坑。面试可先讲 P0 表 5～6 条（如 P0-1/3/5/9），再带「全量还有意图漂移、事实核查循环等，见路线图 P1/P2」。
 
 ---
 
