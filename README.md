@@ -170,24 +170,109 @@ flowchart TD
 2. 「城管平台用了什么技术」→ 出现 step「检索知识库…」→ 最终回答；刷新后历史仅一问一答两条。  
 3. Ollama 未启动时应收到 `error` 事件，用户消息仍可能已保存。
 
-### P1 — Week 2：深度与可靠性
+### 第二阶段（P1）— 10 天 · Agent 实战与技术栈覆盖
+
+**周期：** 10 个自然日（1 人主力）。**定位：** 本项目以 **Agent 开发练习** 为主，第二阶段在 FamBrain 业务上 **尽可能触达「技术选型总表」17 项**；验收以 **必做 Agent + 必接技术** 为准，其余为 **触达级**（最小可运行样例或对比脚本即可，README 标 ✅）。
+
+#### 第二阶段要完成的 Agent（总表）
+
+| 优先级 | 英文名 | 中文名 | 类型 | 本阶段交付 | 主要用到的技术（见下表） |
+|--------|--------|--------|------|------------|------------------------|
+| **P0 必验收** | `KnowledgeIndexer` | **知识入库师** | 新建 | CLI/脚本：扫描 `users/<corpusUserId>/corpus/` → 分块 → embed → 写入 Chroma | LlamaIndex、ChromaDB、Ollama Embed、p-limit、Zod、Pino |
+| **P0 必验收** | `KnowledgeManager` | **知识管理员** | 增强 | 向量检索为主 + 关键词 fallback；仍输出 `hits[]`；可选 LlamaIndex Retriever | LangChain、LlamaIndex、ChromaDB、Ollama、Zod、LangSmith |
+| **P0 必验收** | `FactChecker` | **事实核查员** | 新建 | 校验 `answer` 与 `hits`/`citations`；不通过触发 **再检索 1 次**（总修正 ≤2 轮） | LangGraph、LangChain、Zod、LangSmith |
+| **P0 必验收** | `ContentOrganizer` | **内容整理师** | 新建 | 合并 citations、去重 path、统一 Markdown 引用格式（可在 Analyst 后处理节点） | LangChain、Zod |
+| **P0 必验收** | — | **编排层（LangGraph）** | 迁移 | `runPipelineStream` → `StateGraph`：intake → retrieval → analyst → checker →（条件）retrieval | LangGraph、LangSmith |
+| **P1 增强** | `IntakeCoordinator` | **入口接线员** | 增强 | 路由 JSON 改 **Zod** 校验；保留 `defaultIntakeDecision` | LangChain、Zod、StructuredOutputParser 思路 |
+| **P1 增强** | `InformationAnalyst` | **信息分析师** | 增强 | 终稿 JSON **Zod**；`insufficientEvidence` 与 citations 契约 | LangChain、Ollama 流式、Zod |
+| **P1 触达** | `DocParser` | **文档解析师** | 新建（最小） | 1 条路径：如 `vault` 内 **1 份 PDF** → 纯文本 → 触发入库 | Docling、p-limit、LangChain Tool |
+| **P1 触达** | `ContentSummarizer` | **内容摘要师** | 新建（最小） | 对单篇 md 生成摘要 + 3 个 tags（脚本或独立节点各 1 次） | LangChain、Ollama |
+| **P2 延后** | — | **Agno 对比** | 样例 | 仓库 `experiments/agno-minimal/` 复现「接线员→检索」2 节点，**不写进主链路** | Agno |
+| **P0 已有** | 上述 P0 三 Agent 中 2 个 | 入口接线员、信息分析师 | 维持 | 行为不回归即可 | 见 P0 踩坑表 |
+
+**合计：** 必验收 **4 个新角色 + 1 个增强角色 + LangGraph 编排**；触达 **2 个新角色 + 2 个增强**；对比实验 **Agno** 可选。
+
+#### 第二阶段技术栈覆盖（17 项 + LangChain 子能力）
+
+| 序号 | 技术 | 第二阶段目标 | 优先级 | 触达方式（练习要点） |
+|------|------|--------------|--------|----------------------|
+| 1 | LangChain | ✅ 加深 | **P0** | `StructuredTool` 包装「检索 / 解析 / 入库」；KM/Checker 用 `invoke`；可选 `bindTools` 试验性 1 个 Tool Agent |
+| 2 | LangGraph | ✅ 接入 | **P0** | `StateGraph` + `addConditionalEdges` 实现核查回退；`stream` 对接现有 SSE `step` |
+| 3 | LlamaIndex | ✅ 接入 | **P0** | `VectorStoreIndex` + Chroma；分块按 `##`；`asRetriever()` 供 KM |
+| 4 | ChromaDB | ✅ 接入 | **P0** | 按 `corpusUserId` 分 collection；本地持久化目录 |
+| 5 | Ollama | ✅ 保持 | **P0** | chat + embed；7b 给 Checker/Organizer，14b 给 Intake/Analyst（可配置） |
+| 6 | Zod | ✅ 加深 | **P0** | Intake/KM/Analyst/Checker 输出 schema；解析失败统一 fallback |
+| 7 | Mem0 | 触达 | **P1** | 接入 1 条「用户偏好」写入/读取（如「我是前端」），下轮 Intake 注入 |
+| 8 | Docling | 触达 | **P1** | DocParser 解析 1 个 PDF → md 片段 → 走 Indexer |
+| 9 | Vercel AI SDK | 触达 | **P1** | `experiments/vercel-ai-stream/` 与 Analyst 流式对比，**主链仍 SSE** |
+| 10 | Agno | 触达 | **P2** | 独立实验目录对比 LangGraph，不阻塞验收 |
+| 11 | LangMem | 触达 | **P1** | 长会话 **摘要压缩** 1 处（>N 轮时压缩历史再进 Intake） |
+| 12 | LangSmith | 触达 | **P0** | 开发环境配置 project；Intake/KM/Checker 链可追踪（或 Pino 二选一 **P0**） |
+| 13 | Pino | 触达 | **P0** | 替代部分 `agent-log` 生产级日志；与 LangSmith 至少落地 **其一** |
+| 14 | p-limit | ✅ 接入 | **P0** | Indexer 批量 embed 并发限制（如 3） |
+| 15 | TypeBox | 触达 | **P2** | `experiments/typebox-vs-zod/` 复用 Intake schema 对比校验，**主链仍 Zod** |
+| 16 | MCP SDK | 触达 | **P1** | 只读 Tool：列 `vault` 文件列表供 Intake/Tool 调用（不接写盘） |
+| 17 | Recall | 触达 | **P1** | `experiments/recall-vs-llamaindex/` 同 query 对比 topK，**主链仍 LlamaIndex** |
+
+**LangChain 子能力（第二阶段 checklist）：**
+
+| 子能力 | 优先级 | 验收 |
+|--------|--------|------|
+| ChatOllama / Message | P0 | 已有，保持 |
+| StructuredTool / DynamicTool | P0 | ≥2 个 Tool（检索、解析） |
+| StructuredOutputParser / Zod 等价 | P0 | 全部 Agent JSON 过 schema |
+| bindTools（可选） | P1 | 1 个「自动选检索」试验路由 |
+| ConversationSummaryBuffer / LangMem | P1 | 长对话不爆 context 的 1 条用例 |
+
+#### 第二阶段验收标准（10 天结束时必须全部满足）
+
+| # | 类别 | 验收项 | 通过标准 |
+|----|------|--------|----------|
+| A1 | Agent | **知识入库师** | 对当前主角 `corpus/` 执行入库命令后，Chroma 有记录；重复执行幂等或文档说明 |
+| A2 | Agent | **知识管理员** | 问「城管平台 / 奥卡云 技术栈」：日志有 vector `hits`（≥1），`path` 在 `corpus/` 下；口语问法命中率明显优于仅关键词 |
+| A3 | Agent | **事实核查员** | 无 `hits` 时终稿不编造公司/项目细节；核查打回后 **最多再检索 1 次**，无死循环 |
+| A4 | Agent | **内容整理师** | 终稿含统一 citations 块（path + excerpt）；同 path 不重复堆砌 |
+| A5 | 编排 | **LangGraph** | 图节点 ≥4；条件边实现 checker→retrieval；前端 `step` 仍可见 intake/retrieval/analyst（+check） |
+| A6 | 回归 | **P0 能力** | README「P0 自测 3 条」+ 下表 **G1～G5** 共 8 条，**≥7 条通过** |
+| T1 | 技术 | **17 项总表** | 序号 **1～6、14** 为 ✅；**12 或 13** 至少其一 ✅；序号 **7～11、15～17** 至少 **触达**（实验或最小 API） |
+| T2 | 技术 | **可观测** | 能展示 1 次完整链路的 trace 或结构化日志（LangSmith 或 Pino） |
+| D1 | 文档 | **README** | 本阶段 Agent 表「类型」列改为已实现；17 项表更新 ✅/触达说明 |
+
+**Golden 问法（G1～G5，与 P0 自测一起算回归）：**
+
+| 编号 | 用户问法 | 期望 |
+|------|----------|------|
+| G1 | 你好 | 短回复，不检索 |
+| G2 | 我的名字 | 检索 personal/简历，非 clarify |
+| G3 | 我做过的项目和掌握的技术 | vector hits ≥2，回答分点 |
+| G4 | 城管平台用了什么技术 | hits 含对应 project md，有 citation |
+| G5 | 那个项目呢？（无上下文） | clarify，且不进入 Analyst 编造 |
+
+#### 十日排期（建议）
+
+| 天 | 焦点 | Agent | 技术 |
+|----|------|-------|------|
+| D1 | 环境与 Chroma | 知识入库师（骨架） | Chroma、Ollama embed、p-limit |
+| D2 | 分块入库 | 知识入库师（完成） | LlamaIndex、Pino、Zod（index metadata） |
+| D3 | 检索切换 | 知识管理员 | LlamaIndex retriever、关键词 fallback |
+| D4 | LangGraph 迁移 | 编排 | StateGraph 对齐现有 3 节点 |
+| D5 | 核查闭环 | 事实核查员 | conditional edge、Zod、LangSmith/Pino |
+| D6 | 整理与 schema | 内容整理师 | Intake/Analyst Zod 全量 |
+| D7 | 解析触达 | 文档解析师 | Docling 单 PDF |
+| D8 | 记忆/对比触达 | — | Mem0 或 LangMem 1 用例；Recall 对比脚本 |
+| D9 | 扩展触达 | 内容摘要师；可选 MCP 列文件 | Vercel AI / MCP 实验 |
+| D10 | 回归 + 文档 | 全链路 | 跑 A1～T2、G1～G5；更新 17 项 ✅ |
+
+> **风险：** 10 天内 17 项全 ✅ 不现实；**验收以 A1～A6、T1 必做项、T2 为准**，序号 7～11、15～17 以「触达」计入 T1。
+
+### P2 — Week 3 及以后：锦上添花
 
 | 英文名 | 中文名 | 职责 |
 |--------|--------|------|
-| `FactChecker` | 事实核查员 | 校验分析结论与证据，矛盾时触发重查 |
-| `ContentOrganizer` | 内容整理师 | 结构化输出、来源标注与可追溯 |
-| `DocParser` | 文档解析师 | PDF / Word / PPT / 图片等解析为纯文本 |
+| `ContentSummarizer` | 内容摘要师 | 若第二阶段仅触达，此处做完整上传流水线 |
+| （完善） | 文档解析师 / MCP 写操作 | 多格式、权限、vault 下载 API |
 
-**里程碑：** 多 Agent 协作 + 事实核查循环；处理幻觉、格式与重试。
-
-### P2 — Week 3：锦上添花
-
-| 英文名 | 中文名 | 职责 |
-|--------|--------|------|
-| `ContentSummarizer` | 内容摘要师 | 摘要、标签与分类 |
-| `KnowledgeIndexer` | 知识入库师 | 分块、向量化、写入向量库 |
-
-**里程碑：** 文档上传完整流水线就绪。
+**里程碑：** 文档上传完整流水线；前端可观测面板；Agno/TypeBox 对比报告（可选）。
 
 ### Week 4
 
