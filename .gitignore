@@ -24,6 +24,14 @@ package-lock.json
 # personal knowledge corpus (resume, originals — keep local only)
 /src/doc/
 
+# Chroma 向量库（KnowledgeIndexer 本地持久化）
+/data/chroma/*
+!/data/chroma/.gitkeep
+
+# 入库 CLI 日志（可选：pnpm run index:corpus 2>&1 | tee logs/...）
+/logs/*
+!/logs/.gitkeep
+
 # misc
 .DS_Store
 *.pem
