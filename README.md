@@ -17,7 +17,7 @@ pnpm run db:generate
 pnpm run dev
 ```
 
-浏览器访问 [http://localhost:3000](http://localhost:3000)。环境变量、脚本说明、代码结构见 [项目简介](docs/01-project-overview.md)。
+浏览器访问 [http://localhost:3000](http://localhost:3000)（端口由 `.env` 的 `PORT` 控制）。环境变量与代码结构见 [项目简介](docs/01-project-overview.md)。
 
 开发前请阅读 [`AGENTS.md`](./AGENTS.md)（Next.js 版本与常见教程有差异）。
 
@@ -33,10 +33,27 @@ pnpm run dev
 ## 常用命令
 
 ```bash
-pnpm run dev              # 本地开发
+pnpm run dev              # 同时启动 Web + Agent 服务
+pnpm run dev:web          # 仅 Web BFF
+pnpm run dev:agents       # 仅 Agent 服务（默认 :3001）
+pnpm run build            # db generate + standalone 打包
+pnpm run pack:deploy      # 本地构建并打 tar 部署包
+pnpm run docker:up        # Docker 一键启动 web + agents + ollama + chroma
 pnpm run chroma:server    # 启动 Chroma（向量库）
-pnpm run index:corpus     # 离线语料入库
+pnpm run index:corpus     # 离线语料入库（apps/agents）
 ```
+
+## Monorepo 结构
+
+```text
+apps/web/           Next.js UI + BFF（output: standalone）
+apps/agents/        Agent HTTP 服务 + 业务（默认 AGENTS_PORT=3001）
+packages/db/        Prisma + 会话 repo
+packages/auth/      JWT / 登录注册 / 会话
+packages/agent-*/   Agent 公共 types / config / shared
+```
+
+语料目录：`data/doc/users/<userId>/corpus/` · SQLite：`packages/db/prisma/dev.db`
 
 ---
 

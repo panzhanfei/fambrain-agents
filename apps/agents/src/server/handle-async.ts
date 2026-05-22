@@ -1,0 +1,28 @@
+import type { IncomingMessage, ServerResponse } from "node:http";
+
+export type HttpHandler = (
+  req: IncomingMessage,
+  res: ServerResponse
+) => void | Promise<void>;
+
+/** 捕获 async handler 未处理的 rejection，避免进程内 silent fail。 */
+export function handleAsync(fn: HttpHandler): HttpHandler {
+  return (req, res) => {
+    void Promise.resolve(fn(req, res)).catch((err: unknown) => {
+      if (res.headersSent) {
+        console.error("[@fambrain/agents] handler error after headers sent:", err);
+        try {
+          res.destroy();
+        } catch {
+          //
+        }
+        return;
+      }
+
+      console.error(err);
+      const msg = err instanceof Error ? err.message : "internal server error";
+      res.writeHead(500, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ error: msg }));
+    });
+  };
+}

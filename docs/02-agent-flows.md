@@ -19,7 +19,7 @@
 ```mermaid
 flowchart TB
   subgraph offline ["离线：知识入库师（手动 pnpm run index:corpus）"]
-    MD["src/doc/users/*/corpus/*.md"]
+    MD["data/doc/users/*/corpus/*.md"]
     KI["KnowledgeIndexer"]
     CH[("Chroma<br/>fambrain_corpus_&lt;userId&gt;")]
     MD --> KI --> CH
@@ -43,7 +43,7 @@ flowchart TB
 
 ## P0 在线编排流程
 
-入口接线员只输出 **JSON 路由决策**；**进哪个 Agent 由服务端编排器查表决定**（见 `src/agents/IntakeCoordinator/prompt.ts` 中的 `IntakeRoutingDecision`），不是模型在回复里写「下一个 Agent 名字」。
+入口接线员只输出 **JSON 路由决策**；**进哪个 Agent 由服务端编排器查表决定**（见 `apps/agents/src/IntakeCoordinator/prompt.ts` 中的 `IntakeRoutingDecision`），不是模型在回复里写「下一个 Agent 名字」。
 
 ```mermaid
 flowchart TD
@@ -71,7 +71,7 @@ flowchart TD
 
 ```mermaid
 flowchart TD
-  CLI["scripts/index-all-corpus.ts"] --> ALL["indexAllCorpora()"]
+  CLI["apps/agents/scripts/index-all-corpus.ts"] --> ALL["indexAllCorpora()"]
   ALL --> LISTU["listCorpusUserIds()"]
   LISTU --> LOOP{每个 corpusUserId}
   LOOP --> ONE["indexOneCorpusUser()"]
@@ -85,9 +85,9 @@ flowchart TD
 
 | 步骤 | 做什么 | 规则 | 文件 | 方法 |
 |------|--------|------|------|------|
-| 0 | CLI 入口 | 加载 `.env`；失败 exit 1 | `scripts/index-all-corpus.ts` | — |
-| 1 | 找用户 | `src/doc/users/*` 下 corpus 至少有 1 个 `.md` | `list-corpus-users.ts` | `listCorpusUserIds()` |
-| 2 | 路径约定 | 语料根 `users/<id>/corpus/` | `src/lib/knowledge/doc-paths.ts` | `getUserCorpusRoot()` |
+| 0 | CLI 入口 | 加载 `.env`；失败 exit 1 | `apps/agents/scripts/index-all-corpus.ts` | — |
+| 1 | 找用户 | `data/doc/users/*` 下 corpus 至少有 1 个 `.md` | `list-corpus-users.ts` | `listCorpusUserIds()` |
+| 2 | 路径约定 | 语料根 `users/<id>/corpus/` | `apps/agents/src/knowledge/doc-paths.ts` | `getUserCorpusRoot()` |
 | 3 | 扫 md | 递归 `.md`；跳过 `vault/originals/images/...` | `list-markdown-files.ts` | `listMarkdownFiles()`, `toRepoPath()` |
 | 4 | 读正文 | UTF-8 读全文 | `index-one-user.ts` | `readFile()` |
 | 5 | 分块 | 按 `##` 切；无 `##` 整篇 1 块；`id_`=user:path:index | `split-markdown.ts` | `splitMarkdownToDocuments()` |
@@ -187,7 +187,7 @@ flowchart TD
 | `clarifyingQuestion` | 澄清提问 | 信息不足时追问一个关键问题 | **直接返回用户** |
 | `briefReply` | 简短回复 | 寒暄或拒答（≤80 字） | **直接返回用户** |
 
-## 编排分支（`src/agents/pipeline/run-stream.ts`）
+## 编排分支（`apps/agents/src/pipeline/run-stream.ts`）
 
 | 条件 | 调用的 Agent | 用户看到什么 |
 |------|----------------|--------------|

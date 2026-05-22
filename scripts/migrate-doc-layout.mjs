@@ -12,13 +12,13 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const docRoot = path.join(repoRoot, "src/doc");
+const docRoot = path.join(repoRoot, "data/doc");
 const corpusFolders = ["experience", "projects", "personal"];
 const CORPUS = "corpus";
 const VAULT = "vault";
 
 function resolveOwnerFromDb() {
-  const dbPath = path.join(repoRoot, "prisma/dev.db");
+  const dbPath = path.join(repoRoot, "packages/db/prisma/dev.db");
   const db = new Database(dbPath, { readonly: true });
   try {
     return (

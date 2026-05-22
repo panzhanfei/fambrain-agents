@@ -1,0 +1,13 @@
+{
+  "name": "@fambrain/agent-config",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./service-url": "./src/service-url.ts"
+  },
+  "dependencies": {
+    "zod": "^4.4.3"
+  }
+}

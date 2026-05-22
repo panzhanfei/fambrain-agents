@@ -1,12 +1,9 @@
-# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
-
 # dependencies
-/node_modules
+node_modules/
 package-lock.json
 /.pnp
 .pnp.*
 .yarn/*
-!.yarn/patches
 !.yarn/plugins
 !.yarn/releases
 !.yarn/versions
@@ -15,20 +12,21 @@ package-lock.json
 /coverage
 
 # next.js
-/.next/
+**/.next/
 /out/
+/dist/
 
 # production
 /build
 
 # personal knowledge corpus (resume, originals — keep local only)
-/src/doc/
+/data/doc/
 
 # Chroma 向量库（KnowledgeIndexer 本地持久化）
 /data/chroma/*
 !/data/chroma/.gitkeep
 
-# 入库 CLI 日志（可选：pnpm run index:corpus 2>&1 | tee logs/...）
+# 入库 CLI 日志
 /logs/*
 !/logs/.gitkeep
 
@@ -42,11 +40,13 @@ yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
 
-# env files (can opt-in for committing if needed)
+# env files
 .env*
 !.env.example
 
 # sqlite (Prisma local)
+/packages/db/prisma/*.db
+/packages/db/prisma/*.db-journal
 /prisma/*.db
 /prisma/*.db-journal
 
@@ -55,6 +55,6 @@ yarn-error.log*
 
 # typescript
 *.tsbuildinfo
-next-env.d.ts
+**/next-env.d.ts
 
-/src/generated/prisma
+/packages/db/src/generated/

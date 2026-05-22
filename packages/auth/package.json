@@ -1,0 +1,22 @@
+{
+  "name": "@fambrain/auth",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./constants": "./src/constants.ts",
+    "./jwt": "./src/jwt.ts",
+    "./session": "./src/session.ts",
+    "./login": "./src/login.ts",
+    "./register": "./src/register.ts",
+    "./schemas/auth": "./src/schemas/auth.ts"
+  },
+  "dependencies": {
+    "@fambrain/db": "workspace:*",
+    "bcryptjs": "^3.0.3",
+    "jose": "^6.2.3",
+    "next": "16.2.6",
+    "zod": "^4.4.3"
+  }
+}

@@ -13,7 +13,7 @@
 | 层级 | 选型 |
 |------|------|
 | 框架 | Next.js 16、React 19 |
-| 数据库 | SQLite + Prisma 7（客户端生成至 `src/generated/prisma`） |
+| 数据库 | SQLite + Prisma 7（客户端生成至 `packages/db/src/generated/prisma`） |
 | 校验 | Zod |
 | 认证 | httpOnly Cookie + JWT（`jose`）、密码哈希（`bcryptjs`） |
 | 包管理 | **pnpm**（见 `packageManager`；勿提交 `package-lock.json`） |
@@ -50,7 +50,7 @@ pnpm run db:generate
 pnpm run dev
 ```
 
-浏览器访问 [http://localhost:3000](http://localhost:3000)。聊天需本机 **[Ollama](https://ollama.com/)** 已启动，且 `.env` 中 `OLLAMA_BASE_URL` / `OLLAMA_MODEL` 与本地已拉取模型一致。
+浏览器访问 `http://localhost:${PORT}`（默认 3000，见 `.env` 的 `PORT`）。聊天需本机 **[Ollama](https://ollama.com/)** 已启动，且 `.env` 中 `OLLAMA_HOST`/`OLLAMA_PORT`（或 `OLLAMA_BASE_URL`）与 `OLLAMA_MODEL` 一致。
 
 **pnpm 10+** 若安装后提示需批准依赖的构建脚本（如 `prisma`、`better-sqlite3`），在本仓库根目录执行一次 `pnpm approve-builds` 并按提示勾选即可；`package.json` 里已配置 `pnpm.onlyBuiltDependencies` 作为允许构建的名单，新开环境仍可能需要你本地确认一次。
 
@@ -60,14 +60,16 @@ pnpm run dev
 
 - **首个注册用户**会成为 `ADMIN`；其余成员默认 `PENDING`，需具备「成员审核」权限的账号在 `/admin/users` 通过后变为 `ACTIVE` 才可进入主界面。
 - **聊天区**：侧栏会话与历史来自数据库；发送消息走 `POST /api/conversations/:id/messages`（**SSE 流式**），经 **Orchestrator → Pipeline → 三个 Worker Agent** 生成回复，**仅将最终 assistant 正文落库**（中间路由/检索结果在内存传递，不写 `messages` 表）。
-- **登录/注册表单**使用 `src/actions/auth.ts`（Server Actions）；业务逻辑在 `src/server/auth/`，与 REST API 共用。
+- **登录/注册表单**使用 `apps/web/src/actions/auth.ts`（Server Actions）；业务逻辑在 `packages/auth/`，与 REST API 共用。
 
 ## 脚本（pnpm）
 
 | 命令 | 说明 |
 |------|------|
 | `pnpm run dev` | 本地开发 |
-| `pnpm run build` / `pnpm run start` | 构建与生产启动 |
+| `pnpm run build` / `pnpm run start` | 构建 standalone / 生产启动（`apps/web`） |
+| `pnpm run pack:deploy` | 本地构建并打 tar 部署包 |
+| `pnpm run docker:up` | Docker 一键启动 web + ollama + chroma |
 | `pnpm run lint` | ESLint |
 | `pnpm run db:generate` | 生成 Prisma Client |
 | `pnpm run db:migrate` | 开发环境迁移 |
@@ -83,7 +85,12 @@ pnpm run dev
 
 | 变量 | 必填 | 说明 |
 |------|------|------|
-| `DATABASE_URL` | 建议 | 默认 `file:./prisma/dev.db`（相对仓库根目录） |
+| `PORT` | 否 | Web 端口，默认 `3000`（`pnpm run dev` / `start` / Docker 映射） |
+| `AGENTS_HOST` / `AGENTS_PORT` | 建议 | Agent HTTP 服务，默认 `127.0.0.1:3001`；Web BFF 通过此地址调用 pipeline |
+| `AGENTS_SERVICE_URL` | 否 | 完整 Agent 服务 URL；Docker 内通常为 `http://agents:3001` |
+| `OLLAMA_HOST` / `OLLAMA_PORT` | 建议 | Ollama 地址；或用 `OLLAMA_BASE_URL` 直接覆盖 |
+| `CHROMA_HOST` / `CHROMA_PORT` | 否 | 本地 Chroma（`pnpm run chroma:server`）；或用 `CHROMA_SERVER_URL` 覆盖 |
+| `DATABASE_URL` | 建议 | 默认 `file:./packages/db/prisma/dev.db`（相对仓库根目录 `.env`） |
 | `JWT_SECRET` | 生产必填 | 长度 ≥ 24；开发未设置时会使用占位密钥（控制台告警） |
 | `JWT_RENEW_BEFORE_EXPIRY_SEC` | 否 | 中间件刷新 Cookie 的提前量（秒），默认约 4 天 |
 | `LOGIN_RATE_LIMIT_MAX` / `LOGIN_RATE_LIMIT_WINDOW_MS` | 否 | 登录接口内存限流 |
@@ -92,45 +99,42 @@ pnpm run dev
 | `TRUST_PROXY_HEADERS` | 否 | 设为 `true` 时信任 `X-Forwarded-*`（反向代理场景） |
 | `SECURITY_ENABLE_HSTS` | 否 | 设为 `true` 时在响应头启用 HSTS |
 | `FAMBRAIN_MEMBERSHIP_AUDIT_ID_SUFFIX` | 否 | 身份证号后缀匹配则拥有「审核成员」权限；不设则用代码内默认值 |
-| `OLLAMA_BASE_URL` | 建议 | 默认 `http://127.0.0.1:11434`；对话与 Agent 均通过此地址访问 Ollama |
+| `OLLAMA_BASE_URL` | 否 | 完整 Ollama URL；不设则由 `OLLAMA_HOST` + `OLLAMA_PORT` 拼接 |
 | `OLLAMA_MODEL` | 建议 | 默认 `qwen2.5:14b`；Intake / Analyst 等未单独配置时使用 |
 | `OLLAMA_MODEL_INTAKE_COORDINATOR` | 否 | 仅入口接线员专用模型；不配则等于 `OLLAMA_MODEL` |
 | `OLLAMA_MODEL_EMBED` | 否 | 嵌入模型；不配则 `nomic-embed-text`（知识入库师 embed 用） |
-| `CHROMA_SERVER_URL` | 否 | Chroma HTTP 地址；默认 `http://127.0.0.1:8000`（先 `pnpm run chroma:server`） |
+| `CHROMA_SERVER_URL` | 否 | Chroma HTTP 客户端地址；不设则由 `CHROMA_HOST` + `CHROMA_PORT` 拼接（先 `pnpm run chroma:server`） |
 | `OLLAMA_STREAM_THINK` | 否 | 流式是否请求 thinking；不支持时服务端会自动降级重试 |
-| `FAMBRAIN_CORPUS_USER_ID` | 否 | 强制所有登录用户检索 `src/doc/users/<此 userId>/`；不设则按用户表 `corpusUserId` 或本人 id |
+| `FAMBRAIN_CORPUS_USER_ID` | 否 | 强制所有登录用户检索 `data/doc/users/<此 userId>/`；不设则按用户表 `corpusUserId` 或本人 id |
 
 单机内存限流不适用于多副本；上生产请在前端网关或 Redis 等侧做统一限流。
 
-## 代码结构（P0）
+## 代码结构（Monorepo）
 
 | 路径 | 职责 |
 |------|------|
-| `src/agents/orchestrator/` | **对话唯一入口** `runAgentStream(history)` |
-| `src/agents/pipeline/` | 编排：`parseIntakeDecision`、`runPipelineStream`（`step` 进度事件） |
-| `src/agents/IntakeCoordinator/` | 入口接线员（路由 JSON） |
-| `src/agents/KnowledgeIndexer/` | **知识入库师**（离线 CLI：corpus → chunk → embed → Chroma） |
-| `src/agents/KnowledgeManager/` | 知识管理员（P0 关键词扫描；D3 计划向量检索 + fallback） |
-| `src/agents/InformationAnalyst/` | 信息分析师（流式 `thinking` + `assistant`，终稿 JSON 解析） |
-| `src/agents/config/` | Ollama 等运行时配置（读环境变量） |
-| `src/server/db/conversation-messages.ts` | 会话消息的 **唯一** Prisma 访问层 |
-| `src/server/chat/handle-post-message.ts` | 存用户消息 → 调 Orchestrator → SSE → 存 assistant |
-| `src/app/api/conversations/[id]/messages/route.ts` | GET 历史；POST 鉴权后委托 `handle-post-message` |
-| `src/lib/chat/sse.ts` | SSE 帧编码 |
-| `src/actions/auth.ts` | 登录/注册 Server Actions |
-| `src/doc/users/<userId>/corpus/` | 可检索履历 Markdown；`vault/` 为私人原件；见 `src/doc/users/README.md` |
+| `apps/web/` | Next.js UI + BFF；`.next` 产物在此目录 |
+| `apps/agents/` | Agent 业务：orchestrator、pipeline、各 Worker、Indexer CLI |
+| `packages/db/` | Prisma schema、migrations、会话 repo |
+| `packages/auth/` | JWT、登录注册、会话 |
+| `packages/agent-types/` | `DbChatTurn`、`AgentPipelineContext` 等共享类型 |
+| `packages/agent-config/` | Ollama / Chroma 环境配置 |
+| `packages/agent-shared/` | agent-log、ollama-native-stream |
+| `apps/web/src/server/chat/handle-post-message.ts` | 存用户消息 → 调 Orchestrator → SSE → 存 assistant |
+| `apps/web/src/app/api/conversations/[id]/messages/route.ts` | GET 历史；POST 鉴权后委托 BFF |
+| `data/doc/users/<userId>/corpus/` | 可检索履历 Markdown；`vault/` 为私人原件 |
 
-**约定：** `src/agents/*` 不直接访问数据库；编排层不把中间 Agent 输出写入 `messages`。
+**约定：** `@fambrain/agents` 不直接访问数据库；编排层不把中间 Agent 输出写入 `messages`。
 
 ## P0 已落地能力（代码索引）
 
 | 技能点 | 代码位置 | 用途 |
 |--------|----------|------|
-| `runAgentStream` + `runPipelineStream` | `orchestrator/`、`pipeline/run-stream.ts` | 服务端编排：进哪个 Agent 由代码查表 |
-| `parseIntakeDecision` / `defaultIntakeDecision` | `pipeline/parse-intake.ts` | 解析 Intake 路由 JSON；失败保守查库 |
-| `completeIntakeCoordinator` | `IntakeCoordinator/ollama-chat.ts` | 一次 `invoke` → 路由 JSON |
-| `scanDocCandidates` + `retrieveKnowledge` | `KnowledgeManager/retrieve.ts` | P0 关键词 RAG + LLM 精排 |
+| `runAgentStream` + `runPipelineStream` | `apps/agents/src/orchestrator/`、`pipeline/run-stream.ts` | 服务端编排：进哪个 Agent 由代码查表 |
+| `parseIntakeDecision` / `defaultIntakeDecision` | `apps/agents/src/pipeline/parse-intake.ts` | 解析 Intake 路由 JSON；失败保守查库 |
+| `completeIntakeCoordinator` | `apps/agents/src/intake-coordinator/ollama-chat.ts` | 一次 `invoke` → 路由 JSON |
+| `scanDocCandidates` + `retrieveKnowledge` | `apps/agents/src/knowledge-manager/retrieve.ts` | P0 关键词 RAG + LLM 精排 |
 | `coalesceRetrieval` | 同上 | 空 hits 时回退关键词命中 |
-| `streamAnalyzeInformation` | `InformationAnalyst/stream.ts` | 流式 thinking + assistant |
-| `indexAllCorpora` / `indexOneCorpusUser` | `KnowledgeIndexer/` | 离线 corpus → Chroma |
-| `logAgentIn` / `logAgentOut` | `agents/shared/agent-log.ts` | 调试：路由 → 检索 → 终稿 |
+| `streamAnalyzeInformation` | `apps/agents/src/information-analyst/stream.ts` | 流式 thinking + assistant |
+| `indexAllCorpora` / `indexOneCorpusUser` | `apps/agents/src/knowledge-indexer/` | 离线 corpus → Chroma |
+| `logAgentIn` / `logAgentOut` | `packages/agent-shared/src/agent-log.ts` | 调试：路由 → 检索 → 终稿 |

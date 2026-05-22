@@ -1,0 +1,13 @@
+{
+  "name": "@fambrain/agent-shared",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./agent-log": "./src/agent-log.ts",
+    "./ollama-native-stream": "./src/ollama-native-stream.ts"
+  },
+  "dependencies": {
+    "@fambrain/agent-config": "workspace:*"
+  }
+}
