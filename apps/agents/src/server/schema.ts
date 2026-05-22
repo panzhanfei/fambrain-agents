@@ -13,5 +13,3 @@ export const pipelineStreamBodySchema = z.object({
     displayName: z.string().min(1),
   }),
 });
-
-export type PipelineStreamBody = z.infer<typeof pipelineStreamBodySchema>;

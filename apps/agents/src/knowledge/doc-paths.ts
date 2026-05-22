@@ -10,12 +10,7 @@ export const DOC_USERS_DIR = "users";
 /** Agent 检索用的 Markdown 语料（可授权共享） */
 export const CORPUS_DIR = "corpus";
 
-/** 私人原件：证件照、PDF、图片等（默认仅本人；下载 API 用 actorUserId） */
-export const VAULT_DIR = "vault";
-
 export const SCAN_FOLDERS = ["experience", "projects", "personal"] as const;
-
-export type ScanFolder = (typeof SCAN_FOLDERS)[number];
 
 export type CorpusScanRoot = {
   /** 其下直接包含 experience / projects / personal */
@@ -31,11 +26,6 @@ export function getUserHome(userId: string): string {
 /** `data/doc/users/<userId>/corpus` */
 export function getUserCorpusRoot(corpusUserId: string): string {
   return path.join(getUserHome(corpusUserId), CORPUS_DIR);
-}
-
-/** `data/doc/users/<actorUserId>/vault` */
-export function getUserVaultRoot(actorUserId: string): string {
-  return path.join(getUserHome(actorUserId), VAULT_DIR);
 }
 
 async function corpusHasMarkdown(

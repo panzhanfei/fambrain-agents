@@ -1,15 +1,17 @@
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 
-import { ChromaVectorStore } from "@llamaindex/chroma";
-import { OllamaEmbedding } from "@llamaindex/ollama";
-import { Document, Settings, VectorStoreIndex, storageContextFromDefaults } from "llamaindex";
+import { Chroma } from "@langchain/community/vectorstores/chroma";
 import type { Logger } from "pino";
 
-import { getAgentsConfig } from "@fambrain/agent-config";
 import { getUserCorpusRoot } from "../knowledge/doc-paths";
+import {
+  chromaLibArgs,
+  createOllamaEmbeddings,
+  deleteChromaCollection,
+} from "../knowledge/chroma-rag";
 
-import { corpusCollectionName, getChromaServerUrl } from "./constants";
+import { corpusCollectionName } from "./constants";
 import { listMarkdownFiles, toRepoPath } from "./list-markdown-files";
 import { splitMarkdownToDocuments } from "./split-markdown";
 
@@ -22,20 +24,12 @@ export async function indexOneCorpusUser(
   corpusUserId: string,
   logger: Logger
 ): Promise<IndexOneUserResult> {
-  const { ollama } = getAgentsConfig();
-
-  // ① 配置 embedding 模型（读 .env 的 OLLAMA_BASE_URL / OLLAMA_MODEL_EMBED）
-  Settings.embedModel = new OllamaEmbedding({
-    model: ollama.models.embed,
-    config: { host: ollama.baseUrl },
-  });
-
-  // ② 扫描 md
+  // ① 扫描 md
   const corpusRoot = getUserCorpusRoot(corpusUserId);
   const mdFiles = await listMarkdownFiles(corpusRoot);
 
-  // ③ 读文件 + 分块
-  const docs: Document[] = [];
+  // ② 读文件 + 分块
+  const docs = [];
   for (const absPath of mdFiles) {
     const body = await readFile(absPath, "utf8");
     const repoPath = toRepoPath(absPath);
@@ -51,34 +45,21 @@ export async function indexOneCorpusUser(
   }
 
   const collectionName = corpusCollectionName(corpusUserId);
+  const embeddings = createOllamaEmbeddings();
 
-  // ④ Chroma 存储（JS client 连 HTTP 服务，见 getChromaServerUrl / CHROMA_DATA_PATH）
-  const vectorStore = new ChromaVectorStore({
-    collectionName,
-    chromaClientParams: { path: getChromaServerUrl() },
-  });
+  // ③ 全量重建：删旧 collection（首次不存在则忽略）
+  await deleteChromaCollection(collectionName);
+  logger.info({ corpusUserId, collectionName }, "deleted old collection");
 
-  // ⑤ 全量重建：删旧 collection（首次不存在则忽略）
-  const client = vectorStore.client();
-  try {
-    await client.deleteCollection({ name: collectionName });
-    logger.info({ corpusUserId, collectionName }, "deleted old collection");
-  } catch {
-    // 首次入库，collection 不存在
-  }
-
-  // ⑥ embed + 写入（内部会调 Ollama，可能较慢）
+  // ④ embed + 写入（内部会调 Ollama，可能较慢）
   logger.info(
     { corpusUserId, fileCount: mdFiles.length, chunkCount: docs.length },
     "indexing started"
   );
 
-  const storageContext = await storageContextFromDefaults({
-    vectorStore,
-  });
-
-  await VectorStoreIndex.fromDocuments(docs, {
-    storageContext,
+  const vectorStore = new Chroma(embeddings, chromaLibArgs(collectionName));
+  await vectorStore.addDocuments(docs, {
+    ids: docs.map((doc) => doc.id ?? ""),
   });
 
   logger.info(

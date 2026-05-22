@@ -1,4 +1,4 @@
-export { prisma, findMonorepoRoot } from "./client";
+export { prisma } from "./client";
 export {
   findOwnedConversation,
   listConversationMessages,

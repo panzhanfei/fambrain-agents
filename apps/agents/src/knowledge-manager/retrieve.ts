@@ -1,4 +1,4 @@
-import { readdir, readFile } from "node:fs/promises";
+import { readFile } from "node:fs/promises";
 import path from "node:path";
 
 import {
@@ -10,12 +10,12 @@ import { ChatOllama } from "@langchain/ollama";
 
 import { getAgentsConfig } from "@fambrain/agent-config";
 import { logAgentIn, logAgentOut } from "@fambrain/agent-shared/agent-log";
-
+import { listCorpusScanRoots, SCAN_FOLDERS } from "../knowledge/doc-paths";
 import {
-  listCorpusScanRoots,
-  SCAN_FOLDERS,
-} from "../knowledge/doc-paths";
-
+  listMarkdownFiles,
+  toRepoPath,
+} from "../knowledge-indexer/list-markdown-files";
+import { vectorRetrieve } from "./vector-retrieve";
 import {
   prompt,
   type KnowledgeHit,
@@ -73,50 +73,17 @@ function pickExcerpt(body: string, tokens: string[]): string {
   if (idx < 0) return text.slice(0, EXCERPT_MAX);
   const start = Math.max(0, idx - 60);
   const slice = text.slice(start, start + EXCERPT_MAX);
-  return (start > 0 ? "…" : "") + slice + (start + EXCERPT_MAX < text.length ? "…" : "");
-}
-
-/** 递归收集目录下所有 .md 文件路径（跳过 originals 等） */
-async function listMarkdownFiles(dir: string): Promise<string[]> {
-  let entries;
-  try {
-    entries = await readdir(dir, { withFileTypes: true });
-  } catch {
-    return [];
-  }
-
-  const files: string[] = [];
-  for (const ent of entries) {
-    const name = String(ent.name);
-    const full = path.join(dir, name);
-    if (ent.isDirectory()) {
-      if (
-        name === "originals" ||
-        name === "images" ||
-        name === "vault" ||
-        name === "corpus" ||
-        name === "sources"
-      ) {
-        continue;
-      }
-      files.push(...(await listMarkdownFiles(full)));
-    } else if (ent.isFile() && name.endsWith(".md")) {
-      files.push(full);
-    }
-  }
-  return files;
-}
-
-/** 将绝对路径转为仓库内相对路径，如 src/doc/projects/foo.md */
-function toRepoPath(absPath: string): string {
-  return path.relative(process.cwd(), absPath).split(path.sep).join("/");
+  return (
+    (start > 0 ? "…" : "") +
+    slice +
+    (start + EXCERPT_MAX < text.length ? "…" : "")
+  );
 }
 
 /**
- * 在 `src/doc/users/<corpusUserId>/corpus/` 下按关键词预扫候选段落（P0 假 RAG）。
- * 过渡：users/id 直下或 src/doc 根下扁平目录；不扫描 vault。
+ * 在 `data/doc/users/<corpusUserId>/corpus/` 下按关键词预扫候选段落（向量检索 fallback）。
  */
-export async function scanDocCandidates(
+async function scanDocCandidates(
   corpusUserId: string,
   searchQuery: string,
   topics: string[] = [],
@@ -234,8 +201,7 @@ function retrieveByKeywords(
     .slice(0, MAX_HITS);
 
   const top = hits[0]?.relevance ?? 0;
-  const coverage =
-    top >= 0.6 ? "sufficient" : top > 0 ? "partial" : "none";
+  const coverage = top >= 0.6 ? "sufficient" : top > 0 ? "partial" : "none";
 
   return {
     hits,
@@ -291,6 +257,27 @@ function coalesceRetrieval(
   return fallback.hits.length > 0 ? fallback : primary;
 }
 
+/** 向量检索 检索结果 */
+async function loadCandidates(input: KnowledgeManagerInput) {
+  if (input.candidates.length > 0) return input.candidates;
+  // 1. 先试向量
+  try {
+    const vectorHits = await vectorRetrieve(
+      input.corpusUserId,
+      [input.searchQuery, ...input.topics, ...input.subTasks].join(" ")
+    );
+    if (vectorHits.length > 0) return vectorHits;
+  } catch (e) {
+    // Chroma 不可用，静默降级
+  }
+  // 2. fallback 到现有关键词扫描
+  return scanDocCandidates(
+    input.corpusUserId,
+    input.searchQuery,
+    input.topics,
+    input.subTasks
+  );
+}
 /**
  * 知识检索主入口：补全 candidates → 尝试 Ollama 精排 → 失败则关键词回退。
  */
@@ -305,16 +292,7 @@ export async function retrieveKnowledge(
     candidatesProvided: input.candidates.length,
   });
 
-  const candidates =
-    input.candidates.length > 0
-      ? input.candidates
-      : await scanDocCandidates(
-          input.corpusUserId,
-          input.searchQuery,
-          input.topics,
-          input.subTasks
-        );
-
+  const candidates = await loadCandidates(input);
   logAgentOut("KnowledgeManager", "预扫候选（摘要）", {
     corpusUserId: input.corpusUserId,
     candidateCount: candidates.length,
@@ -339,9 +317,7 @@ export async function retrieveKnowledge(
     const text = textFromResponse(ai.content);
     const parsed = parseJsonObject<KnowledgeRetrievalResult>(text);
     const result = coalesceRetrieval(
-      !parsed
-        ? keywordFallback
-        : normalizeResult(parsed, keywordFallback),
+      !parsed ? keywordFallback : normalizeResult(parsed, keywordFallback),
       keywordFallback
     );
     logAgentOut("KnowledgeManager", "检索结果", result);

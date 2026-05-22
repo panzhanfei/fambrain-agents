@@ -1,21 +1,12 @@
 /**
  * 知识入库师（KnowledgeIndexer）
- * 离线 CLI：扫描 data/doc/users/corpus → 分块 → Ollama embed → Chroma。
+ * 离线 CLI：扫描 data/doc/users/corpus → 分块 → LangChain embed → Chroma。
  */
 
 import pino from "pino";
 
 import { indexOneCorpusUser } from "./index-one-user";
 import { listCorpusUserIds } from "./list-corpus-users";
-
-export { corpusCollectionName, CHROMA_DATA_PATH, DEFAULT_CHROMA_SERVER_URL, getChromaServerUrl } from "./constants";
-export type { ChunkMetadata } from "../knowledge/chunk-metadata";
-export { chunkMetadataSchema } from "../knowledge/chunk-metadata";
-export type { IndexOneUserResult } from "./index-one-user";
-export { indexOneCorpusUser } from "./index-one-user";
-export { listCorpusUserIds } from "./list-corpus-users";
-export { listMarkdownFiles, toRepoPath } from "./list-markdown-files";
-export { splitMarkdownToDocuments } from "./split-markdown";
 
 export const indexerLogger = pino({
   name: "fambrain-indexer",

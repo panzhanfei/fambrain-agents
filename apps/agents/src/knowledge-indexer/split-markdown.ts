@@ -1,4 +1,4 @@
-import { Document } from "llamaindex";
+import { Document } from "@langchain/core/documents";
 
 import { chunkMetadataSchema } from "../knowledge/chunk-metadata";
 
@@ -29,8 +29,8 @@ export function splitMarkdownToDocuments(
     });
     return [
       new Document({
-        id_: `${corpusUserId}:${repoPath}:0`,
-        text: trimmed,
+        id: `${corpusUserId}:${repoPath}:0`,
+        pageContent: trimmed,
         metadata: metadata as Record<string, unknown>,
       }),
     ];
@@ -54,8 +54,8 @@ export function splitMarkdownToDocuments(
 
     docs.push(
       new Document({
-        id_: `${corpusUserId}:${repoPath}:${i}`,
-        text,
+        id: `${corpusUserId}:${repoPath}:${i}`,
+        pageContent: text,
         metadata: metadata as Record<string, unknown>,
       })
     );

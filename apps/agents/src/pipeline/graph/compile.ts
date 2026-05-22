@@ -1,0 +1,173 @@
+import { END, START, StateGraph } from "@langchain/langgraph";
+
+import { logAgentOut } from "@fambrain/agent-shared/agent-log";
+
+import { completeIntakeCoordinator } from "../../intake-coordinator";
+import { retrieveKnowledge } from "../../knowledge-manager";
+import {
+  defaultIntakeDecision,
+  parseIntakeDecision,
+} from "../parse-intake";
+
+import {
+  PipelineGraphAnnotation,
+  type PipelineGraphState,
+} from "./state";
+
+function routeAfterIntake(
+  state: PipelineGraphState
+): "respondEarly" | "retrieval" | "factChecker" {
+  if (state.exitEarly || state.error) return "respondEarly";
+
+  const decision = state.decision;
+  if (!decision) return "respondEarly";
+
+  if (decision.intent === "clarify" && decision.clarifyingQuestion) {
+    return "respondEarly";
+  }
+
+  if (
+    (decision.intent === "chitchat" || decision.intent === "out_of_scope") &&
+    decision.briefReply
+  ) {
+    return "respondEarly";
+  }
+
+  if (decision.needsRetrieval) return "retrieval";
+
+  if (!decision.needsRetrieval && decision.briefReply) {
+    return "respondEarly";
+  }
+
+  return "factChecker";
+}
+
+function routeAfterFactChecker(
+  state: PipelineGraphState
+): "retrieval" | typeof END {
+  if (!state.checkerPassed && state.retryCount < 1) {
+    return "retrieval";
+  }
+  return END;
+}
+
+async function intakeNode(
+  state: PipelineGraphState
+): Promise<Partial<PipelineGraphState>> {
+  try {
+    const intakeRaw = await completeIntakeCoordinator(state.history);
+    const decision =
+      parseIntakeDecision(intakeRaw) ??
+      defaultIntakeDecision(state.userQuestion);
+
+    logAgentOut("Pipeline", "解析后的路由决策", decision);
+    return { decision };
+  } catch (e) {
+    const msg =
+      e instanceof Error ? e.message : "入口接线员调用失败，请确认 Ollama 可用";
+    return {
+      error: msg,
+      answer: "（模型调用失败：请确认本地 Ollama 已启动且模型已拉取）",
+      exitEarly: true,
+    };
+  }
+}
+
+async function retrievalNode(
+  state: PipelineGraphState
+): Promise<Partial<PipelineGraphState>> {
+  const decision = state.decision;
+  if (!decision) {
+    return { error: "缺少入口路由决策" };
+  }
+
+  const fromRetry = !state.checkerPassed && state.retryCount < 1;
+
+  try {
+    const retrieval = await retrieveKnowledge({
+      corpusUserId: state.context.corpusUserId,
+      searchQuery: decision.searchQuery || state.userQuestion,
+      topics: decision.topics,
+      subTasks: decision.subTasks,
+      candidates: [],
+    });
+
+    return {
+      hits: retrieval.hits,
+      coverage: retrieval.coverage,
+      notes: retrieval.notes,
+      retryCount: fromRetry ? state.retryCount + 1 : state.retryCount,
+    };
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "知识库检索失败";
+    return {
+      error: msg,
+      retryCount: fromRetry ? state.retryCount + 1 : state.retryCount,
+    };
+  }
+}
+
+/** D5 占位：始终通过；后续替换为 answer vs hits 校验 */
+async function factCheckerNode(
+  _state: PipelineGraphState
+): Promise<Partial<PipelineGraphState>> {
+  return { checkerPassed: true };
+}
+
+function respondEarlyNode(
+  state: PipelineGraphState
+): Partial<PipelineGraphState> {
+  if (state.answer) {
+    return { exitEarly: true };
+  }
+
+  const decision = state.decision;
+  if (!decision) {
+    return {
+      answer: "（未能理解您的问题，请换一种方式描述）",
+      exitEarly: true,
+    };
+  }
+
+  if (decision.intent === "clarify" && decision.clarifyingQuestion) {
+    logAgentOut("Pipeline", "本轮结束（澄清，未调下游）", {
+      answer: decision.clarifyingQuestion,
+    });
+    return { answer: decision.clarifyingQuestion, exitEarly: true };
+  }
+
+  if (decision.briefReply) {
+    logAgentOut("Pipeline", "本轮结束（短回复）", {
+      answer: decision.briefReply,
+    });
+    return { answer: decision.briefReply, exitEarly: true };
+  }
+
+  return {
+    answer: "（未能生成回复，请稍后重试）",
+    exitEarly: true,
+  };
+}
+
+function buildPipelineGraph() {
+  return new StateGraph(PipelineGraphAnnotation)
+    .addNode("intake", intakeNode)
+    .addNode("retrieval", retrievalNode)
+    .addNode("factChecker", factCheckerNode)
+    .addNode("respondEarly", respondEarlyNode)
+    .addEdge(START, "intake")
+    .addConditionalEdges("intake", routeAfterIntake)
+    .addEdge("retrieval", "factChecker")
+    .addConditionalEdges("factChecker", routeAfterFactChecker)
+    .addEdge("respondEarly", END);
+}
+
+let compiledGraph: ReturnType<ReturnType<typeof buildPipelineGraph>["compile"]> | null =
+  null;
+
+export function getCompiledPipelineGraph() {
+  if (!compiledGraph) {
+    compiledGraph = buildPipelineGraph().compile();
+  }
+  return compiledGraph;
+}

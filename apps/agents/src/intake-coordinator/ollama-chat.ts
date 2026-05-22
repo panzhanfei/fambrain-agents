@@ -7,11 +7,9 @@ import { ChatOllama } from "@langchain/ollama";
 
 import { getAgentsConfig } from "@fambrain/agent-config";
 import { logAgentIn, logAgentOut } from "@fambrain/agent-shared/agent-log";
-import { prompt } from "./prompt";
-
 import type { DbChatTurn } from "@fambrain/agent-types";
 
-export type { DbChatTurn };
+import { prompt } from "./prompt";
 
 const { ollama } = getAgentsConfig();
 

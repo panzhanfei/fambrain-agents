@@ -105,16 +105,9 @@ export function getAgentsConfig(): AgentsConfig {
   return cached;
 }
 
-/** 单测或脚本需要改环境变量时再调用 */
-export function resetAgentsConfigCache(): void {
-  cached = null;
-}
-
 export {
-  resolveHttpServiceUrl,
   resolveOllamaBaseUrl,
   resolveChromaServerUrl,
-  resolveWebPort,
   resolveAgentsPort,
   resolveAgentsServiceUrl,
 } from "./service-url";

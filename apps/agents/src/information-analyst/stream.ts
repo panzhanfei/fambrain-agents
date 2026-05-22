@@ -13,7 +13,7 @@ import {
   type InformationAnalystResult,
 } from "./prompt";
 
-export type AnalystStreamChunk =
+type AnalystStreamChunk =
   | { type: "thinking"; text: string }
   | { type: "assistant"; text: string };
 

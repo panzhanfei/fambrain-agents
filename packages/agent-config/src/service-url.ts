@@ -36,12 +36,6 @@ export function resolveChromaServerUrl(): string {
   });
 }
 
-export function resolveWebPort(): number {
-  const raw = process.env.PORT?.trim() || "3000";
-  const n = Number.parseInt(raw, 10);
-  return Number.isFinite(n) && n > 0 ? n : 3000;
-}
-
 export function resolveAgentsPort(): number {
   const raw = process.env.AGENTS_PORT?.trim() || "3001";
   const n = Number.parseInt(raw, 10);

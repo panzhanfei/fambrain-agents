@@ -6,10 +6,6 @@ import type {
   DbChatTurn,
 } from "@fambrain/agent-types";
 
-export type { AgentPipelineContext };
-
-export type { AgentPipelineResult, AgentStreamEvent, DbChatTurn };
-
 /**
  * FamBrain 对话唯一入口：流式产出 step / thinking / assistant，结束时返回终稿 answer。
  */
