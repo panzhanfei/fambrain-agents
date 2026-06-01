@@ -1,1 +1,0 @@
-export { retrieveKnowledge } from "./retrieve";

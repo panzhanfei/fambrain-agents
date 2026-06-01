@@ -1,6 +1,6 @@
 import { Document } from "@langchain/core/documents";
 
-import { chunkMetadataSchema } from "../knowledge/chunk-metadata";
+import { chunkMetadataSchema } from "@/agentflow/knowledge";
 
 function titleFromMarkdown(fileName: string, body: string): string {
   const line = body.match(/^#\s+(.+)$/m)?.[1]?.trim();

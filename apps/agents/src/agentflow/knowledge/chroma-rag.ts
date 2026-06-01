@@ -4,7 +4,7 @@ import { ChromaClient } from "chromadb";
 
 import { getAgentsConfig } from "@fambrain/agent-config";
 
-import { getChromaServerUrl } from "../knowledge-indexer/constants";
+import { getChromaServerUrl } from "@/agentflow/agents/offline/knowledge-indexer";
 
 export function createOllamaEmbeddings(): OllamaEmbeddings {
   const { ollama } = getAgentsConfig();

@@ -1,5 +1,5 @@
-import { openCorpusVectorStore } from "../knowledge/chroma-rag";
-import { corpusCollectionName } from "../knowledge-indexer/constants";
+import { corpusCollectionName } from "@/agentflow/agents/offline/knowledge-indexer";
+import { openCorpusVectorStore } from "@/agentflow/knowledge";
 
 export async function vectorRetrieve(
   corpusUserId: string,

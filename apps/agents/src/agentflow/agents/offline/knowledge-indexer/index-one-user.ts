@@ -4,12 +4,12 @@ import path from "node:path";
 import { Chroma } from "@langchain/community/vectorstores/chroma";
 import type { Logger } from "pino";
 
-import { getUserCorpusRoot } from "../knowledge/doc-paths";
 import {
   chromaLibArgs,
   createOllamaEmbeddings,
   deleteChromaCollection,
-} from "../knowledge/chroma-rag";
+  getUserCorpusRoot,
+} from "@/agentflow/knowledge";
 
 import { corpusCollectionName } from "./constants";
 import { listMarkdownFiles, toRepoPath } from "./list-markdown-files";

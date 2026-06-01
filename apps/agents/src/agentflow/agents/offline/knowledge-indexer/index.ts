@@ -8,6 +8,12 @@ import pino from "pino";
 import { indexOneCorpusUser } from "./index-one-user";
 import { listCorpusUserIds } from "./list-corpus-users";
 
+export { corpusCollectionName, getChromaServerUrl } from "./constants";
+export { indexOneCorpusUser, type IndexOneUserResult } from "./index-one-user";
+export { listCorpusUserIds } from "./list-corpus-users";
+export { listMarkdownFiles, toRepoPath } from "./list-markdown-files";
+export { splitMarkdownToDocuments } from "./split-markdown";
+
 export const indexerLogger = pino({
   name: "fambrain-indexer",
   level: process.env.LOG_LEVEL ?? "info",

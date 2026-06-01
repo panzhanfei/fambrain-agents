@@ -5,7 +5,7 @@ import {
   DOC_ROOT,
   DOC_USERS_DIR,
   getUserCorpusRoot,
-} from "../knowledge/doc-paths";
+} from "@/agentflow/knowledge";
 
 import { listMarkdownFiles } from "./list-markdown-files";
 

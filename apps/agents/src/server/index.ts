@@ -5,12 +5,12 @@ import { fileURLToPath } from "node:url";
 import { resolveAgentsPort } from "@fambrain/agent-config/service-url";
 import { config as loadEnv } from "dotenv";
 
-import { handleAsync } from "./handle-async";
+import { handleAsync } from "@/server/handle-async";
 import {
   handleHealth,
   handleNotFound,
   handlePipelineStream,
-} from "./routes";
+} from "@/server/routes";
 
 const repoRoot = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),

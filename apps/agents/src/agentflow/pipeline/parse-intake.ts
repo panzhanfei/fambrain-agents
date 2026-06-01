@@ -1,4 +1,4 @@
-import type { IntakeRoutingDecision } from "../intake-coordinator/prompt";
+import type { IntakeRoutingDecision } from "@/agentflow/agents/online/intake-coordinator";
 
 /** 从接线员回复里解析路由 JSON */
 export function parseIntakeDecision(raw: string): IntakeRoutingDecision | null {

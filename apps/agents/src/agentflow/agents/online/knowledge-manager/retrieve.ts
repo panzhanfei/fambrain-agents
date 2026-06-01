@@ -10,11 +10,8 @@ import { ChatOllama } from "@langchain/ollama";
 
 import { getAgentsConfig } from "@fambrain/agent-config";
 import { logAgentIn, logAgentOut } from "@fambrain/agent-shared/agent-log";
-import { listCorpusScanRoots, SCAN_FOLDERS } from "../knowledge/doc-paths";
-import {
-  listMarkdownFiles,
-  toRepoPath,
-} from "../knowledge-indexer/list-markdown-files";
+import { listMarkdownFiles, toRepoPath } from "@/agentflow/agents/offline/knowledge-indexer";
+import { listCorpusScanRoots, SCAN_FOLDERS } from "@/agentflow/knowledge";
 import { vectorRetrieve } from "./vector-retrieve";
 import {
   prompt,

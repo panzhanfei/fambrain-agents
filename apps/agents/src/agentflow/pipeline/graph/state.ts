@@ -5,8 +5,8 @@ import type {
   DbChatTurn,
 } from "@fambrain/agent-types";
 
-import type { IntakeRoutingDecision } from "../../intake-coordinator/prompt";
-import type { InformationAnalystInput } from "../../information-analyst/prompt";
+import type { IntakeRoutingDecision } from "@/agentflow/agents/online/intake-coordinator";
+import type { InformationAnalystInput } from "@/agentflow/agents/online/information-analyst";
 
 /**
  * LangGraph 编排共享状态（Intake → KM → FactChecker → Analyst）。

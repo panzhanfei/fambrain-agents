@@ -1,7 +1,7 @@
 import type {
   KnowledgeHit,
   KnowledgeRetrievalResult,
-} from "../knowledge-manager/prompt";
+} from "@/agentflow/agents/online/knowledge-manager";
 
 /**
  * InformationAnalyst 系统指令（P0）。

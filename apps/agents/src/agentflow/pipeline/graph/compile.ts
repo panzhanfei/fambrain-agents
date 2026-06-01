@@ -1,9 +1,11 @@
-import { END, START, StateGraph } from "@langchain/langgraph";
+import { END, START, StateGraph, getWriter } from "@langchain/langgraph";
+import type { LangGraphRunnableConfig } from "@langchain/langgraph";
 
 import { logAgentOut } from "@fambrain/agent-shared/agent-log";
 
-import { completeIntakeCoordinator } from "../../intake-coordinator";
-import { retrieveKnowledge } from "../../knowledge-manager";
+import { completeIntakeCoordinator } from "@/agentflow/agents/online/intake-coordinator";
+import { streamAnalyzeInformation } from "@/agentflow/agents/online/information-analyst";
+import { retrieveKnowledge } from "@/agentflow/agents/online/knowledge-manager";
 import {
   defaultIntakeDecision,
   parseIntakeDecision,
@@ -44,11 +46,11 @@ function routeAfterIntake(
 
 function routeAfterFactChecker(
   state: PipelineGraphState
-): "retrieval" | typeof END {
+): "retrieval" | "analyst" {
   if (!state.checkerPassed && state.retryCount < 1) {
     return "retrieval";
   }
-  return END;
+  return "analyst";
 }
 
 async function intakeNode(
@@ -114,6 +116,45 @@ async function factCheckerNode(
   return { checkerPassed: true };
 }
 
+async function analystNode(
+  state: PipelineGraphState,
+  config: LangGraphRunnableConfig
+): Promise<Partial<PipelineGraphState>> {
+  const decision = state.decision;
+  if (!decision) {
+    return { answer: "（未能理解您的问题，请换一种方式描述）" };
+  }
+
+  const write = getWriter(config);
+
+  try {
+    const gen = streamAnalyzeInformation({
+      userQuestion: state.userQuestion,
+      language: decision.language,
+      subTasks: decision.subTasks,
+      hits: state.hits,
+      coverage: state.coverage,
+      notes: state.notes,
+    });
+
+    let result = await gen.next();
+    while (!result.done) {
+      write?.(result.value);
+      result = await gen.next();
+    }
+
+    logAgentOut("Pipeline", "本轮结束（分析师终稿）", {
+      answer: result.value.answer,
+    });
+    return { answer: result.value.answer };
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "信息分析师调用失败";
+    const answer = "（生成回答时出错，请稍后重试）";
+    write?.({ type: "assistant", text: answer });
+    return { error: msg, answer };
+  }
+}
+
 function respondEarlyNode(
   state: PipelineGraphState
 ): Partial<PipelineGraphState> {
@@ -154,11 +195,13 @@ function buildPipelineGraph() {
     .addNode("intake", intakeNode)
     .addNode("retrieval", retrievalNode)
     .addNode("factChecker", factCheckerNode)
+    .addNode("analyst", analystNode)
     .addNode("respondEarly", respondEarlyNode)
     .addEdge(START, "intake")
     .addConditionalEdges("intake", routeAfterIntake)
     .addEdge("retrieval", "factChecker")
     .addConditionalEdges("factChecker", routeAfterFactChecker)
+    .addEdge("analyst", END)
     .addEdge("respondEarly", END);
 }
 

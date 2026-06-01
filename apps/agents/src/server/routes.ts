@@ -1,11 +1,11 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 
-import { runAgentStream } from "../orchestrator";
 import type { AgentStreamEvent } from "@fambrain/agent-types";
 
-import { requireAuth } from "./auth-middleware";
-import { pipelineStreamBodySchema } from "./schema";
-import { initSseResponse, writeSse } from "./sse";
+import { runAgentStream } from "@/agentflow";
+import { requireAuth } from "@/server/auth-middleware";
+import { pipelineStreamBodySchema } from "@/server/schema";
+import { initSseResponse, writeSse } from "@/server/sse";
 
 function streamEventName(ev: AgentStreamEvent): string {
   return ev.type;
