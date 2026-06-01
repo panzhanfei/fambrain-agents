@@ -67,19 +67,23 @@ const SUGGESTIONS = [
   "推荐几本系统设计的入门资料",
 ];
 
-function formatListTime(iso: string): string {
-  try {
-    const date = new Date(iso);
-    const diffSec = Math.floor((Date.now() - date.getTime()) / 1000);
-    const rtf = new Intl.RelativeTimeFormat("zh-CN", { numeric: "auto" });
-    if (diffSec < 60) return "刚刚";
-    if (diffSec < 3600) return rtf.format(-Math.floor(diffSec / 60), "minute");
-    if (diffSec < 86400) return rtf.format(-Math.floor(diffSec / 3600), "hour");
-    if (diffSec < 86400 * 7) return rtf.format(-Math.floor(diffSec / 86400), "day");
-    return new Intl.DateTimeFormat("zh-CN", { dateStyle: "short", timeStyle: "short" }).format(date);
-  } catch {
-    return "";
-  }
+function IconChat({ className }: { className?: string }) {
+  return (
+    <svg
+      className={className}
+      width="14"
+      height="14"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.75"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+    >
+      <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5Z" />
+    </svg>
+  );
 }
 
 function IconSidebarToggle({ className }: { className?: string }) {
@@ -566,6 +570,7 @@ export function ChatShell({ initialConversations, viewer }: ChatShellProps) {
             const labels: Record<string, string> = {
               intake: "理解问题…",
               retrieval: "检索知识库…",
+              fact_checker: "核查证据…",
               analyst: "整理回答…",
             };
             setThinkingPanelVisible(true);
@@ -653,9 +658,7 @@ export function ChatShell({ initialConversations, viewer }: ChatShellProps) {
           <span className="truncate text-[15px] font-semibold tracking-tight text-[#111827]">FamBrain</span>
         </div>
 
-        <div className="px-3 pt-3 pb-1 text-[12px] font-medium uppercase tracking-wide text-[#9ca3af]">
-          历史对话
-        </div>
+        <div className="px-3 pt-3 pb-2 text-[13px] text-[#9ca3af]">历史对话</div>
         <ul className="flex min-h-0 flex-1 flex-col gap-0.5 overflow-y-auto px-2 pb-3">
           {listLoading ? (
             <li className="px-3 py-6 text-center text-[13px] text-[#9ca3af]">加载列表中…</li>
@@ -717,8 +720,8 @@ export function ChatShell({ initialConversations, viewer }: ChatShellProps) {
                   ) : (
                     <div
                       className={[
-                        "flex items-stretch gap-0.5 rounded-xl transition-colors",
-                        selected ? "bg-white shadow-sm ring-1 ring-black/[0.04]" : "hover:bg-black/[0.03]",
+                        "group relative flex items-center gap-0.5 rounded-lg transition-colors",
+                        selected ? "bg-[#ececee]" : "hover:bg-black/[0.04]",
                       ].join(" ")}
                     >
                       <button
@@ -728,26 +731,18 @@ export function ChatShell({ initialConversations, viewer }: ChatShellProps) {
                           setPreferEmptySession(false);
                           setActiveConversationId(c.id);
                         }}
-                        className="min-w-0 flex-1 px-3 py-2.5 text-left"
+                        className="flex min-w-0 flex-1 items-center gap-2.5 px-2.5 py-2 text-left"
                       >
-                        <span className="flex items-center gap-1.5">
+                        <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-[#e8e8ea] bg-white text-[#a1a1aa]">
                           {c.pinned ? (
-                            <IconPin
-                              active
-                              className="shrink-0 text-amber-500"
-                            />
-                          ) : null}
-                          <span className="line-clamp-1 text-[14px] font-medium text-[#111827]">{c.title}</span>
+                            <IconPin active className="h-3.5 w-3.5 text-amber-500" />
+                          ) : (
+                            <IconChat />
+                          )}
                         </span>
-                        <span className="mt-0.5 block line-clamp-1 text-[12px] text-[#9ca3af]">
-                          {c.preview || "暂无消息"}
-                          <span className="text-[11px] text-[#bdbdbd]">
-                            {" "}
-                            · {formatListTime(c.updatedAt)}
-                          </span>
-                        </span>
+                        <span className="min-w-0 flex-1 truncate text-[14px] text-[#374151]">{c.title}</span>
                       </button>
-                      <div className="flex shrink-0 flex-col justify-center gap-0.5 pr-1 opacity-100 sm:opacity-0 sm:group-hover:opacity-100">
+                      <div className="flex shrink-0 items-center gap-0.5 pr-1 opacity-100 sm:opacity-0 sm:group-hover:opacity-100">
                         <button
                           type="button"
                           aria-label={c.pinned ? "取消置顶" : "置顶"}
@@ -758,7 +753,7 @@ export function ChatShell({ initialConversations, viewer }: ChatShellProps) {
                             void togglePinOptimistic(c.id);
                           }}
                           className={[
-                            "rounded-lg p-1.5 hover:bg-black/[0.06]",
+                            "rounded-md p-1 hover:bg-black/[0.06]",
                             c.pinned ? "text-amber-500" : "text-[#9ca3af] hover:text-amber-500",
                           ].join(" ")}
                         >
@@ -774,7 +769,7 @@ export function ChatShell({ initialConversations, viewer }: ChatShellProps) {
                             setEditingSidebarId(c.id);
                             setEditSidebarTitleDraft(c.title);
                           }}
-                          className="rounded-lg p-1.5 text-[#9ca3af] hover:bg-black/[0.06] hover:text-[#4f46e5]"
+                          className="rounded-md p-1 text-[#9ca3af] hover:bg-black/[0.06] hover:text-[#4f46e5]"
                         >
                           <IconEditTitle className="mx-auto text-[15px]" />
                         </button>

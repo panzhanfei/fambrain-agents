@@ -6,7 +6,7 @@
 
 ---
 
-## 一、行业常见坑（18 项）
+## 一、行业常见坑（19 项）
 
 ### 推理与规划（4）
 
@@ -35,14 +35,15 @@
 - [ ] **#14 发言顺序混乱** — **触发：** 两个 Agent 同时推送消息，顺序不确定 — **对策：** 入口接线员通过优先级队列 + 回合令牌控制发言顺序
 - [ ] **#15 信息不对称** — **触发：** 分析师看到旧索引，文档刚更新 — **对策：** 统一数据快照，每次任务前刷新索引状态
 
-### 记忆与上下文（2）
+### 记忆与上下文（3）
 
 - [ ] **#16 关键信息遗忘** — **触发：** 用户第 1 轮说「我是前端开发」，第 5 轮却推荐后端框架 — **对策：** 用户偏好写入共享状态，每轮对话前注入偏好摘要
 - [ ] **#17 上下文污染** — **触发：** 中间错误步骤留在上下文中，影响后续决策 — **对策：** 上下文分层管理，错误步骤清除，只保留修正后的结果
+- [ ] **#19 跨轮重复检索** — **触发：** 用户在同一会话再次发送相同或极相似问题（如连续两遍「城管平台用了什么技术？」），系统仍全量走 Intake → KM → FactChecker → Analyst，体感「又核查、又检索」 — **对策：** 不依赖 FactChecker 跨轮记忆；采用 **检索结果缓存**（`corpusUserId + searchQuery`，TTL）+ **Intake 识别重复问**（复用上轮 grounded 回答或 `direct_answer`）；同义改写走 semantic cache；详见 §2.2
 
 ### 流式输出与可观测性（1）
 
-- [x] **#18 推理黑盒（P0 部分）** — **已做：** SSE `step` 展示 intake/检索/分析；`thinking` 展示推理流；`agent-log` 打 Intake/KM/Pipeline — **待做：** Token 统计、引用列表 UI、完整调试面板（P1）
+- [x] **#18 推理黑盒（P0 部分）** — **已做：** SSE `step` 展示 intake / retrieval / **fact_checker** / analyst；`thinking` 展示推理流；`agent-log` 打 Intake / KM / **FactChecker** / Pipeline — **待做：** Token 统计、引用列表 UI、完整调试面板（P1）
 
 ---
 
@@ -56,6 +57,7 @@
 |--------|--------|------|
 | IntakeCoordinator | `intent`、`searchQuery`、`topics`、`subTasks` | 写长答案、编造履历、决定「下一个 Agent 名字」 |
 | KnowledgeManager | 从 **candidates** 选 `hits`（path / excerpt / relevance） | 对用户说话、归纳终稿、编造未出现在候选中的事实 |
+| FactChecker | 审当轮 `hits`/`coverage`；产出 `passed`、`refinedSearchQuery`、`checkerNotes` | 写用户终稿、编造 hits、跨轮缓存「已验过」 |
 | InformationAnalyst | 据 `hits` 写 `answer` + `citations`；无据时 `insufficientEvidence` | 无 `hits` 时按训练数据编造经历 |
 
 ### P0 踩坑表
@@ -72,6 +74,54 @@
 | P0-8 | 多 Agent | Intake/KM/Analyst 串台 | 单 prompt 包打天下 | 严守合同；终稿只在 Analyst | 🔄 持续 |
 | P0-9 | RAG | 口语命中率低 | 曾仅关键词；离线向量已入库 | Intake 补全指代；在线向量检索 | ✅ D3 已接 LangChain |
 | P0-10 | 上下文 | `corpusUserId` 与「我是谁」混淆 | 语料主人 ≠ 登录者 | session / direct_answer 与 corpus 分离 | ⬜ 待做 |
+| P0-11 | FactChecker / 编排 | 用户以为「核查过一次，同句再问不应再进 FactChecker」 | **两类现象混为一谈：**（A）同轮打回再检索 → FactChecker 跑 2 次是 Corrective RAG 设计；（B）**新一条用户消息** = 新 pipeline，`checkerPassed`/`retryCount` 重置，无跨轮 cache | 见 §2.2；消坑 sprint **D5-消坑** | ⬜ 待做 |
+
+### 2.2 FactChecker 与跨轮重复检索（2026-06 · D5 联调）
+
+> **背景：** D5 已接入 `Intake → KM → FactChecker → Analyst`。FactChecker 职责是 **检索后、生成前** 审查当轮 `hits`/`coverage`，不是「验完永久放行」；市面同类为 Self-RAG / Corrective RAG 的 **evidence grader**，跨轮去重靠 **cache / Intake**，不靠 FactChecker 记状态。
+
+#### 何时会进入 FactChecker（代码：`pipeline/graph/compile.ts`）
+
+| 条件 | 路径 |
+|------|------|
+| `needsRetrieval === true` | `retrieval` → **必进** `factChecker` → `analyst` 或打回再 `retrieval` |
+| 闲聊 / clarify / `briefReply` 提前结束 | **不进**（`respondEarly`） |
+| `needsRetrieval === false` 且无 `briefReply` | 少见：直接 `factChecker`（通常 `passed=true`） |
+
+**同轮第二次 FactChecker：** 仅当第一次 `passed=false` 且 `retryCount < 1` → 改写 `searchQuery` 再检索 → **必须再审新一轮 hits**（不是 bug）。
+
+**新一轮用户消息（即使用户字面上重复上一问）：** 整图重跑；`history` 只帮 Intake 理解指代，**不会**跳过 KM / FactChecker。
+
+#### 典型误解 vs 实际
+
+| 误解 | 实际 |
+|------|------|
+| 第一次 FactChecker 后问题应被「解决」 | 同轮只决定**本轮**证据够不够；打回 = 再检索，不是写入会话记忆 |
+| 同句再问应跳过核查 | P0 无 query cache / 重复问识别 → 每轮检索类问题仍会核查 |
+| FactChecker 应避免重复读原文 | 审的是**当轮** `hits`；跨轮重复靠 cache，不靠 FactChecker |
+
+#### 推荐对策组合（后续集中实现 · 优先级）
+
+| 优先级 | 对策 | 解决哪类「第二次」 | 改动面 |
+|--------|------|-------------------|--------|
+| P0 必留 | 检索后 FactChecker + 最多 1 次打回再检索 | 同轮证据不足 | 已实现 |
+| **+1** | **检索结果缓存** `corpusUserId + normalizedSearchQuery`，TTL 5～30min；cache hit 时 FactChecker 规则快检或跳过 LLM | 跨轮同句/同义再问 | `retrieveKnowledge` / `retrievalNode` |
+| **+2** | **Intake 重复问识别**：归一化后与本会话上一轮 user 相同 + 上轮为检索回答 → `needsRetrieval: false`，Analyst 复用 history 简答（附「与上次一致」） | 跨轮 verbatim 重复 | `intake-coordinator` prompt + `routeAfterIntake` |
+| +3 | 生成后 citation 规则校验（answer vs hits） | 幻觉终稿 | Analyst 后节点 / pitfalls #9 |
+| +4 | 向量 rerank，降低 FactChecker 打回率 | 同轮少出现 2 次 FactChecker | KM |
+
+**不建议：** 仅靠 FactChecker 跨轮记住 `passed` 跳过（语料更新、上下文变化会导致陈旧或漏检索）。
+
+#### 踩坑表
+
+| ID | 环节 | 现象 | 根因 | 对策（计划） | 状态 |
+|----|------|------|------|--------------|------|
+| D5-1 | FactChecker | 证据无命中时 UI 出现两次「核查证据…」+ 两次检索 | `routeAfterFactChecker` 打回逻辑 | 保留；用 D3-2 提高首轮命中率，减少打回 | 🔄 预期行为 |
+| D5-2 | 编排 / UX | 聊天记录里**同一句再问**，仍走检索+核查 | 每轮 `runPipelineStream` 状态重置；无 cache | 检索 cache + Intake 重复问（§2.2 表） | ⬜ **消坑 sprint D5-消坑** |
+| D5-3 | 职责 | 期望 FactChecker 校验**终稿** vs hits | P0 仅在生成前审证据包 | D6 后或 +3 增加生成后 groundedness | ⬜ 路线图 |
+| D5-4 | SSE | 重复问时 step 闪过快，用户只注意到「整理回答」 | `fact_checker` 与 `analyst` 连续 | 可选：重复问跳过 fact_checker step 展示 | ⬜ 低优 |
+
+**验证脚本：** `pnpm run verify:fact-checker`、`pnpm run verify:fact-checker:pipeline`（`apps/agents/package.json`）。
 
 ### 2.1 D3 / LangChain 联调踩坑（2026-05-22）
 
@@ -101,7 +151,7 @@
 
 **链路说明（通俗）：** 向量「书架找书」成功 → LLM「管理员挑书」失手 → 关键词「按书名搜字」也对不上 → 最终交空列表给 Analyst。
 
-### 与通用坑 #1～#18 的对应
+### 与通用坑 #1～#19 的对应
 
 | 本项目 | 通用坑 |
 |--------|--------|
@@ -112,6 +162,8 @@
 | P0-9 / D3-2 | 检索策略限制 |
 | D3-8 / D3-9 | #16 关键信息遗忘 |
 | P0-10 | #15 信息不对称 |
+| P0-11 / D5-2 | #19 跨轮重复检索 |
+| D5-1 | #6 工具调用死循环（已限 1 次打回，非死循环） |
 
 ---
 
@@ -125,17 +177,22 @@
 | **消坑 D2** | 召回质量 | D3-6～D3-7、D3-10 | path 去重；常量集中；G3 path 分布改善 |
 | **消坑 D3** | 多轮上下文 | D3-8～D3-9、P0-10 | Intake/Analyst 短历史；pipeline 检索摘要 |
 | **消坑 D4** | 回归 + 文档 | D3-11～D3-12、P0-6、A6 | G1～G5 全自动脚本；docs/流程图/sync；FactChecker 与 KM 联调 |
+| **消坑 D5-消坑** | 跨轮少重复 | D5-2、P0-11；可选 D5-4 | 检索 cache；Intake 同句重复问；Golden：连续两问 G4 第二次命中 cache 或简答 |
 
 **完成标准（核心 Agent + 消坑）：**
 
-- [ ] 在线链路：Intake → KM（向量）→ FactChecker → ContentOrganizer → Analyst
+- [x] 在线链路（P0）：Intake → KM（向量 + 关键词）→ **FactChecker** → Analyst（ContentOrganizer ⬜ D6）
 - [ ] Golden **G1～G5 ≥4 条稳定通过**（允许 G5 clarify 行为一致即可）
 - [ ] D3-2 **不可复现**（12 candidates → hits 必 ≥1）
 - [ ] 踩坑表 D3-* 与 P0-4 / P0-6 状态更新为 ✅ 或 🔄 有明确遗留
+- [ ] D5-2：同会话连续两问 G4 原文，第二次不再全量向量检索（cache 或 Intake 复用）← §2.2
 
 ---
 
-## 四、调试 checklist（每轮对话 · P0 + D3）
+## 四、调试 checklist（每轮对话 · P0 + D3 + D5）
+
+- [ ] 若出现**两次** `fact_checker` step：查 FactChecker 第一次是否 `passed=false`、是否打回再检索（D5-1，常伴 `retryCount: 1`）← §2.2
+- [ ] 若**新一条消息**与上轮同句仍全链路：属 D5-2 未消坑，非 FactChecker 失效
 
 - [ ] Intake 原始 JSON 是否合理（`intent` / `searchQuery` / `needsRetrieval`）
 - [ ] KM 预扫 `paths` 是否有内容；**`hits` 是否非空（若 `candidateCount > 0`）** ← D3-2
@@ -145,3 +202,4 @@
 - [ ] 终稿是否出现候选中不存在的公司、项目、日期（幻觉）
 - [ ] 换模型复现：区分 prompt 问题 vs 模型能力（`OLLAMA_MODEL` / `OLLAMA_MODEL_INTAKE_COORDINATOR`）
 - [ ] agents 服务 `:3001` 是否唯一实例（无 EADDRINUSE）← D3-12
+- [ ] FactChecker 日志：`passed` / `refinedSearchQuery` / `retryCount` 是否符合 §2.2 判定表

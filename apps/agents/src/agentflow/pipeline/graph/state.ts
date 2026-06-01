@@ -33,7 +33,7 @@ export const PipelineGraphAnnotation = Annotation.Root({
   error: Annotation<string | null>,
   /** true 表示图在 respondEarly 结束，不再进入 Analyst */
   exitEarly: Annotation<boolean>,
-  /** D5 事实核查员占位：false 且 retryCount < 1 时可打回再检索 */
+  /** 事实核查员：false 且 retryCount < 1 时可打回再检索 */
   checkerPassed: Annotation<boolean>,
   /** 核查打回后的再检索次数（最多 1 次） */
   retryCount: Annotation<number>,

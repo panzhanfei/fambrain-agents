@@ -29,7 +29,8 @@ export async function getSidebarConversations(userId: string): Promise<Conversat
 
   return conversations.map((c) => {
     const raw = c.messages[0]?.content ?? "";
-    const preview = raw.length > 160 ? `${raw.slice(0, 160)}…` : raw;
+    const normalized = raw.replace(/\s+/g, " ").trim();
+    const preview = normalized.length > 72 ? `${normalized.slice(0, 72)}…` : normalized;
     return {
       id: c.id,
       title: c.title || "新对话",

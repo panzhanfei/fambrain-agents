@@ -9,7 +9,9 @@
   "scripts": {
     "dev": "tsx watch --env-file=../../.env src/server/index.ts",
     "start": "tsx --env-file=../../.env src/server/index.ts",
-    "index:corpus": "tsx --env-file=../../.env scripts/index-all-corpus.ts"
+    "index:corpus": "tsx --env-file=../../.env scripts/index-all-corpus.ts",
+    "verify:fact-checker": "tsx --env-file=../../.env scripts/verify-fact-checker.ts",
+    "verify:fact-checker:pipeline": "tsx --env-file=../../.env scripts/verify-fact-checker-pipeline.ts"
   },
   "dependencies": {
     "@fambrain/agent-config": "workspace:*",

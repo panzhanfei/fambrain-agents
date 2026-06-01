@@ -15,7 +15,11 @@ export type AgentPipelineContext = {
 
 /** Orchestrator 向 HTTP 层推送的流式事件 */
 export type AgentStreamEvent =
-  | { type: "step"; name: "intake" | "retrieval" | "analyst"; status: "running" | "done" }
+  | {
+      type: "step";
+      name: "intake" | "retrieval" | "fact_checker" | "analyst";
+      status: "running" | "done";
+    }
   | { type: "thinking"; text: string }
   | { type: "assistant"; text: string }
   | { type: "error"; message: string };

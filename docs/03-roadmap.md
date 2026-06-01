@@ -20,8 +20,9 @@
 ### P0 自测
 
 1. 「你好」→ 短回复（闲聊 / `briefReply`）。
-2. 「城管平台用了什么技术」→ step「检索知识库…」→ 最终回答；刷新后历史仅一问一答两条。
+2. 「城管平台用了什么技术」→ step「检索知识库…」→ **「核查证据…」** →「整理回答…」→ 最终回答；无语料时可能二次检索（见 [坑点 D5-1](./04-pitfalls.md)）。
 3. Ollama 未启动时应收到 `error` 事件，用户消息仍可能已保存。
+4. **（可选自动化）** `cd apps/agents && pnpm run verify:fact-checker && pnpm run verify:fact-checker:pipeline`
 
 ### Golden 问法（回归）
 
@@ -47,9 +48,9 @@
 | `IntakeCoordinator` | 入口接线员 | 维持 + Zod 化 | ✅ P0；Zod 待 D6 | [§2](./02-agent-flows.md#2-intakecoordinator--入口接线员-) |
 | `KnowledgeManager` | 知识管理员 | 增强 | ✅ P0 关键词；**D3 接 Chroma 向量** | [§3](./02-agent-flows.md#3-knowledgemanager--知识管理员--p0--d3-向量) |
 | `InformationAnalyst` | 信息分析师 | 维持 + Zod 化 | ✅ P0；Zod 待 D6 | [§4](./02-agent-flows.md#4-informationanalyst--信息分析师-) |
-| `FactChecker` | 事实核查员 | 新建 | ⬜ D5 | — |
+| `FactChecker` | 事实核查员 | 新建 | **🔄 D5 已接入**（证据包核查；Zod / 跨轮 cache 待消坑） | [§4](./02-agent-flows.md#4-factchecker--事实核查员-d5-) |
 | `ContentOrganizer` | 内容整理师 | 新建 | ⬜ D6 | — |
-| LangGraph 编排 | — | 迁移 | ⬜ D4 | — |
+| LangGraph 编排 | — | 迁移 | **✅** `pipeline/graph` StateGraph | [P0 在线编排](./02-agent-flows.md#p0-在线编排流程) |
 | `DocParser` | 文档解析师 | 触达 | ⬜ D7 | — |
 | `ContentSummarizer` | 内容摘要师 | 触达 | ⬜ D9 | — |
 
@@ -59,7 +60,7 @@
 |--------|-------|------|----------|
 | **P0 必验收** | 知识入库师 | CLI 全量入库 | LlamaIndex、ChromaDB、Ollama Embed、Zod、Pino |
 | **P0 必验收** | 知识管理员 | 向量为主 + 关键词 fallback | LangChain、LlamaIndex、ChromaDB、LangSmith |
-| **P0 必验收** | 事实核查员 | 校验 answer vs hits；最多再检索 1 次 | LangGraph、Zod |
+| **P0 必验收** | 事实核查员 | **检索后**审 `hits`/`coverage`；`passed=false` 时改写 `searchQuery` 并**最多再检索 1 次**；生成后 citation 校验待后续 | LangGraph、ChatOllama、规则兜底；Zod 待 D6 |
 | **P0 必验收** | 内容整理师 | citations 去重、统一格式 | LangChain、Zod |
 | **P0 必验收** | 编排层 | `runPipelineStream` → `StateGraph` | LangGraph、LangSmith |
 | **P1 增强** | 入口接线员 / 信息分析师 | JSON 改 Zod 校验 | LangChain、Zod |
@@ -73,8 +74,8 @@
 | D1 | 环境与 Chroma | 知识入库师（骨架） | Chroma、Ollama embed、p-limit | **✅ 完成** |
 | D2 | 分块入库 | 知识入库师（完成） | LlamaIndex、Pino、Zod | **✅ 基本完成** |
 | D3 | 检索切换 | 知识管理员 | LlamaIndex retriever、关键词 fallback | **⬜ 下一步** |
-| D4 | LangGraph 迁移 | 编排 | StateGraph | ⬜ |
-| D5 | 核查闭环 | 事实核查员 | conditional edge、Zod | ⬜ |
+| D4 | LangGraph 迁移 | 编排 | StateGraph、`runPipelineStream` | **✅** |
+| D5 | 核查闭环 | 事实核查员 | `completeFactCheck`、checker→retrieval 条件边；Zod / 跨轮 cache 见 [坑点 §2.2](./04-pitfalls.md) | **🔄** 已接入，**D5-消坑**待做 |
 | D6 | 整理与 schema | 内容整理师 | Intake/Analyst Zod | ⬜ |
 | D7 | 解析触达 | 文档解析师 | Docling 单 PDF | ⬜ |
 | D8 | 记忆/对比触达 | — | Mem0 / LangMem；Recall 对比 | ⬜ |
@@ -89,13 +90,13 @@
 |----|------|--------|----------|------|
 | A1 | Agent | 知识入库师 | 入库后 Chroma 有记录；重复执行幂等 | **✅ 已通过** |
 | A2 | Agent | 知识管理员 | 口语问法 vector hits ≥1，`path` 在 `corpus/` 下 | ⬜ |
-| A3 | Agent | 事实核查员 | 无 hits 不编造；打回后最多再检索 1 次 | ⬜ |
+| A3 | Agent | 事实核查员 | 无 hits 不编造；打回后最多再检索 1 次；`retryCount≥1` 强制放行 | **🔄** 脚本 `verify:fact-checker` / `verify:fact-checker:pipeline` 已通过；Golden 待回归 |
 | A4 | Agent | 内容整理师 | 统一 citations；同 path 不重复 | ⬜ |
-| A5 | 编排 | LangGraph | 节点 ≥4；checker→retrieval 条件边；SSE step 可见 | ⬜ |
+| A5 | 编排 | LangGraph | 节点 ≥5（含 factChecker）；checker→retrieval 条件边；SSE `fact_checker` | **🔄** 图与 step 已接；ContentOrganizer 未接 |
 | A6 | 回归 | P0 能力 | [P0 自测 3 条](#p0-自测) + G1～G5 共 8 条，**≥7 条通过** | 进行中 |
 | T1 | 技术 | 17 项总表 | 1～6、14 为 ✅；12 或 13 至少其一 ✅；7～11、15～17 触达 | 进行中 |
 | T2 | 技术 | 可观测 | 1 次完整链路 trace 或结构化日志 | 部分（Pino 入库） |
-| D1 | 文档 | docs 更新 | Agent 表与 17 项 ✅/⬜ 同步 | 本次拆分 ✅ |
+| D1 | 文档 | docs 更新 | Agent 表与 17 项 ✅/⬜ 同步 | **🔄** 2026-06 同步 D5 / FactChecker |
 
 ---
 

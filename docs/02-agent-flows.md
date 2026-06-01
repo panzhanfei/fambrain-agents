@@ -4,15 +4,16 @@
 
 本文描述 FamBrain 多 Agent 的 **全局链路**、**在线编排**、**单 Agent 实现**（含规则 / 文件 / 方法），以及路由契约与 SSE 事件。
 
-## P0 三 Agent 角色
+## P0 在线四 Agent 角色
 
 | 英文名 | 中文名 | 职责 |
 |--------|--------|------|
-| `IntakeCoordinator` | 入口接线员 | 接收输入、理解意图、拆分任务、分发下游 |
-| `KnowledgeManager` | 知识管理员 | 检索知识库，返回相关片段（RAG 检索） |
+| `IntakeCoordinator` | 入口接线员 | 接收输入、理解意图、拆分任务、产出路由 JSON |
+| `KnowledgeManager` | 知识管理员 | 检索知识库，返回 `hits` / `coverage` / `notes` |
+| `FactChecker` | 事实核查员 | **检索后、生成前**审查证据包；不足时打回再检索（最多 1 次） |
 | `InformationAnalyst` | 信息分析师 | 对检索结果分析、归纳并回答 |
 
-**里程碑：** 用户提问 → 意图识别 → 检索 → 分析 → 回答。（在线三 Agent **已实现**；检索仍为 P0 关键词，向量库已可离线入库，在线向量检索见 D3。）
+**里程碑：** 用户提问 → 意图识别 → 检索 → **证据核查** → 分析 → 回答。（LangGraph 编排 **已实现**；KM：**向量 + 关键词 fallback**；FactChecker：**D5 已接入**，跨轮 cache 见 [坑点 §2.2](./04-pitfalls.md)。）
 
 ## 全链路总览（离线入库 + 在线对话）
 
@@ -27,36 +28,43 @@ flowchart TB
 
   subgraph online ["在线：用户聊天 POST .../messages"]
     U[用户消息] --> IC[IntakeCoordinator<br/>入口接线员]
-    IC --> P{parseIntakeDecision<br/>编排器查表}
+    IC --> P{parseIntakeDecision<br/>LangGraph 路由}
     P -->|clarify / chitchat| R1[briefReply / 澄清]
     P -->|needsRetrieval| KM[KnowledgeManager<br/>知识管理员]
-    P -->|direct_answer| IA[InformationAnalyst<br/>信息分析师]
-    KM --> IA
+    KM --> FC[FactChecker<br/>事实核查员]
+    FC -->|passed 或已重试| IA[InformationAnalyst<br/>信息分析师]
+    FC -->|未通过且 retry&lt;1| KM
+    P -->|direct_answer 等| FC2[FactChecker 可选] --> IA
     IA --> OUT[assistant 入库]
   end
 
-  CH -.->|D3 计划：向量 hits| KM
-  MD -.->|P0 当前：关键词扫 md| KM
+  CH -.->|向量 hits| KM
+  MD -.->|关键词 fallback| KM
 ```
 
-> **进度（2026-05）：** 离线 `KnowledgeIndexer` ✅（442 chunks 已入库验证）；在线 KM 仍读 md 关键词，下一步 D3 接 Chroma `asRetriever()`。
+> **进度（2026-06）：** 离线 `KnowledgeIndexer` ✅；在线 KM 已接 Chroma `vectorRetrieve` + 关键词 fallback；`FactChecker` 已接入 LangGraph（`pipeline/graph/compile.ts`）。
 
 ## P0 在线编排流程
 
-入口接线员只输出 **JSON 路由决策**；**进哪个 Agent 由服务端编排器查表决定**（见 `apps/agents/src/IntakeCoordinator/prompt.ts` 中的 `IntakeRoutingDecision`），不是模型在回复里写「下一个 Agent 名字」。
+入口接线员只输出 **JSON 路由决策**；**进哪个节点由 LangGraph 查表决定**（`IntakeRoutingDecision` 见 `agentflow/agents/online/intake-coordinator/prompt.ts`），不是模型在回复里写「下一个 Agent 名字」。
+
+实现：`apps/agents/src/agentflow/pipeline/graph/compile.ts` · 流式入口 `pipeline/graph/stream.ts` → `runPipelineStream()`。
 
 ```mermaid
 flowchart TD
-  A[用户消息] --> B[IntakeCoordinator<br/>入口接线员]
-  B --> C{解析 JSON<br/>parseIntakeDecision}
+  A[用户消息] --> B[IntakeCoordinator]
+  B --> C{parseIntakeDecision}
 
-  C -->|intent = clarify<br/>需澄清| D[返回 clarifyingQuestion<br/>澄清提问]
-  C -->|intent = chitchat / out_of_scope<br/>且存在 briefReply| E[返回 briefReply<br/>简短回复]
-  C -->|needsRetrieval = true<br/>需要查库| F[KnowledgeManager<br/>知识管理员]
-  C -->|intent = direct_answer<br/>且无 briefReply| G[InformationAnalyst<br/>信息分析师]
+  C -->|clarify / chitchat + briefReply| D[respondEarly]
+  C -->|needsRetrieval = true| F[KnowledgeManager]
+  C -->|其它需下游| FC0[FactChecker]
 
-  F --> G
-  G --> H[返回最终回答<br/>assistant 消息入库]
+  F --> FC[FactChecker]
+  FC -->|checkerPassed 或 retryCount ≥ 1| G[InformationAnalyst]
+  FC -->|!checkerPassed 且 retryCount = 0| F
+  FC0 --> G
+  G --> H[assistant 入库]
+  D --> H
 ```
 
 ## 单 Agent 实现流程
@@ -112,7 +120,7 @@ flowchart TD
   PARSE -->|失败| DEF["defaultIntakeDecision()"]
   PARSE --> OK[IntakeRoutingDecision]
   DEF --> OK
-  OK --> PIPE["run-stream.ts 查表分支"]
+  OK --> PIPE["LangGraph compile.ts"]
 ```
 
 | 步骤 | 做什么 | 规则 | 文件 | 方法 |
@@ -121,34 +129,60 @@ flowchart TD
 | 2 | 调模型 | 一次 `invoke`；模型见 `OLLAMA_MODEL_INTAKE_COORDINATOR` | `IntakeCoordinator/ollama-chat.ts` | `completeIntakeCoordinator()` |
 | 3 | 解析 JSON | 抠 JSON；失败不抛给用户 | `pipeline/parse-intake.ts` | `parseIntakeDecision()` |
 | 4 | 兜底 | 解析失败 → `needsRetrieval=true` 保守查库 | `pipeline/parse-intake.ts` | `defaultIntakeDecision()` |
-| 5 | 编排 | **代码**决定 clarify / brief / KM / Analyst | `pipeline/run-stream.ts` | `runPipelineStream()` |
+| 5 | 编排 | LangGraph 条件边 | `pipeline/graph/compile.ts` | `getCompiledPipelineGraph()` |
 
-### 3. KnowledgeManager — 知识管理员 ✅ P0 / ⬜ D3 向量
+### 3. KnowledgeManager — 知识管理员 ✅
 
 **职责：** 产出 `hits[]`（path / excerpt / relevance），不对用户说话。
 
-**技术：** LangChain `ChatOllama`（精排）；P0 关键词扫描；D3 计划 LlamaIndex `asRetriever()`。
+**技术：** LangChain `ChatOllama`（精排）；**向量检索** + 关键词扫描 fallback。
 
 ```mermaid
 flowchart TD
-  IN["searchQuery + topics + subTasks<br/>corpusUserId"] --> SCAN["scanDocCandidates()<br/>关键词预扫 md"]
-  SCAN --> CAND[candidates]
-  CAND --> LLM["可选 ChatOllama 精排"]
-  LLM --> COAL["coalesceRetrieval()<br/>空 hits 回退关键词"]
-  COAL --> OUT["KnowledgeRetrievalResult<br/>hits / coverage / notes"]
-  CHROMA[("Chroma 向量库")] -.->|D3 计划| VEC["vectorRetrieve()"]
-  VEC -.-> OUT
+  IN["searchQuery + corpusUserId"] --> VEC["vectorRetrieve()"]
+  VEC -->|无结果| SCAN["scanDocCandidates()"]
+  VEC --> CAND[candidates]
+  SCAN --> CAND
+  CAND --> LLM["ChatOllama 精排"]
+  LLM --> COAL["coalesceRetrieval()"]
+  COAL --> OUT["hits / coverage / notes"]
 ```
 
 | 步骤 | 做什么 | 规则 | 文件 | 方法 |
 |------|--------|------|------|------|
-| 1 | 预扫 | `experience/projects/personal`；token 含中文二元切分 | `KnowledgeManager/retrieve.ts` | `scanDocCandidates()`, `tokenize()` |
-| 2 | LLM 精排 | 只从 candidates 选；至少 1 条 hit（prompt） | `retrieve.ts`, `prompt.ts` | `retrieveKnowledge()` |
-| 3 | 回退 | LLM 返回空 hits → 关键词命中合并 | `retrieve.ts` | `coalesceRetrieval()` |
-| 4 | 输出 | 最多 5 条；coverage=sufficient/partial/none | `KnowledgeManager/prompt.ts` | 类型 `KnowledgeHit`, `KnowledgeRetrievalResult` |
-| 5 | 向量检索 | **未接**；D3：`asRetriever()` + 关键词 fallback | （待建） | — |
+| 1 | 向量预扫 | Chroma collection per user | `vector-retrieve.ts`, `knowledge/chroma-rag.ts` | `vectorRetrieve()` |
+| 2 | 关键词 fallback | `experience/projects/personal`；中文二元切分 | `retrieve.ts` | `scanDocCandidates()`, `tokenize()` |
+| 3 | LLM 精排 | 只从 candidates 选 | `retrieve.ts`, `prompt.ts` | `retrieveKnowledge()` |
+| 4 | 回退 | LLM 空 hits → 关键词合并 | `retrieve.ts` | `coalesceRetrieval()` |
+| 5 | 输出 | 最多 5 条；coverage 三档 | `prompt.ts` | `KnowledgeRetrievalResult` |
 
-### 4. InformationAnalyst — 信息分析师 ✅
+### 4. FactChecker — 事实核查员（D5）🔄
+
+**职责：** 审查当轮 `hits` / `coverage` 是否足以回答 `userQuestion`；**不写终稿**。`passed=false` 时产出 `refinedSearchQuery`，编排器最多再打回 KM **1 次**。
+
+**技术：** LangChain `ChatOllama`；规则兜底 `buildRuleBasedFactCheck()`；`retryCount≥1` 时代码强制放行。
+
+```mermaid
+flowchart TD
+  IN["userQuestion + hits + coverage<br/>searchQuery + retryCount"] --> LLM["completeFactCheck()"]
+  LLM --> NORM["normalizeFactCheckerResult()"]
+  NORM -->|passed=false, retry=0| REWRITE["更新 decision.searchQuery"]
+  NORM -->|passed=true 或 retry≥1| NOTES["合并 checkerNotes → notes"]
+  REWRITE --> RET["retrieval 节点再打回"]
+  NOTES --> IA["InformationAnalyst"]
+```
+
+| 步骤 | 做什么 | 规则 | 文件 | 方法 |
+|------|--------|------|------|------|
+| 1 | 输入 | 含 `retryCount`（0=首次，1=已重试） | `fact-checker/prompt.ts` | `FactCheckerInput` |
+| 2 | 调模型 | 与 Intake 同 `OLLAMA_MODEL_INTAKE_COORDINATOR` | `check-facts.ts` | `completeFactCheck()` |
+| 3 | 解析 | JSON → `passed` / `evidenceScore` / `issues` | `check-helpers.ts` | `normalizeFactCheckerResult()` |
+| 4 | 兜底 | LLM 失败走规则；重试后强制 `passed=true` | `check-helpers.ts` | `buildRuleBasedFactCheck()` |
+| 5 | 编排 | `checkerPassed` → analyst 或 retrieval | `pipeline/graph/compile.ts` | `factCheckerNode()`, `routeAfterFactChecker()` |
+
+**验证：** `pnpm run verify:fact-checker`（规则）、`pnpm run verify:fact-checker:pipeline`（全链路）。跨轮重复问仍全量检索见 [坑点 §2.2](./04-pitfalls.md)。
+
+### 5. InformationAnalyst — 信息分析师 ✅
 
 **职责：** 据 `hits` 写终稿；无证据时 `insufficientEvidence`，禁止编造履历。
 
@@ -169,9 +203,9 @@ flowchart TD
 |------|--------|------|------|------|
 | 1 | 输入 | 只认上游 hits；不自己检索 | `InformationAnalyst/prompt.ts` | `InformationAnalystInput` |
 | 2 | 流式 | thinking + assistant SSE | `InformationAnalyst/stream.ts` | `streamAnalyzeInformation()` |
-| 3 | 终稿 JSON | answer / citations / insufficientEvidence | `InformationAnalyst/analyze.ts` | JSON 解析 |
+| 3 | 终稿 JSON | answer / citations / insufficientEvidence | `analyze-helpers.ts` | `normalizeAnalystResult()` |
 | 4 | 兜底 | 解析失败用 hits 拼可读回答 | `analyze-helpers.ts` | `buildFallbackAnswer()` |
-| 5 | 落库 | 编排器只存最终 assistant 正文 | `pipeline/run-stream.ts` | `runAnalystStream()` |
+| 5 | 落库 | LangGraph `analyst` 节点 + SSE custom 流 | `pipeline/graph/compile.ts`, `stream.ts` | `analystNode()`, `streamAnalyzeInformation()` |
 
 ## 路由字段（IntakeCoordinator 输出）
 
@@ -187,22 +221,23 @@ flowchart TD
 | `clarifyingQuestion` | 澄清提问 | 信息不足时追问一个关键问题 | **直接返回用户** |
 | `briefReply` | 简短回复 | 寒暄或拒答（≤80 字） | **直接返回用户** |
 
-## 编排分支（`apps/agents/src/pipeline/run-stream.ts`）
+## 编排分支（`pipeline/graph/compile.ts`）
 
-| 条件 | 调用的 Agent | 用户看到什么 |
-|------|----------------|--------------|
-| `intent === "clarify"` 且 `clarifyingQuestion` 有值 | 无（结束） | 澄清提问 |
-| `intent` 为 `chitchat` / `out_of_scope` 且 `briefReply` 有值 | 无（结束） | 简短回复 |
-| `needsRetrieval === true` | KnowledgeManager → InformationAnalyst | 归纳后的最终回答 |
-| `needsRetrieval === false` 且无 `briefReply` | InformationAnalyst（`hits` 为空） | 不查库的通用长答 |
-| 其余 | 优先 `briefReply`，否则兜底提示 | 简短说明或请用户补充 |
+| 条件 | 节点顺序 | 用户看到什么 |
+|------|----------|--------------|
+| `intent === "clarify"` 且 `clarifyingQuestion` 有值 | `respondEarly` | 澄清提问 |
+| `intent` 为 `chitchat` / `out_of_scope` 且 `briefReply` 有值 | `respondEarly` | 简短回复 |
+| `needsRetrieval === true` | KM → **FactChecker** →（可选再打回 KM）→ Analyst | SSE：检索 → 核查 → 整理回答 |
+| `needsRetrieval === false` 且无 `briefReply` | FactChecker → Analyst（`hits` 常为空） | 不查库长答 |
+| FactChecker `passed=false` 且 `retryCount<1` | 再 `retrieval` → 再 **FactChecker** | 同轮可能见两次「核查证据…」 |
+| 其余 | `respondEarly` | 简短说明或请用户补充 |
 
 ## 流式 SSE 事件（`POST .../messages`）
 
 | `event` | 含义 |
 |---------|------|
 | `meta` | 用户消息已落库（含真实 `id`） |
-| `step` | 编排进度：`intake` / `retrieval` / `analyst`，`status` 为 `running` \| `done` |
+| `step` | 编排进度：`intake` / `retrieval` / `fact_checker` / `analyst`，`status` 为 `running` \| `done` |
 | `thinking` | 信息分析师推理流（若模型/Ollama 支持） |
 | `assistant` | 面向用户的正文增量（流结束后以 `answer` 写入 DB） |
 | `done` | 流结束，含 user/assistant 消息 id 与终稿 `content` |

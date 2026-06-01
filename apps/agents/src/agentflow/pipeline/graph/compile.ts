@@ -3,6 +3,7 @@ import type { LangGraphRunnableConfig } from "@langchain/langgraph";
 
 import { logAgentOut } from "@fambrain/agent-shared/agent-log";
 
+import { completeFactCheck } from "@/agentflow/agents/online/fact-checker";
 import { completeIntakeCoordinator } from "@/agentflow/agents/online/intake-coordinator";
 import { streamAnalyzeInformation } from "@/agentflow/agents/online/information-analyst";
 import { retrieveKnowledge } from "@/agentflow/agents/online/knowledge-manager";
@@ -109,11 +110,68 @@ async function retrievalNode(
   }
 }
 
-/** D5 占位：始终通过；后续替换为 answer vs hits 校验 */
+function mergeAnalystNotes(
+  kmNotes: string | null,
+  checkerNotes: string | null
+): string | null {
+  const parts = [kmNotes, checkerNotes].filter(
+    (n): n is string => typeof n === "string" && n.trim().length > 0
+  );
+  return parts.length > 0 ? parts.join(" ") : null;
+}
+
 async function factCheckerNode(
-  _state: PipelineGraphState
+  state: PipelineGraphState
 ): Promise<Partial<PipelineGraphState>> {
-  return { checkerPassed: true };
+  const decision = state.decision;
+  if (!decision) {
+    return { checkerPassed: true };
+  }
+
+  try {
+    const result = await completeFactCheck({
+      userQuestion: state.userQuestion,
+      intent: decision.intent,
+      needsRetrieval: decision.needsRetrieval,
+      searchQuery: decision.searchQuery || state.userQuestion,
+      subTasks: decision.subTasks,
+      topics: decision.topics,
+      language: decision.language,
+      hits: state.hits,
+      coverage: state.coverage,
+      notes: state.notes,
+      retryCount: state.retryCount,
+    });
+
+    const patch: Partial<PipelineGraphState> = {
+      checkerPassed: result.passed,
+      notes: mergeAnalystNotes(state.notes, result.checkerNotes),
+    };
+
+    if (
+      !result.passed &&
+      result.refinedSearchQuery &&
+      state.retryCount < 1
+    ) {
+      patch.decision = {
+        ...decision,
+        searchQuery: result.refinedSearchQuery,
+      };
+    }
+
+    logAgentOut("Pipeline", "事实核查", {
+      passed: result.passed,
+      evidenceScore: result.evidenceScore,
+      retryCount: state.retryCount,
+      issueCount: result.issues.length,
+    });
+
+    return patch;
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "事实核查员调用失败";
+    logAgentOut("Pipeline", "事实核查（异常，放行）", { error: msg });
+    return { checkerPassed: true, error: msg };
+  }
 }
 
 async function analystNode(

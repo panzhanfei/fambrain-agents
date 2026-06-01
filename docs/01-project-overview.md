@@ -6,7 +6,7 @@
 
 基于 **Next.js（App Router）** 的家庭协作型对话应用：注册登录、成员审核、会话与消息持久化，以及 **P0 多 Agent 聊天闭环**（意图路由 → 知识库检索 → 归纳回答，SSE 流式）。
 
-**当前进度（2026-05）：** 离线知识入库师 **已实现**；在线向量检索、LangGraph、事实核查等待 D3+。详见 [路线图](./03-roadmap.md)。
+**当前进度（2026-06）：** 离线知识入库师 **已实现**；在线 **LangGraph** 编排（`Intake → KM → FactChecker → Analyst`）、KM **向量 + 关键词 fallback** 已接；事实核查员 **D5 已接入**（证据包核查 + 最多 1 次打回再检索），跨轮检索缓存待 [坑点 §2.2](./04-pitfalls.md)。详见 [路线图](./03-roadmap.md) · [流程图](./02-agent-flows.md)。
 
 ## 应用层技术栈
 
@@ -130,11 +130,13 @@ pnpm run dev
 
 | 技能点 | 代码位置 | 用途 |
 |--------|----------|------|
-| `runAgentStream` + `runPipelineStream` | `apps/agents/src/orchestrator/`、`pipeline/run-stream.ts` | 服务端编排：进哪个 Agent 由代码查表 |
-| `parseIntakeDecision` / `defaultIntakeDecision` | `apps/agents/src/pipeline/parse-intake.ts` | 解析 Intake 路由 JSON；失败保守查库 |
-| `completeIntakeCoordinator` | `apps/agents/src/intake-coordinator/ollama-chat.ts` | 一次 `invoke` → 路由 JSON |
-| `scanDocCandidates` + `retrieveKnowledge` | `apps/agents/src/knowledge-manager/retrieve.ts` | P0 关键词 RAG + LLM 精排 |
-| `coalesceRetrieval` | 同上 | 空 hits 时回退关键词命中 |
-| `streamAnalyzeInformation` | `apps/agents/src/information-analyst/stream.ts` | 流式 thinking + assistant |
-| `indexAllCorpora` / `indexOneCorpusUser` | `apps/agents/src/knowledge-indexer/` | 离线 corpus → Chroma |
-| `logAgentIn` / `logAgentOut` | `packages/agent-shared/src/agent-log.ts` | 调试：路由 → 检索 → 终稿 |
+| `runAgentStream` + `runPipelineStream` | `apps/agents/src/agentflow/`、`pipeline/graph/stream.ts` | LangGraph 编排 + SSE |
+| `getCompiledPipelineGraph` | `pipeline/graph/compile.ts` | Intake → KM → FactChecker → Analyst |
+| `parseIntakeDecision` / `defaultIntakeDecision` | `pipeline/parse-intake.ts` | 解析 Intake 路由 JSON |
+| `completeIntakeCoordinator` | `agentflow/agents/online/intake-coordinator/` | 一次 `invoke` → 路由 JSON |
+| `retrieveKnowledge` + `vectorRetrieve` | `agentflow/agents/online/knowledge-manager/` | 向量 + 关键词 + LLM 精排 |
+| `completeFactCheck` | `agentflow/agents/online/fact-checker/` | 证据包核查；打回再检索 |
+| `streamAnalyzeInformation` | `agentflow/agents/online/information-analyst/` | 流式 thinking + assistant |
+| `verify:fact-checker` / `verify:fact-checker:pipeline` | `apps/agents/scripts/` | FactChecker 本地验证 |
+| `indexAllCorpora` | `agentflow/agents/offline/knowledge-indexer/` | 离线 corpus → Chroma |
+| `logAgentIn` / `logAgentOut` | `packages/agent-shared/src/agent-log.ts` | 调试：含 FactChecker 🔍 |

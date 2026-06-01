@@ -1,6 +1,13 @@
+export { completeFactCheck } from "./check-facts";
+export {
+  buildRuleBasedFactCheck,
+  normalizeFactCheckerResult,
+  parseJsonObject,
+} from "./check-helpers";
 export {
   prompt,
-  type Citation,
-  type InformationAnalystInput,
-  type InformationAnalystResult,
+  type FactCheckerInput,
+  type FactCheckerIssue,
+  type FactCheckerIssueCode,
+  type FactCheckerResult,
 } from "./prompt";

@@ -3,12 +3,14 @@
 export type AgentLogName =
   | "IntakeCoordinator"
   | "KnowledgeManager"
+  | "FactChecker"
   | "InformationAnalyst"
   | "Pipeline";
 
 const AGENT_EMOJI: Record<AgentLogName, string> = {
   IntakeCoordinator: "🎫",
   KnowledgeManager: "📚",
+  FactChecker: "🔍",
   InformationAnalyst: "🧠",
   Pipeline: "🛤️",
 };
