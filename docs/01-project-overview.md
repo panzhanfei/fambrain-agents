@@ -168,7 +168,7 @@ pnpm run dev
 | `verify:memory` / `verify:doc-parser` | `apps/agents/scripts/` | Mem0+LangMem / DocParser |
 | `preparePipelineMemory` | `agentflow/memory/` | 每轮加载 Mem0 + LangMem → `memoryBlock` |
 | `ingestDocumentBatch` | `agentflow/agents/offline/doc-parser/` | 批量上传解析 → corpus + 可选入库 |
-| `summarizeContent` | `agentflow/agents/offline/content-summarizer/` | 离线结构化摘要（D9） |
+| `summarizeContent` | `agentflow/agents/online/content-summarizer/` | 在线摘要分支 + CLI（D9） |
 | `listVaultFiles` | `agentflow/knowledge/list-vault-files.ts` | vault 只读列举（MCP 共用） |
 | `recallKeywordRetrieve` | `agentflow/knowledge/recall-keyword-retrieve.ts` | 轻量关键词 RAG（对比用） |
 | `indexAllCorpora` | `agentflow/agents/offline/knowledge-indexer/` | 离线 corpus → Chroma |

@@ -23,6 +23,7 @@ export type AgentStreamEvent =
         | "intake"
         | "retrieval"
         | "fact_checker"
+        | "content_summarizer"
         | "content_organizer"
         | "analyst";
       status: "running" | "done";

@@ -58,7 +58,7 @@ function buildFallback(input: ContentSummarizerInput): ContentSummaryResult {
   };
 }
 
-/** 对一段文本生成结构化摘要（D9 触达；不参与在线 LangGraph） */
+/** 对一段文本生成结构化摘要（在线 LangGraph 节点调用） */
 export async function summarizeContent(
   input: ContentSummarizerInput
 ): Promise<ContentSummaryResult> {

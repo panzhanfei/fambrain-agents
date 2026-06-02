@@ -4,7 +4,7 @@
  *   pnpm run summarize:document -- path/to/file.md
  */
 
-import { summarizeMarkdownFile } from "../src/agentflow/agents/offline/content-summarizer/index.ts";
+import { summarizeMarkdownFile } from "../src/agentflow/agents/online/content-summarizer/index.ts";
 
 async function main() {
   const absPath = process.argv[2]?.trim();

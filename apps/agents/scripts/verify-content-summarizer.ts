@@ -7,9 +7,11 @@
 import assert from "node:assert/strict";
 
 import {
+  buildSummarizeSourceText,
   contentSummaryResultSchema,
+  formatSummaryAsAnswer,
   parseContentSummaryResult,
-} from "../src/agentflow/agents/offline/content-summarizer/index.ts";
+} from "../src/agentflow/agents/online/content-summarizer/index.ts";
 
 function testSchema() {
   const parsed = contentSummaryResultSchema.safeParse({
@@ -51,9 +53,47 @@ function testParseFallback() {
   assert.equal(ok.bullets.length, 2);
 }
 
+function testFormatAndSource() {
+  const answer = formatSummaryAsAnswer({
+    title: "城管平台",
+    summary: "React 与小程序。",
+    bullets: ["前端 React 18"],
+    keywords: ["城管", "React"],
+    language: "zh",
+    notes: null,
+  });
+  assert.match(answer, /^## 城管平台/);
+  assert.match(answer, /React 与小程序/);
+
+  const { text } = buildSummarizeSourceText({
+    userQuestion: "总结城管",
+    decision: {
+      intent: "summarize_content",
+      needsRetrieval: true,
+      searchQuery: "城管平台",
+      subTasks: [],
+      topics: ["project"],
+      language: "zh",
+      confidence: 0.9,
+      clarifyingQuestion: null,
+      briefReply: null,
+    },
+    hits: [
+      {
+        path: "a.md",
+        title: "城管",
+        excerpt: "React 18",
+        relevance: 0.9,
+      },
+    ],
+  });
+  assert.match(text, /React 18/);
+}
+
 async function main() {
   testSchema();
   testParseFallback();
+  testFormatAndSource();
   console.log("verify:content-summarizer OK");
 }
 

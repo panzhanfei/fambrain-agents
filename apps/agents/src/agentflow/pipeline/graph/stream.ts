@@ -17,6 +17,7 @@ type PipelineStepName =
   | "intake"
   | "retrieval"
   | "fact_checker"
+  | "content_summarizer"
   | "content_organizer"
   | "analyst";
 
@@ -175,17 +176,29 @@ export async function* runPipelineStream(
 
       if (finalState.decision?.needsRetrieval) {
         yield* startStep("retrieval");
+      } else if (finalState.decision?.intent === "summarize_content") {
+        yield* startStep("content_summarizer");
       }
       continue;
     }
 
     if (nodeName === "retrieval") {
       yield* finishStep("retrieval");
-      yield* startStep("fact_checker");
+
+      if (finalState.decision?.intent === "summarize_content") {
+        yield* startStep("content_summarizer");
+      } else {
+        yield* startStep("fact_checker");
+      }
 
       if (finalState.error) {
         yield { type: "error", message: finalState.error };
       }
+      continue;
+    }
+
+    if (nodeName === "contentSummarizer") {
+      yield* finishStep("content_summarizer");
       continue;
     }
 

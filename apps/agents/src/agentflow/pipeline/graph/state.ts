@@ -9,7 +9,7 @@ import type { IntakeRoutingDecision } from "@/agentflow/agents/online/intake-coo
 import type { InformationAnalystInput } from "@/agentflow/agents/online/information-analyst";
 
 /**
- * LangGraph 编排共享状态（Intake → KM → FactChecker → ContentOrganizer → Analyst）。
+ * LangGraph 编排共享状态（Intake → KM → FactChecker → ContentOrganizer → Analyst；摘要分支 Intake → KM → ContentSummarizer）。
  * 初始值由 `stream.ts` 的 `buildInitialState()` 注入；节点只返回需要更新的字段。
  */
 export const PipelineGraphAnnotation = Annotation.Root({

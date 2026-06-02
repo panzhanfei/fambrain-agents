@@ -10,6 +10,7 @@ import type { IntakeRoutingDecision } from "./prompt";
 
 export const intakeIntentSchema = z.enum([
   "retrieve_and_answer",
+  "summarize_content",
   "direct_answer",
   "clarify",
   "chitchat",

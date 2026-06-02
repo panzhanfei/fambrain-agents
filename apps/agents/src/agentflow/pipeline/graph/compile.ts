@@ -4,6 +4,11 @@ import type { LangGraphRunnableConfig } from "@langchain/langgraph";
 import { logAgentOut } from "@fambrain/agent-shared/agent-log";
 
 import { organizeKnowledge } from "@/agentflow/agents/online/content-organizer";
+import {
+  buildSummarizeSourceText,
+  formatSummaryAsAnswer,
+  summarizeContent,
+} from "@/agentflow/agents/online/content-summarizer";
 import { completeFactCheck } from "@/agentflow/agents/online/fact-checker";
 import { completeIntakeCoordinator } from "@/agentflow/agents/online/intake-coordinator";
 import { streamAnalyzeInformation } from "@/agentflow/agents/online/information-analyst";
@@ -20,7 +25,7 @@ import {
 
 function routeAfterIntake(
   state: PipelineGraphState
-): "respondEarly" | "retrieval" | "factChecker" {
+): "respondEarly" | "retrieval" | "factChecker" | "contentSummarizer" {
   if (state.exitEarly || state.error) return "respondEarly";
 
   const decision = state.decision;
@@ -37,12 +42,26 @@ function routeAfterIntake(
     return "respondEarly";
   }
 
+  if (decision.intent === "summarize_content") {
+    if (decision.needsRetrieval) return "retrieval";
+    return "contentSummarizer";
+  }
+
   if (decision.needsRetrieval) return "retrieval";
 
   if (!decision.needsRetrieval && decision.briefReply) {
     return "respondEarly";
   }
 
+  return "factChecker";
+}
+
+function routeAfterRetrieval(
+  state: PipelineGraphState
+): "factChecker" | "contentSummarizer" {
+  if (state.decision?.intent === "summarize_content") {
+    return "contentSummarizer";
+  }
   return "factChecker";
 }
 
@@ -178,6 +197,50 @@ async function factCheckerNode(
   }
 }
 
+async function contentSummarizerNode(
+  state: PipelineGraphState
+): Promise<Partial<PipelineGraphState>> {
+  const decision = state.decision;
+  if (!decision) {
+    return {
+      answer: "（未能理解摘要请求，请说明要总结的项目或文档）",
+      exitEarly: true,
+    };
+  }
+
+  try {
+    const { text, sourceLabel } = buildSummarizeSourceText({
+      userQuestion: state.userQuestion,
+      decision,
+      hits: state.hits,
+    });
+
+    if (!text.trim()) {
+      return {
+        answer: "（没有可摘要的正文，请先说明要总结的项目或粘贴内容）",
+        exitEarly: true,
+      };
+    }
+
+    const summary = await summarizeContent({
+      text,
+      sourceLabel,
+      language: decision.language,
+    });
+
+    const answer = formatSummaryAsAnswer(summary);
+    logAgentOut("Pipeline", "本轮结束（内容摘要师）", { title: summary.title });
+    return { answer, exitEarly: true };
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "内容摘要师调用失败";
+    return {
+      error: msg,
+      answer: "（生成摘要时出错，请稍后重试）",
+      exitEarly: true,
+    };
+  }
+}
+
 async function contentOrganizerNode(
   state: PipelineGraphState
 ): Promise<Partial<PipelineGraphState>> {
@@ -274,13 +337,15 @@ function buildPipelineGraph() {
     .addNode("intake", intakeNode)
     .addNode("retrieval", retrievalNode)
     .addNode("factChecker", factCheckerNode)
+    .addNode("contentSummarizer", contentSummarizerNode)
     .addNode("contentOrganizer", contentOrganizerNode)
     .addNode("analyst", analystNode)
     .addNode("respondEarly", respondEarlyNode)
     .addEdge(START, "intake")
     .addConditionalEdges("intake", routeAfterIntake)
-    .addEdge("retrieval", "factChecker")
+    .addConditionalEdges("retrieval", routeAfterRetrieval)
     .addConditionalEdges("factChecker", routeAfterFactChecker)
+    .addEdge("contentSummarizer", "respondEarly")
     .addEdge("contentOrganizer", "analyst")
     .addEdge("analyst", END)
     .addEdge("respondEarly", END);

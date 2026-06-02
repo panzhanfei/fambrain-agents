@@ -3,7 +3,7 @@ import { readFile } from "node:fs/promises";
 import { summarizeContent } from "./summarize";
 import type { ContentSummaryResult } from "./prompt";
 
-/** 读取本地 Markdown/文本文件并摘要 */
+/** 读取本地 Markdown/文本文件并摘要（CLI / 工具用） */
 export async function summarizeMarkdownFile(
   absPath: string,
   options?: { language?: "zh" | "en" | "mixed"; maxBullets?: number }

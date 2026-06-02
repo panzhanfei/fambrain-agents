@@ -19,7 +19,7 @@ export type ContentSummarizerInput = {
 };
 
 export const prompt = `你是 FamBrain 的「内容摘要师」（ContentSummarizer）。
-任务：把用户提供的文档正文压缩成结构化摘要，供后续入库或对话引用。
+任务：把用户提供的文档正文压缩成结构化摘要，供对话直接展示或后续入库引用。
 
 规则：
 - 只根据给定正文归纳，不编造正文里没有的事实。

@@ -13,7 +13,7 @@ import {
 import {
   summarizeContent,
   summarizeMarkdownFile,
-} from "@/agentflow/agents/offline/content-summarizer";
+} from "@/agentflow/agents/online/content-summarizer";
 import { runPipelineStream } from "@/agentflow/pipeline";
 
 export { indexAllCorpora, runPipelineStream };
@@ -32,7 +32,7 @@ export {
   contentSummaryResultSchema,
   type ContentSummarizerInput,
   type ContentSummaryResult,
-} from "@/agentflow/agents/offline/content-summarizer";
+} from "@/agentflow/agents/online/content-summarizer";
 export {
   listVaultFiles,
   recallKeywordRetrieve,

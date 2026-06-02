@@ -571,6 +571,7 @@ export function ChatShell({ initialConversations, viewer }: ChatShellProps) {
               intake: "理解问题…",
               retrieval: "检索知识库…",
               fact_checker: "核查证据…",
+              content_summarizer: "生成摘要…",
               content_organizer: "整理证据…",
               analyst: "生成回答…",
             };

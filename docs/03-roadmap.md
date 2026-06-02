@@ -53,7 +53,7 @@
 | LangGraph 编排 | — | 迁移 | **✅** `pipeline/graph` StateGraph | [P0 在线编排](./02-agent-flows.md#p0-在线编排流程) |
 | Mem0 + LangMem | 记忆层 | 触达 | **✅ D8**（跨会话 + 会话摘要 → Intake/Analyst） | [§8](./02-agent-flows.md#8-记忆层--mem0--langmemd8) |
 | `DocParser` | 文档解析师 | 触达 | **✅ D7**（PDF/Word/PPT/图片批量上传→解析→入库） | [§7](./02-agent-flows.md#7-docparser--文档解析师d7) |
-| `ContentSummarizer` | 内容摘要师 | 触达 | **✅ D9**（CLI / `summarizeContent` + Zod） | [§9](./02-agent-flows.md#9-contentsummarizer--内容摘要师d9) |
+| `ContentSummarizer` | 内容摘要师 | 在线分支 | **✅ D9**（Intake `summarize_content` → KM? → 摘要师；CLI 保留） | [§9](./02-agent-flows.md#9-contentsummarizer--内容摘要师d9) |
 | MCP / Recall / Vercel AI | 实验触达 | 触达 | **✅**（见 [experiments/README.md](../experiments/README.md)） | [§10](./02-agent-flows.md#10-实验触达--mcp--recall--vercel-ai-) |
 
 ### P1 要完成的 Agent（任务 × 技术）

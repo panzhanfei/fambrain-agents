@@ -1,10 +1,7 @@
-/**
- * 内容摘要师（ContentSummarizer）
- * 对 corpus / 上传文档正文生成结构化摘要（D9 触达，不参与在线聊天编排）。
- */
-
 export { summarizeContent } from "./summarize";
 export { summarizeMarkdownFile } from "./summarize-file";
+export { formatSummaryAsAnswer } from "./format-answer";
+export { buildSummarizeSourceText } from "./build-source-text";
 export {
   contentSummaryResultSchema,
   parseContentSummaryResult,

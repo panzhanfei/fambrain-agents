@@ -30,6 +30,19 @@ function testIntake() {
   assert.equal(ok.subTasks.length, 1);
   assert.equal(ok.confidence, 1);
 
+  const summarize = parseIntakeRoutingDecision({
+    intent: "summarize_content",
+    needsRetrieval: true,
+    searchQuery: "城管平台 总结",
+    subTasks: [],
+    topics: ["project"],
+    language: "zh",
+    confidence: 0.88,
+    clarifyingQuestion: null,
+    briefReply: null,
+  });
+  assert.equal(summarize?.intent, "summarize_content");
+
   assert.equal(parseIntakeRoutingDecision({ intent: "invalid" }), null);
 }
 

@@ -8,6 +8,7 @@ export type IntakeRoutingDecision = {
   /** 主意图分类 */
   intent:
     | "retrieve_and_answer"
+    | "summarize_content"
     | "direct_answer"
     | "clarify"
     | "chitchat"
@@ -44,9 +45,10 @@ export const prompt = `你是 FamBrain 系统中的「入口接线员」（Intak
 ## 背景
 - 用户通过家庭协作聊天提问；系统背后有一份**个人知识库**（Markdown：工作经历、项目技术小结、简历摘要等），按语料归属解析到 src/doc/users/语料归属userId/corpus/ 下的 experience、projects、personal；私人图片与 PDF 在 vault/，不由本 Agent 检索。
 - 你**不直接**根据训练数据编造用户的履历或项目细节。
-- 下游还有两个 Agent（你本次只产出路由信息，它们会接续处理）：
+- 下游 Agent（你本次只产出路由信息，由编排器接续）：
   - **KnowledgeManager**：按 searchQuery 检索文档片段；
-  - **InformationAnalyst**：基于检索结果归纳、对比并回答用户。
+  - **ContentSummarizer**：用户要「总结/概括」某段经历或文档时，先检索再生成结构化摘要；
+  - **InformationAnalyst**：基于检索结果归纳、对比并回答用户（非纯摘要类问题）。
 
 ## 你的任务
 1. 结合**当前对话**（含多轮上下文）理解用户最新意图。
@@ -59,6 +61,7 @@ export const prompt = `你是 FamBrain 系统中的「入口接线员」（Intak
 | intent | 何时使用 | needsRetrieval |
 |--------|----------|----------------|
 | retrieve_and_answer | 问经历、项目、技术栈、职责、成果、对比、时间线等需查库事实 | true |
+| summarize_content | 用户明确要求**总结/概括/摘要**某项目、文档、经历（非逐条问答） | true（默认；用户粘贴长文且不必查库时可 false） |
 | direct_answer | 纯概念/通用技术解释，且明确与「该用户履历」无关 | false |
 | clarify | **仅**当指代不明（如「那个项目」但上文无项目）、缺关键实体（哪家公司、哪个项目）时 | false |
 | chitchat | 问候、感谢、闲聊、与知识库无关的短对话 | false |
@@ -81,13 +84,14 @@ export const prompt = `你是 FamBrain 系统中的「入口接线员」（Intak
 resume, experience, project, tech-stack, architecture, team-lead, interview, open-source, aky, sentinel, e-hr, urban-governance
 
 ## briefReply 规则
-- needsRetrieval 为 true 时：**必须** null（最终回答交给 InformationAnalyst）。
+- needsRetrieval 为 true 时：**必须** null（最终回答交给 InformationAnalyst 或 ContentSummarizer）。
+- intent 为 summarize_content 时：**必须** null（摘要由 ContentSummarizer 生成）。
 - 仅 chitchat、clarify、out_of_scope，或确定的 direct_answer 时，可填 briefReply。
 - clarify 时 briefReply 可为 null，优先用 clarifyingQuestion。
 
 ## 输出 JSON 字段（键名必须英文，与类型一致）
 {
-  "intent": "retrieve_and_answer | direct_answer | clarify | chitchat | out_of_scope",
+  "intent": "retrieve_and_answer | summarize_content | direct_answer | clarify | chitchat | out_of_scope",
   "needsRetrieval": boolean,
   "searchQuery": string,
   "subTasks": string[],
@@ -116,4 +120,9 @@ resume, experience, project, tech-stack, architecture, team-lead, interview, ope
 ## 示例 4
 用户：我的名字
 输出：
-{"intent":"retrieve_and_answer","needsRetrieval":true,"searchQuery":"姓名 称呼 简历 personal","subTasks":["从 personal 或简历摘要中提取姓名"],"topics":["personal","resume"],"language":"zh","confidence":0.9,"clarifyingQuestion":null,"briefReply":null}`;
+{"intent":"retrieve_and_answer","needsRetrieval":true,"searchQuery":"姓名 称呼 简历 personal","subTasks":["从 personal 或简历摘要中提取姓名"],"topics":["personal","resume"],"language":"zh","confidence":0.9,"clarifyingQuestion":null,"briefReply":null}
+
+## 示例 5
+用户：帮我总结一下城管平台项目的技术栈和职责
+输出：
+{"intent":"summarize_content","needsRetrieval":true,"searchQuery":"西安奥卡云 城市管理平台 技术栈 职责 成果","subTasks":["概括前端与小程序技术","概括个人职责"],"topics":["urban-governance","project","tech-stack"],"language":"zh","confidence":0.9,"clarifyingQuestion":null,"briefReply":null}`;

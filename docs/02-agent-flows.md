@@ -313,17 +313,34 @@ flowchart LR
 
 ### 9. ContentSummarizer — 内容摘要师（D9）✅
 
-**触发：** CLI `pnpm run summarize:document -- <file.md>` 或代码调用 `summarizeContent()` / `summarizeMarkdownFile()`。**不参与**在线 LangGraph。
+**触发：**
 
-**职责：** 对 corpus Markdown 或任意正文生成结构化 JSON 摘要（`title` / `summary` / `bullets` / `keywords`），供入库前预览或后续流水线使用。
+1. **在线（主路径）**：Intake 判定 `intent === "summarize_content"` → 可选 KM 检索 → **ContentSummarizer** → 终稿（不经 Analyst）。
+2. **CLI**：`pnpm run summarize:document -- <file.md>`（单文件工具，不经过 Intake）。
+
+**职责：** 对检索片段或用户原文生成结构化摘要，格式化为 Markdown 回复（`title` / `summary` / `bullets` / `keywords`）。
 
 | 步骤 | 做什么 | 文件 | 方法 |
 |------|--------|------|------|
 | 1 | 截断正文（≤12k 字） | `summarize.ts` | `summarizeContent()` |
 | 2 | Ollama + Zod | `schema.ts`, `prompt.ts` | `parseContentSummaryResult()` |
 | 3 | 读文件 | `summarize-file.ts` | `summarizeMarkdownFile()` |
+| 4 | 编排 | `compile.ts` | `contentSummarizerNode()`；`buildSummarizeSourceText()` |
+| 5 | 展示 | `format-answer.ts` | `formatSummaryAsAnswer()` |
 
-**验证：** `pnpm run verify:content-summarizer`（Zod）；CLI 需 Ollama。
+**在线分支（`compile.ts`）：**
+
+```mermaid
+flowchart TD
+  U[用户: 总结某项目] --> IC[IntakeCoordinator]
+  IC -->|intent=summarize_content| R{needsRetrieval?}
+  R -->|true| KM[KnowledgeManager]
+  R -->|false| CS[ContentSummarizer]
+  KM --> CS
+  CS --> OUT[assistant 终稿]
+```
+
+**验证：** `pnpm run verify:content-summarizer`；`verify:agent-schemas`（含 `summarize_content` intent）；CLI 需 Ollama。
 
 ### 10. 实验触达 — MCP / Recall / Vercel AI ✅
 
@@ -357,7 +374,9 @@ flowchart LR
 |------|----------|--------------|
 | `intent === "clarify"` 且 `clarifyingQuestion` 有值 | `respondEarly` | 澄清提问 |
 | `intent` 为 `chitchat` / `out_of_scope` 且 `briefReply` 有值 | `respondEarly` | 简短回复 |
-| `needsRetrieval === true` | KM → **FactChecker** → **ContentOrganizer** →（可选再打回 KM）→ Analyst | SSE：检索 → 核查 → **整理证据** → 整理回答 |
+| `intent === "summarize_content"` 且 `needsRetrieval === true` | KM → **ContentSummarizer** → 终稿 | SSE：检索 → **生成摘要** |
+| `intent === "summarize_content"` 且 `needsRetrieval === false` | **ContentSummarizer** → 终稿 | SSE：**生成摘要** |
+| `needsRetrieval === true`（非摘要） | KM → **FactChecker** → **ContentOrganizer** →（可选再打回 KM）→ Analyst | SSE：检索 → 核查 → **整理证据** → 整理回答 |
 | `needsRetrieval === false` 且无 `briefReply` | FactChecker → **ContentOrganizer** → Analyst（`hits` 常为空） | 不查库长答 |
 | FactChecker `passed=false` 且 `retryCount<1` | 再 `retrieval` → 再 **FactChecker** | 同轮可能见两次「核查证据…」 |
 | 其余 | `respondEarly` | 简短说明或请用户补充 |
@@ -367,7 +386,7 @@ flowchart LR
 | `event` | 含义 |
 |---------|------|
 | `meta` | 用户消息已落库（含真实 `id`） |
-| `step` | 编排进度：`intake` / `retrieval` / `fact_checker` / **`content_organizer`** / `analyst`，`status` 为 `running` \| `done` |
+| `step` | 编排进度：`intake` / `retrieval` / `fact_checker` / **`content_summarizer`** / **`content_organizer`** / `analyst`，`status` 为 `running` \| `done` |
 | `thinking` | 信息分析师推理流（若模型/Ollama 支持） |
 | `assistant` | 面向用户的正文增量（流结束后以 `answer` 写入 DB） |
 | `done` | 流结束，含 user/assistant 消息 id 与终稿 `content` |
