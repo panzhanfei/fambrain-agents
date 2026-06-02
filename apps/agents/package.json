@@ -11,7 +11,9 @@
     "start": "tsx --env-file=../../.env src/server/index.ts",
     "index:corpus": "tsx --env-file=../../.env scripts/index-all-corpus.ts",
     "verify:fact-checker": "tsx --env-file=../../.env scripts/verify-fact-checker.ts",
-    "verify:fact-checker:pipeline": "tsx --env-file=../../.env scripts/verify-fact-checker-pipeline.ts"
+    "verify:fact-checker:pipeline": "tsx --env-file=../../.env scripts/verify-fact-checker-pipeline.ts",
+    "verify:content-organizer": "tsx scripts/verify-content-organizer.ts",
+    "verify:agent-schemas": "tsx scripts/verify-agent-schemas.ts"
   },
   "dependencies": {
     "@fambrain/agent-config": "workspace:*",

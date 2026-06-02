@@ -19,6 +19,8 @@ import {
   type KnowledgeManagerInput,
   type KnowledgeRetrievalResult,
 } from "./prompt";
+import { parseJsonObject } from "@/agentflow/json-parse";
+import { parseKnowledgeRetrievalResult } from "./schema";
 const MAX_CANDIDATES = 12;
 const MAX_HITS = 5;
 const EXCERPT_MAX = 320;
@@ -128,21 +130,6 @@ async function scanDocCandidates(
   }));
 }
 
-/** 从模型回复文本里抠出 JSON 对象 */
-function parseJsonObject<T>(text: string): T | null {
-  const trimmed = text.trim();
-  const fenced = trimmed.match(/```(?:json)?\s*([\s\S]*?)```/i)?.[1];
-  const candidate = (fenced ?? trimmed).trim();
-  const start = candidate.indexOf("{");
-  const end = candidate.lastIndexOf("}");
-  if (start < 0 || end <= start) return null;
-  try {
-    return JSON.parse(candidate.slice(start, end + 1)) as T;
-  } catch {
-    return null;
-  }
-}
-
 function textFromResponse(content: AIMessage["content"]): string {
   if (typeof content === "string") return content.trim();
   if (Array.isArray(content)) {
@@ -208,41 +195,6 @@ function retrieveByKeywords(
         ? "仅关键词匹配；若需更准可检查 Ollama 是否可用。"
         : null,
   };
-}
-
-/** 校验并规范化模型输出的 JSON */
-function normalizeResult(
-  raw: unknown,
-  fallback: KnowledgeRetrievalResult
-): KnowledgeRetrievalResult {
-  if (!raw || typeof raw !== "object") return fallback;
-  const o = raw as Record<string, unknown>;
-  if (!Array.isArray(o.hits)) return fallback;
-
-  const hits: KnowledgeHit[] = o.hits
-    .filter((h): h is Record<string, unknown> => !!h && typeof h === "object")
-    .map((h) => ({
-      path: String(h.path ?? ""),
-      title: String(h.title ?? ""),
-      excerpt: String(h.excerpt ?? ""),
-      relevance: Math.min(1, Math.max(0, Number(h.relevance) || 0)),
-    }))
-    .filter((h) => h.path && h.excerpt)
-    .slice(0, MAX_HITS);
-
-  const coverage =
-    o.coverage === "sufficient" ||
-    o.coverage === "partial" ||
-    o.coverage === "none"
-      ? o.coverage
-      : fallback.coverage;
-
-  const notes =
-    o.notes === null || o.notes === undefined
-      ? null
-      : String(o.notes).trim() || null;
-
-  return { hits, coverage, notes };
 }
 
 /** LLM 未产出有效 hits 时，回退到关键词检索结果 */
@@ -314,7 +266,9 @@ export async function retrieveKnowledge(
     const text = textFromResponse(ai.content);
     const parsed = parseJsonObject<KnowledgeRetrievalResult>(text);
     const result = coalesceRetrieval(
-      !parsed ? keywordFallback : normalizeResult(parsed, keywordFallback),
+      !parsed
+        ? keywordFallback
+        : parseKnowledgeRetrievalResult(parsed, keywordFallback),
       keywordFallback
     );
     logAgentOut("KnowledgeManager", "检索结果", result);

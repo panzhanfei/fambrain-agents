@@ -1,22 +1,10 @@
-import { parseJsonObject } from "@/agentflow/agents/online/information-analyst/analyze-helpers";
+import { parseJsonObject } from "@/agentflow/json-parse";
 
-import type {
-  FactCheckerInput,
-  FactCheckerIssue,
-  FactCheckerIssueCode,
-  FactCheckerResult,
-} from "./prompt";
+import type { FactCheckerInput, FactCheckerIssue, FactCheckerResult } from "./prompt";
+import { parseFactCheckerResult } from "./schema";
 
 export { parseJsonObject };
-
-const ISSUE_CODES: FactCheckerIssueCode[] = [
-  "no_hits_when_needed",
-  "hits_irrelevant",
-  "coverage_mismatch",
-  "excerpt_too_weak",
-  "subtask_uncovered",
-  "entity_missing",
-];
+export { parseFactCheckerResult as normalizeFactCheckerResult };
 
 const CJK_RUN = /^[\u4e00-\u9fff]+$/;
 
@@ -196,81 +184,3 @@ export function buildRuleBasedFactCheck(
   };
 }
 
-function normalizeIssue(raw: unknown): FactCheckerIssue | null {
-  if (!raw || typeof raw !== "object") return null;
-  const o = raw as Record<string, unknown>;
-  const code = ISSUE_CODES.find((c) => c === o.code);
-  if (!code) return null;
-  const message = String(o.message ?? "").trim();
-  if (!message) return null;
-  return { code, message };
-}
-
-/** 校验并规范化模型输出；retryCount≥1 时强制放行 */
-export function normalizeFactCheckerResult(
-  raw: unknown,
-  fallback: FactCheckerResult,
-  retryCount: number
-): FactCheckerResult {
-  if (!raw || typeof raw !== "object") {
-    return enforceRetryCap(fallback, retryCount);
-  }
-
-  const o = raw as Record<string, unknown>;
-  let passed =
-    typeof o.passed === "boolean" ? o.passed : fallback.passed;
-  const rawScore = Number(o.evidenceScore);
-  const evidenceScore = Number.isFinite(rawScore)
-    ? Math.min(1, Math.max(0, rawScore))
-    : fallback.evidenceScore;
-
-  let refinedSearchQuery =
-    o.refinedSearchQuery == null
-      ? null
-      : String(o.refinedSearchQuery).trim() || null;
-  if (passed) refinedSearchQuery = null;
-
-  const checkerNotes =
-    o.checkerNotes == null
-      ? null
-      : String(o.checkerNotes).trim() || null;
-
-  const issues = Array.isArray(o.issues)
-    ? o.issues
-        .map(normalizeIssue)
-        .filter((i): i is FactCheckerIssue => i !== null)
-    : fallback.issues;
-
-  const result: FactCheckerResult = {
-    passed,
-    evidenceScore,
-    refinedSearchQuery,
-    checkerNotes,
-    issues,
-  };
-
-  return enforceRetryCap(result, retryCount);
-}
-
-function enforceRetryCap(
-  result: FactCheckerResult,
-  retryCount: number
-): FactCheckerResult {
-  if (retryCount < 1 || result.passed) return result;
-  return {
-    passed: true,
-    evidenceScore: Math.min(result.evidenceScore, 0.35),
-    refinedSearchQuery: null,
-    checkerNotes:
-      result.checkerNotes ??
-      "已重试仍不通过模型标准，强制放行；分析师须声明知识库未覆盖或证据有限。",
-    issues: result.issues.length
-      ? result.issues
-      : [
-          {
-            code: "no_hits_when_needed",
-            message: "已达最大重试，不再打回检索。",
-          },
-        ],
-  };
-}

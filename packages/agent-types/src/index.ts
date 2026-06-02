@@ -17,7 +17,12 @@ export type AgentPipelineContext = {
 export type AgentStreamEvent =
   | {
       type: "step";
-      name: "intake" | "retrieval" | "fact_checker" | "analyst";
+      name:
+        | "intake"
+        | "retrieval"
+        | "fact_checker"
+        | "content_organizer"
+        | "analyst";
       status: "running" | "done";
     }
   | { type: "thinking"; text: string }

@@ -1,23 +1,15 @@
+import { dedupeCitations } from "@/agentflow/agents/online/content-organizer";
+import { parseJsonObject } from "@/agentflow/json-parse";
+
 import type {
   Citation,
   InformationAnalystInput,
   InformationAnalystResult,
 } from "./prompt";
+import { parseAnalystResult } from "./schema";
 
-/** 从模型回复文本里抠出 JSON 对象 */
-export function parseJsonObject<T>(text: string): T | null {
-  const trimmed = text.trim();
-  const fenced = trimmed.match(/```(?:json)?\s*([\s\S]*?)```/i)?.[1];
-  const candidate = (fenced ?? trimmed).trim();
-  const start = candidate.indexOf("{");
-  const end = candidate.lastIndexOf("}");
-  if (start < 0 || end <= start) return null;
-  try {
-    return JSON.parse(candidate.slice(start, end + 1)) as T;
-  } catch {
-    return null;
-  }
-}
+export { parseJsonObject };
+export { parseAnalystResult as normalizeAnalystResult };
 
 /** 无模型或解析失败时：用 hits 拼一段可读回答 */
 export function buildFallbackAnswer(
@@ -38,10 +30,12 @@ export function buildFallbackAnswer(
     };
   }
 
-  const citations: Citation[] = hits.map((h) => ({
-    path: h.path,
-    excerpt: h.excerpt,
-  }));
+  const citations: Citation[] = dedupeCitations(
+    hits.map((h) => ({
+      path: h.path,
+      excerpt: h.excerpt,
+    }))
+  );
 
   const bullets = hits.map((h) => `- **${h.title}**：${h.excerpt}`);
   let answer =
@@ -67,32 +61,3 @@ export function buildFallbackAnswer(
   };
 }
 
-/** 校验并规范化模型输出的 JSON */
-export function normalizeAnalystResult(
-  raw: unknown,
-  fallback: InformationAnalystResult
-): InformationAnalystResult {
-  if (!raw || typeof raw !== "object") return fallback;
-  const o = raw as Record<string, unknown>;
-
-  const answer = String(o.answer ?? "").trim();
-  if (!answer) return fallback;
-
-  const citations: Citation[] = Array.isArray(o.citations)
-    ? o.citations
-        .filter((c): c is Record<string, unknown> => !!c && typeof c === "object")
-        .map((c) => ({
-          path: String(c.path ?? ""),
-          excerpt: String(c.excerpt ?? ""),
-        }))
-        .filter((c) => c.path && c.excerpt)
-    : fallback.citations;
-
-  const confidence = Math.min(1, Math.max(0, Number(o.confidence) || 0));
-  const insufficientEvidence =
-    typeof o.insufficientEvidence === "boolean"
-      ? o.insufficientEvidence
-      : fallback.insufficientEvidence;
-
-  return { answer, citations, confidence, insufficientEvidence };
-}

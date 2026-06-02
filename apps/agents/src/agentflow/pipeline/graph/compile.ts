@@ -3,6 +3,7 @@ import type { LangGraphRunnableConfig } from "@langchain/langgraph";
 
 import { logAgentOut } from "@fambrain/agent-shared/agent-log";
 
+import { organizeKnowledge } from "@/agentflow/agents/online/content-organizer";
 import { completeFactCheck } from "@/agentflow/agents/online/fact-checker";
 import { completeIntakeCoordinator } from "@/agentflow/agents/online/intake-coordinator";
 import { streamAnalyzeInformation } from "@/agentflow/agents/online/information-analyst";
@@ -47,11 +48,11 @@ function routeAfterIntake(
 
 function routeAfterFactChecker(
   state: PipelineGraphState
-): "retrieval" | "analyst" {
+): "retrieval" | "contentOrganizer" {
   if (!state.checkerPassed && state.retryCount < 1) {
     return "retrieval";
   }
-  return "analyst";
+  return "contentOrganizer";
 }
 
 async function intakeNode(
@@ -174,6 +175,22 @@ async function factCheckerNode(
   }
 }
 
+async function contentOrganizerNode(
+  state: PipelineGraphState
+): Promise<Partial<PipelineGraphState>> {
+  const organized = organizeKnowledge({
+    hits: state.hits,
+    coverage: state.coverage,
+    notes: state.notes,
+  });
+
+  return {
+    hits: organized.hits,
+    coverage: organized.coverage,
+    notes: organized.notes,
+  };
+}
+
 async function analystNode(
   state: PipelineGraphState,
   config: LangGraphRunnableConfig
@@ -253,12 +270,14 @@ function buildPipelineGraph() {
     .addNode("intake", intakeNode)
     .addNode("retrieval", retrievalNode)
     .addNode("factChecker", factCheckerNode)
+    .addNode("contentOrganizer", contentOrganizerNode)
     .addNode("analyst", analystNode)
     .addNode("respondEarly", respondEarlyNode)
     .addEdge(START, "intake")
     .addConditionalEdges("intake", routeAfterIntake)
     .addEdge("retrieval", "factChecker")
     .addConditionalEdges("factChecker", routeAfterFactChecker)
+    .addEdge("contentOrganizer", "analyst")
     .addEdge("analyst", END)
     .addEdge("respondEarly", END);
 }

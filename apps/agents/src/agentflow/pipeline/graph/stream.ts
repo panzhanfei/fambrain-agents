@@ -9,7 +9,12 @@ import type {
 import { getCompiledPipelineGraph } from "./compile";
 import type { PipelineGraphState } from "./state";
 
-type PipelineStepName = "intake" | "retrieval" | "fact_checker" | "analyst";
+type PipelineStepName =
+  | "intake"
+  | "retrieval"
+  | "fact_checker"
+  | "content_organizer"
+  | "analyst";
 
 type AnalystStreamChunk =
   | { type: "thinking"; text: string }
@@ -163,8 +168,14 @@ export async function* runPipelineStream(
       if (shouldRetryRetrieval(finalState)) {
         yield* startStep("retrieval");
       } else {
-        yield* startStep("analyst");
+        yield* startStep("content_organizer");
       }
+      continue;
+    }
+
+    if (nodeName === "contentOrganizer") {
+      yield* finishStep("content_organizer");
+      yield* startStep("analyst");
       continue;
     }
 

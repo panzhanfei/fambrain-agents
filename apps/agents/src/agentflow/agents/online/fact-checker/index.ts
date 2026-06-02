@@ -5,6 +5,10 @@ export {
   parseJsonObject,
 } from "./check-helpers";
 export {
+  factCheckerResultSchema,
+  parseFactCheckerResult,
+} from "./schema";
+export {
   prompt,
   type FactCheckerInput,
   type FactCheckerIssue,
