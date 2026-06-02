@@ -138,7 +138,7 @@
 | D3-6 | KM | 12 条候选里同一 md 出现 3+ 次 | `topK=12` 按 chunk 检索，未按 `path` 去重 | 常量集中配置；召回后 path 去重（每文件 ≤2 chunk） | ⬜ sprint D2 |
 | D3-7 | 配置 | `12` / `5` / `40` 分散硬编码 | P0  magic number | `VECTOR_TOP_K` / `MAX_HITS` / `INTAKE_HISTORY_TURNS` 收一处或 `.env` | ⬜ sprint D2 |
 | D3-8 | Intake | 仅 `history.slice(-40)` 有上下文 | 控 Ollama context；Web 传全量 DB 历史 | 40 可配置；pipeline 注入「上一轮检索主题」摘要 | ⬜ sprint D3 |
-| D3-9 | Analyst | 追问「那个项目呢」易 clarify 或答偏 | Analyst **不读**聊天历史，仅 `userQuestion` + hits | 传最近 2～4 轮；或 Mem0/LangMem（D8） | ⬜ sprint D3 |
+| D3-9 | Analyst | 追问「那个项目呢」易 clarify 或答偏 | Analyst **不读**全量 DB 历史，仅 `userQuestion` + hits + **memoryBlock** | 传最近 2～4 轮；D8 已注入 Mem0/LangMem，Golden 待验证 | 🔄 sprint D3 |
 | D3-10 | RAG | G3「项目+技术」hits 有但偏 `aky-*` 模板 | 向量未优先 `experience/` / `personal/` | 路径加权或 Intake topics 引导；Golden G3 断言 path 分布 | ⬜ sprint D2 |
 | D3-11 | 文档 | 流程图/roadmap 仍写 LlamaIndex retriever、D3 未接 | 迁移后未同步 docs | 与代码对齐 LangChain；更新 A2 验收状态 | ⬜ sprint D4 |
 | D3-12 | 开发 | `pnpm dev` agents `EADDRINUSE :3001` | 旧进程占端口 | 文档写「先 kill 3001」；或 dev 脚本检测复用 | ⬜ sprint D4 |

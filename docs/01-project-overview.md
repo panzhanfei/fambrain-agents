@@ -6,7 +6,7 @@
 
 基于 **Next.js（App Router）** 的家庭协作型对话应用：注册登录、成员审核、会话与消息持久化，以及 **P0 多 Agent 聊天闭环**（意图路由 → 知识库检索 → 归纳回答，SSE 流式）。
 
-**当前进度（2026-06-02）：** 离线知识入库师 **已实现**（**p-limit 分批 embed**）；在线 **LangGraph** 编排（`Intake → KM → FactChecker → ContentOrganizer → Analyst`）、KM **向量 + 关键词 fallback** 已接；事实核查员 **D5**、内容整理师 **D6** 已接入；**在线 Agent JSON 均已 Zod 化**。跨轮检索缓存待 [坑点 §2.2](./04-pitfalls.md)。详见 [路线图](./03-roadmap.md) · [流程图](./02-agent-flows.md)。
+**当前进度（2026-06-02）：** 离线知识入库师 **已实现**（**p-limit 分批 embed**）；在线 **LangGraph** 编排（`Intake → KM → FactChecker → ContentOrganizer → Analyst`）、KM **向量 + 关键词 fallback** 已接；事实核查员 **D5**、内容整理师 **D6** 已接入；**D7 DocParser**（PDF/Word/PPT/图片批量上传→corpus→可选 Chroma）、**D8 Mem0/LangMem**（Pipeline 注入 `memoryBlock`）已触达；**在线 Agent JSON 均已 Zod 化**。跨轮检索缓存待 [坑点 §2.2](./04-pitfalls.md)（消坑 sprint 末段）。详见 [路线图](./03-roadmap.md) · [流程图](./02-agent-flows.md)。
 
 ## 应用层技术栈
 
@@ -32,7 +32,9 @@
 | ChromaDB | 按 `corpusUserId` 分 collection；离线入库 + **在线检索** |
 | Zod | 注册/会话 + 入库 metadata；**在线 Agent JSON schema**（Intake / KM / FactChecker / Analyst / Organizer） |
 | Pino | 知识入库师结构化日志 |
-| p-limit | 入库 embed 并发控制（`INDEX_EMBED_CONCURRENCY` / `INDEX_EMBED_BATCH_SIZE`） |
+| p-limit | 入库 embed 并发控制；**DocParser** 批量解析并发（`DOC_PARSE_CONCURRENCY`） |
+| Mem0 | 跨会话语义记忆检索，注入 Intake / Analyst prompt |
+| LangMem | 单会话摘要压缩（`data/memory/sessions/`），配合 DB 历史裁剪 Intake 上下文 |
 
 编排与流程详见 [Agent 流程图](./02-agent-flows.md)。
 
@@ -79,6 +81,9 @@ pnpm run dev
 | `pnpm run rebuild:native` | 重新编译 `better-sqlite3`（解决缺少 `.node` 绑定） |
 | `pnpm run chroma:server` | 启动 Chroma HTTP 服务（需 [uv](https://docs.astral.sh/uv/)，数据目录 `data/chroma/`） |
 | `pnpm run index:corpus` | **知识入库师**：全量扫描 `corpus/*.md` → embed → 写入 Chroma（语料变更后手动重跑） |
+| `pnpm run parse:documents` | **文档解析师**：CLI 批量解析本地文件 → corpus md（可选入库） |
+| `cd apps/agents && pnpm run verify:memory` | Mem0 / LangMem 本地验证（LangMem 可不依赖 Mem0） |
+| `cd apps/agents && pnpm run verify:doc-parser` | DocParser 格式与路径单测 |
 
 ## 环境变量
 
@@ -109,6 +114,13 @@ pnpm run dev
 | `CHROMA_SERVER_URL` | 否 | Chroma HTTP 客户端地址；不设则由 `CHROMA_HOST` + `CHROMA_PORT` 拼接（先 `pnpm run chroma:server`） |
 | `OLLAMA_STREAM_THINK` | 否 | 流式是否请求 thinking；不支持时服务端会自动降级重试 |
 | `FAMBRAIN_CORPUS_USER_ID` | 否 | 强制所有登录用户检索 `data/doc/users/<此 userId>/`；不设则按用户表 `corpusUserId` 或本人 id |
+| `DOC_PARSE_CONCURRENCY` | 否 | DocParser 批量解析并发，默认 `2` |
+| `OLLAMA_MODEL_VISION` | 否 | 图片 OCR 视觉模型，默认沿用 `OLLAMA_MODEL`（建议 `llava` 等） |
+| `MEM0_ENABLED` / `LANGMEM_ENABLED` | 否 | 记忆层开关，默认 `true` |
+| `MEM0_HISTORY_DB_PATH` | 否 | Mem0 SQLite，默认 `data/memory/mem0/history.db` |
+| `LANGMEM_SESSIONS_DIR` | 否 | LangMem 会话摘要目录，默认 `data/memory/sessions` |
+| `LANGMEM_SUMMARIZE_AFTER_TURNS` | 否 | 满 N 轮后触发会话摘要，默认 `8` |
+| `LANGMEM_KEEP_RECENT_TURNS` | 否 | 摘要后保留最近轮数，默认 `4` |
 
 单机内存限流不适用于多副本；上生产请在前端网关或 Redis 等侧做统一限流。
 
@@ -144,5 +156,8 @@ pnpm run dev
 | `verify:fact-checker` / `verify:fact-checker:pipeline` | `apps/agents/scripts/` | FactChecker 本地验证 |
 | `verify:content-organizer` / `verify:agent-schemas` | `apps/agents/scripts/` | ContentOrganizer / 全 Agent Zod |
 | `verify:embed-batches` | `apps/agents/scripts/` | Indexer p-limit 分批逻辑 |
+| `verify:memory` / `verify:doc-parser` | `apps/agents/scripts/` | Mem0+LangMem / DocParser |
+| `preparePipelineMemory` | `agentflow/memory/` | 每轮加载 Mem0 + LangMem → `memoryBlock` |
+| `ingestDocumentBatch` | `agentflow/agents/offline/doc-parser/` | 批量上传解析 → corpus + 可选入库 |
 | `indexAllCorpora` | `agentflow/agents/offline/knowledge-indexer/` | 离线 corpus → Chroma |
 | `logAgentIn` / `logAgentOut` | `packages/agent-shared/src/agent-log.ts` | 调试：含 FactChecker 🔍、ContentOrganizer 📋 |

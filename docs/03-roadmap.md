@@ -22,7 +22,7 @@
 1. 「你好」→ 短回复（闲聊 / `briefReply`）。
 2. 「城管平台用了什么技术」→ step「检索知识库…」→ **「核查证据…」** → **「整理证据…」** →「整理回答…」→ 最终回答；无语料时可能二次检索（见 [坑点 D5-1](./04-pitfalls.md)）。
 3. Ollama 未启动时应收到 `error` 事件，用户消息仍可能已保存。
-4. **（可选自动化）** `cd apps/agents && pnpm run verify:fact-checker && pnpm run verify:fact-checker:pipeline && pnpm run verify:content-organizer && pnpm run verify:agent-schemas && pnpm run verify:embed-batches && pnpm run verify:doc-parser`
+4. **（可选自动化）** `cd apps/agents && pnpm run verify:fact-checker && pnpm run verify:fact-checker:pipeline && pnpm run verify:content-organizer && pnpm run verify:agent-schemas && pnpm run verify:embed-batches && pnpm run verify:doc-parser && pnpm run verify:memory`
 
 ### Golden 问法（回归）
 
@@ -51,6 +51,7 @@
 | `FactChecker` | 事实核查员 | 新建 | **✅ D5 已接入**（证据包核查 + **Zod**；跨轮 cache → **消坑 sprint 末段**） | [§4](./02-agent-flows.md#4-factchecker--事实核查员-d5-) |
 | `ContentOrganizer` | 内容整理师 | 新建 | **✅ D6 已接入**（hits 去重 / 规范化 → Analyst 前） | [§6](./02-agent-flows.md#6-contentorganizer--内容整理师-d6-) |
 | LangGraph 编排 | — | 迁移 | **✅** `pipeline/graph` StateGraph | [P0 在线编排](./02-agent-flows.md#p0-在线编排流程) |
+| Mem0 + LangMem | 记忆层 | 触达 | **✅ D8**（跨会话 + 会话摘要 → Intake/Analyst） | [§8](./02-agent-flows.md#8-记忆层--mem0--langmemd8) |
 | `DocParser` | 文档解析师 | 触达 | **✅ D7**（PDF/Word/PPT/图片批量上传→解析→入库） | [§7](./02-agent-flows.md#7-docparser--文档解析师d7) |
 | `ContentSummarizer` | 内容摘要师 | 触达 | ⬜ D9 | — |
 
@@ -64,7 +65,9 @@
 | **P0 必验收** | 内容整理师 | hits **path 去重**、excerpt 合并、Zod 规范化；Analyst citations 去重 API | Zod、`organizeKnowledge` |
 | **P0 必验收** | 编排层 | `runPipelineStream` → `StateGraph`（含 **contentOrganizer** 节点） | LangGraph、LangSmith |
 | **P1 增强** | 入口接线员 / 信息分析师 / KM / FactChecker | 在线 Agent JSON **已 Zod 化**（`verify:agent-schemas`） | LangChain、Zod |
-| **P1 触达** | 文档解析师 / 内容摘要师 | 最小单路径样例 | Docling、p-limit、Ollama |
+| **P1 触达** | 文档解析师 | 批量上传 → corpus + 可选 Chroma | pdf-parse、officeparser、Ollama OCR、p-limit |
+| **P1 触达** | Mem0 / LangMem | Pipeline `memoryBlock`；`verify:memory` | Mem0、LangMem、Ollama |
+| **P1 触达** | 内容摘要师 | 最小单路径样例 | Docling、p-limit、Ollama |
 | **P2 延后** | Agno 对比 | `experiments/agno-minimal/` | Agno |
 
 ### 十日排期
@@ -78,7 +81,7 @@
 | D5 | 核查闭环 | 事实核查员 | `completeFactCheck`、checker→retrieval 条件边；**Zod** | **✅ 已接入** |
 | D6 | 整理与 schema | 内容整理师 | ContentOrganizer 入图；全 Agent JSON Zod | **✅ 完成** |
 | D7 | 解析触达 | 文档解析师 | pdf-parse / officeparser / Ollama OCR；批量上传 API | **✅ 完成** |
-| D8 | 记忆/对比触达 | — | Mem0 / LangMem；Recall 对比 | ⬜ |
+| D8 | 记忆/对比触达 | — | **Mem0 / LangMem** 注入 Pipeline；Recall 对比 | **✅ 记忆触达**（Recall 仍 ⬜） |
 | D9 | 扩展触达 | 内容摘要师；MCP | Vercel AI / MCP 实验 | ⬜ |
 | D10 | 回归 + 文档 | 全链路 | A1～T2、G1～G5（**不含消坑**） | 进行中 |
 
@@ -97,9 +100,10 @@
 | A5 | 编排 | LangGraph | 节点 ≥6（含 factChecker、**contentOrganizer**）；checker→retrieval 条件边；SSE `fact_checker` / **`content_organizer`** | **✅** 图与 step 已接 |
 | A6 | 回归 | P0 能力 | [P0 自测 3 条](#p0-自测) + G1～G5 共 8 条，**≥7 条通过** | 进行中 |
 | A7 | Agent | 文档解析师 | 批量上传 PDF/Word/PPT/图片 → corpus md + 可选 Chroma；`verify:doc-parser` | **✅** 脚本已通过 |
-| T1 | 技术 | 17 项总表 | 1～6、14 为 ✅；12 或 13 至少其一 ✅；7～11、15～17 触达 | 进行中 |
+| A8 | 技术 | 记忆触达 | Mem0 跨会话检索 + LangMem 会话摘要注入 Intake/Analyst；`verify:memory` | **✅** 脚本已通过 |
+| T1 | 技术 | 17 项总表 | 1～6、7、11、14 为 ✅/触达；12 或 13 至少其一 ✅；8 触达；9～10、15～17 触达/延后 | 进行中 |
 | T2 | 技术 | 可观测 | 1 次完整链路 trace 或结构化日志 | 部分（Pino 入库） |
-| D1 | 文档 | docs 更新 | Agent 表与 17 项 ✅/⬜ 同步 | **🔄** 2026-06-02 同步 D7 / DocParser / 批量上传入库 |
+| D1 | 文档 | docs 更新 | Agent 表与 17 项 ✅/⬜ 同步 | **✅** 2026-06-02 同步 D7 DocParser、D8 Mem0/LangMem |
 
 ---
 
@@ -126,11 +130,11 @@
 | 4 | ChromaDB | 向量数据库 | Embedding 存储与检索 | ✅ | 离线入库 + **在线检索** |
 | 5 | Ollama | 本地模型 | 离线跑开源模型 | ✅ | chat + embed + 流式 thinking |
 | 6 | Zod | 结构化校验 | Schema 约束 LLM/API 输出 | ✅ | 注册/会话 + 入库 metadata；**在线 Agent JSON 均已 schema**（`verify:agent-schemas`） |
-| 7 | Mem0 | 高级记忆 | 跨会话语义记忆 | ⬜ | 多轮仅靠 DB messages |
+| 7 | Mem0 | 高级记忆 | 跨会话语义记忆 | **✅ 触达** | `preparePipelineMemory` + `data/memory/mem0/` |
 | 8 | Docling | 文档解析 | PDF/DOC 预处理 | **🔄 触达** | **DocParser** 以 pdf-parse / officeparser / Ollama OCR 落地（Docling 对照见 P2） |
 | 9 | Vercel AI SDK | 轻量 AI SDK | 流式、多模型 | ⬜ | 主链仍自研 SSE |
 | 10 | Agno | 轻量多 Agent | 对比 LangGraph | ⬜ | 实验目录 |
-| 11 | LangMem | 记忆增强 | 会话摘要、压缩 | ⬜ | 未用 |
+| 11 | LangMem | 记忆增强 | 会话摘要、压缩 | **✅ 触达** | `langmem-session` + `data/memory/sessions/` |
 | 12 | LangSmith | 链路追踪 | 可视化执行链 | ⬜ | 调试用 `agent-log` |
 | 13 | Pino | 日志框架 | 结构化运行日志 | ✅ | 知识入库师 `indexerLogger` |
 | 14 | p-limit | 并发控制 | 限制 embed 并发 | ✅ | Indexer `addDocumentsWithEmbedLimit`（`INDEX_EMBED_CONCURRENCY` / `BATCH_SIZE`） |
@@ -138,7 +142,7 @@
 | 16 | MCP SDK | 模型上下文协议 | 标准化工具交互 | ⬜ | 未接入应用 |
 | 17 | Recall | 轻量 RAG | 对比 LlamaIndex | ⬜ | 实验对比 |
 
-**统计（2026-06-02）：** ✅ **9 项**已接入或部分接入（Ollama、Zod、LangChain、LangGraph、LlamaIndex、ChromaDB、p-limit、Pino、LangChain 核心调用）。
+**统计（2026-06-02）：** ✅ **11 项**已接入或触达（上表 9 项 + **Mem0**、**LangMem**；Docling 以 DocParser 替代触达）。
 
 ### P1 技术覆盖计划（17 项 × 触达方式）
 
@@ -150,11 +154,11 @@
 | 4 | ChromaDB | 接入 | **P0** | 按 corpusUserId 分 collection |
 | 5 | Ollama | 保持 | **P0** | chat + embed；7b/14b 分角色 |
 | 6 | Zod | 加深 | **P0** | 全部 Agent JSON 过 schema |
-| 7 | Mem0 | 触达 | P1 | 用户偏好 1 条读写 |
+| 7 | Mem0 | 触达 | P1 | Pipeline 检索 + 轮次持久化 ✅ |
 | 8 | Docling | 触达 | P1 | DocParser 多格式解析 → Indexer（pdf-parse / officeparser） |
 | 9 | Vercel AI SDK | 触达 | P1 | experiments 对比，主链仍 SSE |
 | 10 | Agno | 触达 | P2 | 独立实验 |
-| 11 | LangMem | 触达 | P1 | 长会话摘要压缩 1 处 |
+| 11 | LangMem | 触达 | P1 | 满 N 轮摘要 + Intake 历史裁剪 ✅ |
 | 12 | LangSmith | 触达 | **P0** | 与 Pino 至少落地其一 |
 | 13 | Pino | 触达 | **P0** | 部分 agent-log 迁移 |
 | 14 | p-limit | 接入 | **P0** | Indexer embed 并发限制 |
@@ -170,7 +174,7 @@
 | StructuredTool / DynamicTool | P0 | ≥2 个 Tool |
 | StructuredOutputParser / Zod | P0 | 全部 Agent JSON 过 schema ✅ |
 | bindTools（可选） | P1 | 1 个试验路由 |
-| ConversationSummaryBuffer / LangMem | P1 | 长对话 1 条用例 |
+| ConversationSummaryBuffer / LangMem | P1 | LangMem 会话摘要 + `verify:memory` ✅ |
 
 ### 核心技术分项（学习参考）
 
@@ -223,4 +227,4 @@
 | 可观测性 | streamEvents、调试面板 | 推理黑盒（#18 部分 ✅） |
 | **P0 已落地** | `runPipelineStream`、关键词 RAG、`coalesceRetrieval` | P0-1～10 |
 
-**口述建议：** 先讲 17 项里已 ✅ 的 **9 项** + P0 踩坑 **5～6 条**，再带「其余见 P1/P2 路线图」。
+**口述建议：** 先讲 17 项里已 ✅/触达的 **11 项** + P0 踩坑 **5～6 条**，再带「其余见 P1/P2 路线图」。

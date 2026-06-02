@@ -14,7 +14,7 @@
 | `ContentOrganizer` | 内容整理师 | **核查通过后**对 `hits` 做 Zod 规范化与 path 去重，再交给分析师 |
 | `InformationAnalyst` | 信息分析师 | 对整理后的检索结果分析、归纳并回答 |
 
-**里程碑：** 用户提问 → 意图识别 → 检索 → **证据核查** → **内容整理** → 分析 → 回答。（LangGraph 编排 **已实现**；KM：**向量 + 关键词 fallback**；FactChecker / ContentOrganizer：**D5/D6 已接入**，跨轮 cache 见 [坑点 §2.2](./04-pitfalls.md)。）
+**里程碑：** 用户提问 → 意图识别 → 检索 → **证据核查** → **内容整理** → 分析 → 回答。（LangGraph 编排 **已实现**；KM：**向量 + 关键词 fallback**；FactChecker / ContentOrganizer：**D5/D6 已接入**；**Mem0/LangMem** 在 Intake/Analyst 前注入记忆块；跨轮 **检索 cache** 见 [坑点 §2.2](./04-pitfalls.md)。）
 
 ## 全链路总览（离线入库 + 在线对话）
 
@@ -39,7 +39,8 @@ flowchart TB
   end
 
   subgraph online ["在线：用户聊天 POST .../messages"]
-    U[用户消息] --> IC[IntakeCoordinator<br/>入口接线员]
+    U[用户消息] --> MEM["preparePipelineMemory<br/>Mem0 + LangMem"]
+    MEM --> IC[IntakeCoordinator<br/>入口接线员]
     IC --> P{parseIntakeDecision<br/>LangGraph 路由}
     P -->|clarify / chitchat| R1[briefReply / 澄清]
     P -->|needsRetrieval| KM[KnowledgeManager<br/>知识管理员]
@@ -55,7 +56,7 @@ flowchart TB
   MD -.->|关键词 fallback| KM
 ```
 
-> **进度（2026-06-02）：** 离线 `KnowledgeIndexer` ✅（p-limit 分批 embed）；在线 KM 已接 Chroma `vectorRetrieve` + 关键词 fallback；`FactChecker` + **`ContentOrganizer`** 已接入 LangGraph（`pipeline/graph/compile.ts`）；在线 Agent JSON 解析均走 Zod。
+> **进度（2026-06-02）：** 离线 `KnowledgeIndexer` ✅（p-limit 分批 embed）；在线 KM 已接 Chroma `vectorRetrieve` + 关键词 fallback；`FactChecker` + **`ContentOrganizer`** 已接入 LangGraph；**D7 `DocParser`**（批量上传 / CLI 解析入库）；**D8 Mem0/LangMem**（每轮 `preparePipelineMemory` 注入 Intake/Analyst）；在线 Agent JSON 解析均走 Zod。
 
 ## P0 在线编排流程
 
@@ -280,6 +281,35 @@ flowchart TD
 | 5 | 并发 | `DOC_PARSE_CONCURRENCY`（默认 2） | `ingest-batch.ts` | `getDocParseConcurrency()` |
 
 **验证：** `pnpm run verify:doc-parser`（格式 / 路径 / Markdown 单测，不依赖 Ollama）。
+
+### 8. 记忆层 — Mem0 + LangMem（D8）✅
+
+**触发：** 每轮 `runPipelineStream` 开始前（`pipeline/graph/stream.ts`）。**不参与**离线入库链路。
+
+**职责：** **Mem0** 按 `actorUserId` 检索跨会话偏好/事实；**LangMem** 按 `conversationId` 维护会话摘要；合并为 `memoryBlock` 注入 **IntakeCoordinator** 与 **InformationAnalyst** prompt。轮次结束后 `persistTurnMemory` 写回 Mem0 与 LangMem 存储。
+
+**存储：** `data/memory/mem0/history.db`（Mem0 SQLite）、`data/memory/sessions/<conversationId>.json`（LangMem）。BFF 请求体须带 `conversationId`（`packages/agent-types`）。
+
+```mermaid
+flowchart LR
+  Q[用户问题] --> PREP["preparePipelineMemory()"]
+  PREP --> M0["searchUserMemories()<br/>Mem0"]
+  PREP --> LM["loadSessionSummary()<br/>LangMem"]
+  M0 --> BL["buildMemoryPromptBlock()"]
+  LM --> BL
+  BL --> IC[IntakeCoordinator]
+  BL --> IA[InformationAnalyst]
+  OUT[assistant 落库] --> PERS["persistTurnMemory()"]
+```
+
+| 步骤 | 做什么 | 配置 | 文件 | 方法 |
+|------|--------|------|------|------|
+| 0 | 开关 | `MEM0_ENABLED` / `LANGMEM_ENABLED`（默认开） | `memory/config.ts` | `getMemoryConfig()` |
+| 1 | 加载 | 检索 Mem0 + 读会话摘要；裁剪 Intake 历史 | `prepare-context.ts` | `preparePipelineMemory()` |
+| 2 | 注入 | `memoryBlock` 拼入 system/human | `build-prompt-block.ts` | `buildMemoryPromptBlock()` |
+| 3 | 持久化 | 本轮 user/assistant 写入 Mem0；满 N 轮触发 LangMem 摘要 | `persist-turn.ts`, `langmem-session.ts` | `persistTurnMemory()` |
+
+**验证：** `pnpm run verify:memory`（需 Ollama；可 `MEM0_ENABLED=false` 仅测 LangMem）。
 
 ## 路由字段（IntakeCoordinator 输出）
 
