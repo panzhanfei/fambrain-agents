@@ -27,6 +27,17 @@ flowchart TB
     MD --> KI --> CH
   end
 
+  subgraph ingest ["离线：文档解析师（批量上传 / parse:documents）"]
+    UP["PDF / Word / PPT / 图片"]
+    DP["DocParser"]
+    VAULT["vault/originals/uploads"]
+    IMP["corpus/*/imports/*.md"]
+    UP --> DP
+    DP --> VAULT
+    DP --> IMP
+    IMP --> KI
+  end
+
   subgraph online ["在线：用户聊天 POST .../messages"]
     U[用户消息] --> IC[IntakeCoordinator<br/>入口接线员]
     IC --> P{parseIntakeDecision<br/>LangGraph 路由}
@@ -237,6 +248,38 @@ flowchart TD
 | 5 | 编排 | FactChecker 后固定进入 | `pipeline/graph/compile.ts` | `contentOrganizerNode()` |
 
 **验证：** `pnpm run verify:content-organizer`；全 Agent schema：`pnpm run verify:agent-schemas`。
+
+### 7. DocParser — 文档解析师（D7）✅
+
+**触发：** `POST /api/documents/upload`（Web 代理 → Agents `POST /documents/upload`）或 CLI `pnpm run parse:documents -- <userId> <files...>`。**不参与**在线聊天实时链路。
+
+**职责：** 批量接收 PDF / Word / PPT / 图片 → 解析为 Markdown → 原件存 `vault/originals/uploads`，语料写 `corpus/<category>/imports/` → 可选触发 `KnowledgeIndexer` 全量入库。
+
+**技术：** pdf-parse、officeparser、mammoth（docx）、Ollama vision OCR（图片）、p-limit 并发、Zod（结果 schema）、Pino。
+
+```mermaid
+flowchart TD
+  API["POST /documents/upload<br/>multipart"] --> BATCH["ingestDocumentBatch()"]
+  CLI["pnpm run parse:documents"] --> BATCH
+  BATCH --> VAULT["saveOriginalToVault()"]
+  BATCH --> PARSE["parseDocumentBuffer()<br/>pdf / word / ppt / image"]
+  PARSE --> MD["writeParsedToCorpus()"]
+  MD --> IDX{indexAfter?}
+  IDX -->|是| KI["indexOneCorpusUser()"]
+  IDX -->|否| DONE[返回 JSON 结果]
+  KI --> DONE
+```
+
+| 步骤 | 做什么 | 规则 | 文件 | 方法 |
+|------|--------|------|------|------|
+| 0 | HTTP / CLI | JWT 鉴权；字段 `corpusUserId` / `category` / `indexAfter` | `server/documents-upload.ts`, `scripts/parse-documents.ts` | `handleDocumentsUpload()` |
+| 1 | 存原件 | `users/<actor>/vault/originals/uploads/` | `write-corpus-md.ts` | `saveOriginalToVault()` |
+| 2 | 解析 | PDF→pdf-parse；Word→mammoth/docx+officeparser；PPT→officeparser；图片→Ollama OCR | `parse-file.ts`, `parse-image-ocr.ts` | `parseDocumentBuffer()` |
+| 3 | 写 md | `corpus/<experience\|projects\|personal>/imports/` | `write-corpus-md.ts` | `writeParsedToCorpus()` |
+| 4 | 入库 | 默认 `indexAfter=true` 触发全量 Chroma 重建 | `ingest-batch.ts` | `ingestDocumentBatch()` |
+| 5 | 并发 | `DOC_PARSE_CONCURRENCY`（默认 2） | `ingest-batch.ts` | `getDocParseConcurrency()` |
+
+**验证：** `pnpm run verify:doc-parser`（格式 / 路径 / Markdown 单测，不依赖 Ollama）。
 
 ## 路由字段（IntakeCoordinator 输出）
 

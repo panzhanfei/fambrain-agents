@@ -9,10 +9,17 @@ export {
   DOC_ROOT,
   DOC_USERS_DIR,
   CORPUS_DIR,
+  VAULT_DIR,
+  VAULT_UPLOADS_DIR,
+  CORPUS_IMPORTS_DIR,
   SCAN_FOLDERS,
   getUserHome,
   getUserCorpusRoot,
+  getUserVaultRoot,
+  getVaultUploadsRoot,
+  getCorpusImportDir,
   listCorpusScanRoots,
+  type CorpusCategory,
   type CorpusScanRoot,
 } from "./doc-paths";
 export { findMonorepoRoot } from "./repo-root";

@@ -19,6 +19,7 @@
     "doc:migrate-to-user": "node scripts/migrate-doc-to-corpus-user.mjs",
     "doc:migrate-layout": "node scripts/migrate-doc-layout.mjs",
     "index:corpus": "bash scripts/index-corpus.sh",
+    "parse:documents": "pnpm --filter @fambrain/agents parse:documents",
     "pack:deploy": "bash scripts/pack-deploy.sh",
     "docker:up": "docker compose up -d --build",
     "docker:down": "docker compose down"

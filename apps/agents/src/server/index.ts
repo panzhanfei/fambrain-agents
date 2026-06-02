@@ -11,6 +11,7 @@ import {
   handleNotFound,
   handlePipelineStream,
 } from "@/server/routes";
+import { handleDocumentsUpload } from "@/server/documents-upload";
 
 const repoRoot = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -30,6 +31,11 @@ const server = createServer((req, res) => {
 
   if (url === "/pipeline/stream") {
     handleAsync(handlePipelineStream)(req, res);
+    return;
+  }
+
+  if (url === "/documents/upload") {
+    handleAsync(handleDocumentsUpload)(req, res);
     return;
   }
 
