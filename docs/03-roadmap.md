@@ -22,7 +22,7 @@
 1. 「你好」→ 短回复（闲聊 / `briefReply`）。
 2. 「城管平台用了什么技术」→ step「检索知识库…」→ **「核查证据…」** → **「整理证据…」** →「整理回答…」→ 最终回答；无语料时可能二次检索（见 [坑点 D5-1](./04-pitfalls.md)）。
 3. Ollama 未启动时应收到 `error` 事件，用户消息仍可能已保存。
-4. **（可选自动化）** `cd apps/agents && pnpm run verify:fact-checker && pnpm run verify:fact-checker:pipeline && pnpm run verify:content-organizer && pnpm run verify:agent-schemas && pnpm run verify:embed-batches && pnpm run verify:doc-parser && pnpm run verify:memory`
+4. **（可选自动化）** `cd apps/agents && pnpm run verify:fact-checker && pnpm run verify:fact-checker:pipeline && pnpm run verify:content-organizer && pnpm run verify:agent-schemas && pnpm run verify:embed-batches && pnpm run verify:doc-parser && pnpm run verify:memory && pnpm run verify:content-summarizer && pnpm run verify:vault-list`
 
 ### Golden 问法（回归）
 
@@ -53,7 +53,8 @@
 | LangGraph 编排 | — | 迁移 | **✅** `pipeline/graph` StateGraph | [P0 在线编排](./02-agent-flows.md#p0-在线编排流程) |
 | Mem0 + LangMem | 记忆层 | 触达 | **✅ D8**（跨会话 + 会话摘要 → Intake/Analyst） | [§8](./02-agent-flows.md#8-记忆层--mem0--langmemd8) |
 | `DocParser` | 文档解析师 | 触达 | **✅ D7**（PDF/Word/PPT/图片批量上传→解析→入库） | [§7](./02-agent-flows.md#7-docparser--文档解析师d7) |
-| `ContentSummarizer` | 内容摘要师 | 触达 | ⬜ D9 | — |
+| `ContentSummarizer` | 内容摘要师 | 触达 | **✅ D9**（CLI / `summarizeContent` + Zod） | [§9](./02-agent-flows.md#9-contentsummarizer--内容摘要师d9) |
+| MCP / Recall / Vercel AI | 实验触达 | 触达 | **✅**（见 [experiments/README.md](../experiments/README.md)） | [§10](./02-agent-flows.md#10-实验触达--mcp--recall--vercel-ai-) |
 
 ### P1 要完成的 Agent（任务 × 技术）
 
@@ -67,7 +68,8 @@
 | **P1 增强** | 入口接线员 / 信息分析师 / KM / FactChecker | 在线 Agent JSON **已 Zod 化**（`verify:agent-schemas`） | LangChain、Zod |
 | **P1 触达** | 文档解析师 | 批量上传 → corpus + 可选 Chroma | pdf-parse、officeparser、Ollama OCR、p-limit |
 | **P1 触达** | Mem0 / LangMem | Pipeline `memoryBlock`；`verify:memory` | Mem0、LangMem、Ollama |
-| **P1 触达** | 内容摘要师 | 最小单路径样例 | Docling、p-limit、Ollama |
+| **P1 触达** | 内容摘要师 | CLI + Zod 结构化摘要 | Ollama、Zod、`verify:content-summarizer` |
+| **P1 触达** | MCP / Recall / Vercel AI | 实验脚本（不进主链） | MCP SDK、`recallKeywordRetrieve`、`ai` + `ollama-ai-provider` |
 | **P2 延后** | Agno 对比 | `experiments/agno-minimal/` | Agno |
 
 ### 十日排期
@@ -81,9 +83,9 @@
 | D5 | 核查闭环 | 事实核查员 | `completeFactCheck`、checker→retrieval 条件边；**Zod** | **✅ 已接入** |
 | D6 | 整理与 schema | 内容整理师 | ContentOrganizer 入图；全 Agent JSON Zod | **✅ 完成** |
 | D7 | 解析触达 | 文档解析师 | pdf-parse / officeparser / Ollama OCR；批量上传 API | **✅ 完成** |
-| D8 | 记忆/对比触达 | — | **Mem0 / LangMem** 注入 Pipeline；Recall 对比 | **✅ 记忆触达**（Recall 仍 ⬜） |
-| D9 | 扩展触达 | 内容摘要师；MCP | Vercel AI / MCP 实验 | ⬜ |
-| D10 | 回归 + 文档 | 全链路 | A1～T2、G1～G5（**不含消坑**） | 进行中 |
+| D8 | 记忆/对比触达 | — | **Mem0 / LangMem** 注入 Pipeline | **✅ 完成** |
+| D9 | 扩展触达 | 内容摘要师；MCP；Recall；Vercel AI | 离线摘要 + `experiments/` 脚本 | **✅ 完成** |
+| D10 | 回归 + 文档 | 全链路 | A1～T2、G1～G5（**不含消坑**） | **进行中** |
 
 > **风险：** 10 天内 17 项全 ✅ 不现实；**验收以 A1～A6、T1 必做项、T2 为准**。
 >
@@ -101,9 +103,11 @@
 | A6 | 回归 | P0 能力 | [P0 自测 3 条](#p0-自测) + G1～G5 共 8 条，**≥7 条通过** | 进行中 |
 | A7 | Agent | 文档解析师 | 批量上传 PDF/Word/PPT/图片 → corpus md + 可选 Chroma；`verify:doc-parser` | **✅** 脚本已通过 |
 | A8 | 技术 | 记忆触达 | Mem0 跨会话检索 + LangMem 会话摘要注入 Intake/Analyst；`verify:memory` | **✅** 脚本已通过 |
-| T1 | 技术 | 17 项总表 | 1～6、7、11、14 为 ✅/触达；12 或 13 至少其一 ✅；8 触达；9～10、15～17 触达/延后 | 进行中 |
+| A9 | Agent | 内容摘要师 | `summarizeContent` + CLI；`verify:content-summarizer` | **✅** 脚本已通过 |
+| A10 | 实验 | MCP / Recall / Vercel AI | `experiment:*` + `verify:vault-list` | **✅** 脚本已通过 |
+| T1 | 技术 | 17 项总表 | 1～9、11、14、16、17 触达/✅；10、15 P2；12 或 13 至少其一待补 | **🔄** LangSmith 待触达 |
 | T2 | 技术 | 可观测 | 1 次完整链路 trace 或结构化日志 | 部分（Pino 入库） |
-| D1 | 文档 | docs 更新 | Agent 表与 17 项 ✅/⬜ 同步 | **✅** 2026-06-02 同步 D7 DocParser、D8 Mem0/LangMem |
+| D1 | 文档 | docs 更新 | Agent 表与 17 项 ✅/⬜ 同步 | **✅** 2026-06-02 含 D9 + 实验触达 |
 
 ---
 
@@ -132,17 +136,17 @@
 | 6 | Zod | 结构化校验 | Schema 约束 LLM/API 输出 | ✅ | 注册/会话 + 入库 metadata；**在线 Agent JSON 均已 schema**（`verify:agent-schemas`） |
 | 7 | Mem0 | 高级记忆 | 跨会话语义记忆 | **✅ 触达** | `preparePipelineMemory` + `data/memory/mem0/` |
 | 8 | Docling | 文档解析 | PDF/DOC 预处理 | **🔄 触达** | **DocParser** 以 pdf-parse / officeparser / Ollama OCR 落地（Docling 对照见 P2） |
-| 9 | Vercel AI SDK | 轻量 AI SDK | 流式、多模型 | ⬜ | 主链仍自研 SSE |
+| 9 | Vercel AI SDK | 轻量 AI SDK | 流式、多模型 | **✅ 触达** | `experiment:vercel-ai`（`ai` + `ollama-ai-provider`）；主链仍自研 SSE |
 | 10 | Agno | 轻量多 Agent | 对比 LangGraph | ⬜ | 实验目录 |
 | 11 | LangMem | 记忆增强 | 会话摘要、压缩 | **✅ 触达** | `langmem-session` + `data/memory/sessions/` |
 | 12 | LangSmith | 链路追踪 | 可视化执行链 | ⬜ | 调试用 `agent-log` |
 | 13 | Pino | 日志框架 | 结构化运行日志 | ✅ | 知识入库师 `indexerLogger` |
 | 14 | p-limit | 并发控制 | 限制 embed 并发 | ✅ | Indexer `addDocumentsWithEmbedLimit`（`INDEX_EMBED_CONCURRENCY` / `BATCH_SIZE`） |
 | 15 | TypeBox | 结构校验 | Zod 替代学习 | ⬜ | 实验对比 |
-| 16 | MCP SDK | 模型上下文协议 | 标准化工具交互 | ⬜ | 未接入应用 |
-| 17 | Recall | 轻量 RAG | 对比 LlamaIndex | ⬜ | 实验对比 |
+| 16 | MCP SDK | 模型上下文协议 | 标准化工具交互 | **✅ 触达** | `experiment:mcp-vault` · 工具 `list_vault_files` |
+| 17 | Recall | 轻量 RAG | 对比 LlamaIndex | **✅ 触达** | `recallKeywordRetrieve` + `experiment:recall-compare` |
 
-**统计（2026-06-02）：** ✅ **11 项**已接入或触达（上表 9 项 + **Mem0**、**LangMem**；Docling 以 DocParser 替代触达）。
+**统计（2026-06-02）：** ✅ **14 项**已接入或触达（含 **Vercel AI**、**MCP**、**Recall**、**Mem0**、**LangMem**；Docling 以 DocParser 替代触达）。
 
 ### P1 技术覆盖计划（17 项 × 触达方式）
 
@@ -156,15 +160,15 @@
 | 6 | Zod | 加深 | **P0** | 全部 Agent JSON 过 schema |
 | 7 | Mem0 | 触达 | P1 | Pipeline 检索 + 轮次持久化 ✅ |
 | 8 | Docling | 触达 | P1 | DocParser 多格式解析 → Indexer（pdf-parse / officeparser） |
-| 9 | Vercel AI SDK | 触达 | P1 | experiments 对比，主链仍 SSE |
+| 9 | Vercel AI SDK | 触达 | P1 | `experiment:vercel-ai` ✅ |
 | 10 | Agno | 触达 | P2 | 独立实验 |
 | 11 | LangMem | 触达 | P1 | 满 N 轮摘要 + Intake 历史裁剪 ✅ |
 | 12 | LangSmith | 触达 | **P0** | 与 Pino 至少落地其一 |
 | 13 | Pino | 触达 | **P0** | 部分 agent-log 迁移 |
 | 14 | p-limit | 接入 | **P0** | Indexer embed 并发限制 |
 | 15 | TypeBox | 触达 | P2 | schema 对比实验 |
-| 16 | MCP SDK | 触达 | P1 | 只读列 vault 文件 |
-| 17 | Recall | 触达 | P1 | 同 query 对比 topK |
+| 16 | MCP SDK | 触达 | P1 | `list_vault_files` MCP 工具 ✅ |
+| 17 | Recall | 触达 | P1 | `experiment:recall-compare` ✅ |
 
 ### LangChain 子能力 checklist
 
@@ -227,4 +231,4 @@
 | 可观测性 | streamEvents、调试面板 | 推理黑盒（#18 部分 ✅） |
 | **P0 已落地** | `runPipelineStream`、关键词 RAG、`coalesceRetrieval` | P0-1～10 |
 
-**口述建议：** 先讲 17 项里已 ✅/触达的 **11 项** + P0 踩坑 **5～6 条**，再带「其余见 P1/P2 路线图」。
+**口述建议：** 先讲 17 项里已 ✅/触达的 **14 项** + P0 踩坑 **5～6 条**，再带「LangSmith / Agno 见 P2」。

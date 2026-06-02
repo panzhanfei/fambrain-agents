@@ -170,7 +170,7 @@
 
 ## 三、集中消坑计划（核心 Agent 完成后 · 4 天）
 
-> **前置：** 四个 Agent 骨架接入主链路 — `FactChecker`（D5）、`ContentOrganizer`（D6）、`DocParser`（D7 触达）、`ContentSummarizer`（D9 触达）。完成后 **核心对话 Agent 算齐**，再专心清坑 + 回归。
+> **前置：** 核心 Agent 与 D9 触达已完成 — `FactChecker`（D5）、`ContentOrganizer`（D6）、`DocParser`（D7）、`ContentSummarizer`（D9）、实验脚本（MCP/Recall/Vercel AI）。下一步 **D10 Golden 回归**，再开 **消坑 sprint**。
 
 | 天 | 焦点 | 目标坑 ID | 交付 |
 |----|------|-----------|------|

@@ -23,3 +23,8 @@ export {
   type CorpusScanRoot,
 } from "./doc-paths";
 export { findMonorepoRoot } from "./repo-root";
+export { listVaultFiles, type VaultFileEntry } from "./list-vault-files";
+export {
+  recallKeywordRetrieve,
+  type RecallKeywordHit,
+} from "./recall-keyword-retrieve";

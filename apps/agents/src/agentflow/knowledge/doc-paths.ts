@@ -2,8 +2,12 @@ import path from "node:path";
 
 import { findMonorepoRoot } from "./repo-root";
 
-/** 知识库根目录（monorepo 内 `data/doc`） */
-export const DOC_ROOT = path.join(findMonorepoRoot(), "data/doc");
+/** 知识库根目录（monorepo 内 `data/doc`；测试可设 `FAMBRAIN_DOC_ROOT_OVERRIDE`） */
+export const DOC_ROOT = (() => {
+  const override = process.env.FAMBRAIN_DOC_ROOT_OVERRIDE?.trim();
+  if (override) return path.resolve(override);
+  return path.join(findMonorepoRoot(), "data/doc");
+})();
 
 export const DOC_USERS_DIR = "users";
 

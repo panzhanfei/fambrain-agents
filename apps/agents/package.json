@@ -17,9 +17,16 @@
     "verify:content-organizer": "tsx scripts/verify-content-organizer.ts",
     "verify:agent-schemas": "tsx scripts/verify-agent-schemas.ts",
     "verify:embed-batches": "tsx scripts/verify-embed-batches.ts",
-    "verify:memory": "tsx --env-file=../../.env scripts/verify-memory.ts"
+    "verify:memory": "tsx --env-file=../../.env scripts/verify-memory.ts",
+    "verify:content-summarizer": "tsx scripts/verify-content-summarizer.ts",
+    "verify:vault-list": "tsx scripts/verify-vault-list.ts",
+    "summarize:document": "tsx --env-file=../../.env scripts/summarize-document.ts",
+    "experiment:mcp-vault": "tsx scripts/experiments/mcp-vault-server.ts",
+    "experiment:recall-compare": "tsx --env-file=../../.env scripts/experiments/compare-recall.ts",
+    "experiment:vercel-ai": "tsx --env-file=../../.env scripts/experiments/vercel-ai-stream.ts"
   },
   "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.25.2",
     "@fambrain/agent-config": "workspace:*",
     "@fambrain/agent-shared": "workspace:*",
     "@fambrain/agent-types": "workspace:*",
@@ -38,6 +45,8 @@
     "p-limit": "^3.1.0",
     "pdf-parse": "^2.4.5",
     "pino": "^10.3.1",
+    "ai": "^6.0.116",
+    "ollama-ai-provider": "^1.2.0",
     "zod": "^4.4.3"
   },
   "devDependencies": {

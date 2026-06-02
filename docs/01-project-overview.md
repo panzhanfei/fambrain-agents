@@ -6,7 +6,7 @@
 
 基于 **Next.js（App Router）** 的家庭协作型对话应用：注册登录、成员审核、会话与消息持久化，以及 **P0 多 Agent 聊天闭环**（意图路由 → 知识库检索 → 归纳回答，SSE 流式）。
 
-**当前进度（2026-06-02）：** 离线知识入库师 **已实现**（**p-limit 分批 embed**）；在线 **LangGraph** 编排（`Intake → KM → FactChecker → ContentOrganizer → Analyst`）、KM **向量 + 关键词 fallback** 已接；事实核查员 **D5**、内容整理师 **D6** 已接入；**D7 DocParser**（PDF/Word/PPT/图片批量上传→corpus→可选 Chroma）、**D8 Mem0/LangMem**（Pipeline 注入 `memoryBlock`）已触达；**在线 Agent JSON 均已 Zod 化**。跨轮检索缓存待 [坑点 §2.2](./04-pitfalls.md)（消坑 sprint 末段）。详见 [路线图](./03-roadmap.md) · [流程图](./02-agent-flows.md)。
+**当前进度（2026-06-02）：** 在线 LangGraph 五 Agent 闭环 ✅；**D7 DocParser**、**D8 Mem0/LangMem**、**D9 ContentSummarizer** 与 **MCP / Recall / Vercel AI** 实验脚本已触达。下一步 **D10 Golden 回归**；消坑见 [坑点 §三](./04-pitfalls.md#三集中消坑计划核心-agent-完成后--4-天)。详见 [路线图](./03-roadmap.md) · [流程图](./02-agent-flows.md) · [实验](../experiments/README.md)。
 
 ## 应用层技术栈
 
@@ -35,6 +35,9 @@
 | p-limit | 入库 embed 并发控制；**DocParser** 批量解析并发（`DOC_PARSE_CONCURRENCY`） |
 | Mem0 | 跨会话语义记忆检索，注入 Intake / Analyst prompt |
 | LangMem | 单会话摘要压缩（`data/memory/sessions/`），配合 DB 历史裁剪 Intake 上下文 |
+| MCP SDK | 实验：`experiment:mcp-vault` 只读列 vault |
+| Recall（轻量 RAG） | `recallKeywordRetrieve`；对比脚本 `experiment:recall-compare` |
+| Vercel AI SDK | 实验：`experiment:vercel-ai`（主链仍自研 SSE） |
 
 编排与流程详见 [Agent 流程图](./02-agent-flows.md)。
 
@@ -84,6 +87,12 @@ pnpm run dev
 | `pnpm run parse:documents` | **文档解析师**：CLI 批量解析本地文件 → corpus md（可选入库） |
 | `cd apps/agents && pnpm run verify:memory` | Mem0 / LangMem 本地验证（LangMem 可不依赖 Mem0） |
 | `cd apps/agents && pnpm run verify:doc-parser` | DocParser 格式与路径单测 |
+| `pnpm run summarize:document -- <file.md>` | 内容摘要师（需 Ollama） |
+| `pnpm run experiment:mcp-vault` | MCP stdio 服务（列 vault） |
+| `pnpm run experiment:recall-compare -- <userId> "query"` | Recall vs 向量检索 |
+| `pnpm run experiment:vercel-ai -- "prompt"` | Vercel AI 流式 demo |
+| `cd apps/agents && pnpm run verify:content-summarizer` | 摘要师 Zod 单测 |
+| `cd apps/agents && pnpm run verify:vault-list` | vault 列举单测 |
 
 ## 环境变量
 
@@ -159,5 +168,8 @@ pnpm run dev
 | `verify:memory` / `verify:doc-parser` | `apps/agents/scripts/` | Mem0+LangMem / DocParser |
 | `preparePipelineMemory` | `agentflow/memory/` | 每轮加载 Mem0 + LangMem → `memoryBlock` |
 | `ingestDocumentBatch` | `agentflow/agents/offline/doc-parser/` | 批量上传解析 → corpus + 可选入库 |
+| `summarizeContent` | `agentflow/agents/offline/content-summarizer/` | 离线结构化摘要（D9） |
+| `listVaultFiles` | `agentflow/knowledge/list-vault-files.ts` | vault 只读列举（MCP 共用） |
+| `recallKeywordRetrieve` | `agentflow/knowledge/recall-keyword-retrieve.ts` | 轻量关键词 RAG（对比用） |
 | `indexAllCorpora` | `agentflow/agents/offline/knowledge-indexer/` | 离线 corpus → Chroma |
 | `logAgentIn` / `logAgentOut` | `packages/agent-shared/src/agent-log.ts` | 调试：含 FactChecker 🔍、ContentOrganizer 📋 |

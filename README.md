@@ -2,7 +2,7 @@
 
 基于 **Next.js（App Router）** 的家庭协作型对话应用：注册登录、成员审核、会话持久化，以及 **P0 多 Agent 聊天闭环**（意图路由 → 知识库检索 → 归纳回答，SSE 流式）。
 
-**当前进度：** 离线入库 ✅（p-limit embed）；在线 LangGraph（Intake → KM → **FactChecker** → **ContentOrganizer** → Analyst）、向量检索 ✅；D5/D6 已接入；**D7 DocParser**（批量上传解析入库）、**D8 Mem0/LangMem**（跨会话 + 会话摘要注入）已触达；在线 Agent JSON 已 Zod 化。下一步 **D9～D10** 触达 + Golden 回归；**消坑 sprint 放最后**（见 [坑点 §三](docs/04-pitfalls.md#三集中消坑计划核心-agent-完成后--4-天)）。详见 [路线图](docs/03-roadmap.md) · [流程图](docs/02-agent-flows.md) · [坑点](docs/04-pitfalls.md)。
+**当前进度：** 离线入库 ✅；在线 LangGraph（Intake → KM → **FactChecker** → **ContentOrganizer** → Analyst）✅；**D7 DocParser**、**D8 Mem0/LangMem**、**D9 ContentSummarizer** 与 **MCP / Recall / Vercel AI** 实验脚本已触达。下一步 **D10 Golden 回归**；**消坑 sprint 放最后**（见 [坑点 §三](docs/04-pitfalls.md#三集中消坑计划核心-agent-完成后--4-天)）。详见 [路线图](docs/03-roadmap.md) · [流程图](docs/02-agent-flows.md) · [实验脚本](experiments/README.md)。
 
 ## 快速开始
 
@@ -41,6 +41,10 @@ pnpm run pack:deploy      # 本地构建并打 tar 部署包
 pnpm run docker:up        # Docker 一键启动 web + agents + ollama + chroma
 pnpm run chroma:server    # 启动 Chroma（向量库）
 pnpm run index:corpus     # 离线语料入库（apps/agents）
+pnpm run summarize:document -- path/to.md   # 内容摘要师 CLI
+pnpm run experiment:mcp-vault             # MCP 只读列 vault
+pnpm run experiment:recall-compare -- <userId> "query"
+pnpm run experiment:vercel-ai -- "prompt"
 ```
 
 ## Monorepo 结构

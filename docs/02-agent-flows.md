@@ -56,7 +56,7 @@ flowchart TB
   MD -.->|关键词 fallback| KM
 ```
 
-> **进度（2026-06-02）：** 离线 `KnowledgeIndexer` ✅（p-limit 分批 embed）；在线 KM 已接 Chroma `vectorRetrieve` + 关键词 fallback；`FactChecker` + **`ContentOrganizer`** 已接入 LangGraph；**D7 `DocParser`**（批量上传 / CLI 解析入库）；**D8 Mem0/LangMem**（每轮 `preparePipelineMemory` 注入 Intake/Analyst）；在线 Agent JSON 解析均走 Zod。
+> **进度（2026-06-02）：** 离线 `KnowledgeIndexer` ✅；在线 KM 向量 + 关键词 fallback；D5～D6 入图；**D7 DocParser**、**D8 Mem0/LangMem**、**D9 ContentSummarizer**（离线摘要）；**MCP / Recall / Vercel AI** 见 [experiments/README.md](../experiments/README.md)。在线 Agent JSON 均走 Zod。
 
 ## P0 在线编排流程
 
@@ -310,6 +310,32 @@ flowchart LR
 | 3 | 持久化 | 本轮 user/assistant 写入 Mem0；满 N 轮触发 LangMem 摘要 | `persist-turn.ts`, `langmem-session.ts` | `persistTurnMemory()` |
 
 **验证：** `pnpm run verify:memory`（需 Ollama；可 `MEM0_ENABLED=false` 仅测 LangMem）。
+
+### 9. ContentSummarizer — 内容摘要师（D9）✅
+
+**触发：** CLI `pnpm run summarize:document -- <file.md>` 或代码调用 `summarizeContent()` / `summarizeMarkdownFile()`。**不参与**在线 LangGraph。
+
+**职责：** 对 corpus Markdown 或任意正文生成结构化 JSON 摘要（`title` / `summary` / `bullets` / `keywords`），供入库前预览或后续流水线使用。
+
+| 步骤 | 做什么 | 文件 | 方法 |
+|------|--------|------|------|
+| 1 | 截断正文（≤12k 字） | `summarize.ts` | `summarizeContent()` |
+| 2 | Ollama + Zod | `schema.ts`, `prompt.ts` | `parseContentSummaryResult()` |
+| 3 | 读文件 | `summarize-file.ts` | `summarizeMarkdownFile()` |
+
+**验证：** `pnpm run verify:content-summarizer`（Zod）；CLI 需 Ollama。
+
+### 10. 实验触达 — MCP / Recall / Vercel AI ✅
+
+与主链解耦，脚本在 `apps/agents/scripts/experiments/`，说明见 [experiments/README.md](../experiments/README.md)。
+
+| 实验 | 命令 | 作用 |
+|------|------|------|
+| MCP 列 vault | `pnpm run experiment:mcp-vault` | stdio MCP 工具 `list_vault_files` |
+| Recall 对比 | `pnpm run experiment:recall-compare -- <userId> "query"` | `recallKeywordRetrieve` vs `vectorRetrieve` |
+| Vercel AI SDK | `pnpm run experiment:vercel-ai -- "prompt"` | `streamText` + Ollama（主链仍自研 SSE） |
+
+**验证：** `pnpm run verify:vault-list`（vault 列举单测）。
 
 ## 路由字段（IntakeCoordinator 输出）
 
