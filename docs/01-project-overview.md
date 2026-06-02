@@ -6,7 +6,7 @@
 
 基于 **Next.js（App Router）** 的家庭协作型对话应用：注册登录、成员审核、会话与消息持久化，以及 **P0 多 Agent 聊天闭环**（意图路由 → 知识库检索 → 归纳回答，SSE 流式）。
 
-**当前进度（2026-06）：** 离线知识入库师 **已实现**；在线 **LangGraph** 编排（`Intake → KM → FactChecker → Analyst`）、KM **向量 + 关键词 fallback** 已接；事实核查员 **D5 已接入**（证据包核查 + 最多 1 次打回再检索），跨轮检索缓存待 [坑点 §2.2](./04-pitfalls.md)。详见 [路线图](./03-roadmap.md) · [流程图](./02-agent-flows.md)。
+**当前进度（2026-06-02）：** 离线知识入库师 **已实现**（**p-limit 分批 embed**）；在线 **LangGraph** 编排（`Intake → KM → FactChecker → ContentOrganizer → Analyst`）、KM **向量 + 关键词 fallback** 已接；事实核查员 **D5**、内容整理师 **D6** 已接入；**在线 Agent JSON 均已 Zod 化**。跨轮检索缓存待 [坑点 §2.2](./04-pitfalls.md)。详见 [路线图](./03-roadmap.md) · [流程图](./02-agent-flows.md)。
 
 ## 应用层技术栈
 
@@ -28,10 +28,11 @@
 |------|----------|
 | Ollama | 本地 chat + embed（`ChatOllama`、流式 thinking） |
 | LangChain | Intake / KM 模型调用（`SystemMessage` / `HumanMessage`） |
-| LlamaIndex | 离线 `VectorStoreIndex` 入库；在线 retriever 待 D3 |
-| ChromaDB | 按 `corpusUserId` 分 collection，持久化于 `data/chroma/` |
-| Zod | 注册/会话 + 入库 `chunkMetadataSchema` |
+| LlamaIndex | 离线 `VectorStoreIndex` 入库；**在线 `vectorRetrieve`** |
+| ChromaDB | 按 `corpusUserId` 分 collection；离线入库 + **在线检索** |
+| Zod | 注册/会话 + 入库 metadata；**在线 Agent JSON schema**（Intake / KM / FactChecker / Analyst / Organizer） |
 | Pino | 知识入库师结构化日志 |
+| p-limit | 入库 embed 并发控制（`INDEX_EMBED_CONCURRENCY` / `INDEX_EMBED_BATCH_SIZE`） |
 
 编排与流程详见 [Agent 流程图](./02-agent-flows.md)。
 
@@ -59,7 +60,7 @@ pnpm run dev
 ### 首次使用说明
 
 - **首个注册用户**会成为 `ADMIN`；其余成员默认 `PENDING`，需具备「成员审核」权限的账号在 `/admin/users` 通过后变为 `ACTIVE` 才可进入主界面。
-- **聊天区**：侧栏会话与历史来自数据库；发送消息走 `POST /api/conversations/:id/messages`（**SSE 流式**），经 **Orchestrator → Pipeline → 三个 Worker Agent** 生成回复，**仅将最终 assistant 正文落库**（中间路由/检索结果在内存传递，不写 `messages` 表）。
+- **聊天区**：侧栏会话与历史来自数据库；发送消息走 `POST /api/conversations/:id/messages`（**SSE 流式**），经 **Orchestrator → Pipeline → 五个 Worker Agent** 生成回复，**仅将最终 assistant 正文落库**（中间路由/检索结果在内存传递，不写 `messages` 表）。
 - **登录/注册表单**使用 `apps/web/src/actions/auth.ts`（Server Actions）；业务逻辑在 `packages/auth/`，与 REST API 共用。
 
 ## 脚本（pnpm）
@@ -103,6 +104,8 @@ pnpm run dev
 | `OLLAMA_MODEL` | 建议 | 默认 `qwen2.5:14b`；Intake / Analyst 等未单独配置时使用 |
 | `OLLAMA_MODEL_INTAKE_COORDINATOR` | 否 | 仅入口接线员专用模型；不配则等于 `OLLAMA_MODEL` |
 | `OLLAMA_MODEL_EMBED` | 否 | 嵌入模型；不配则 `nomic-embed-text`（知识入库师 embed 用） |
+| `INDEX_EMBED_CONCURRENCY` | 否 | 入库 embed 同时进行的批次数，默认 `3`（上限 16） |
+| `INDEX_EMBED_BATCH_SIZE` | 否 | 每批 chunk 数，默认 `8`（上限 64） |
 | `CHROMA_SERVER_URL` | 否 | Chroma HTTP 客户端地址；不设则由 `CHROMA_HOST` + `CHROMA_PORT` 拼接（先 `pnpm run chroma:server`） |
 | `OLLAMA_STREAM_THINK` | 否 | 流式是否请求 thinking；不支持时服务端会自动降级重试 |
 | `FAMBRAIN_CORPUS_USER_ID` | 否 | 强制所有登录用户检索 `data/doc/users/<此 userId>/`；不设则按用户表 `corpusUserId` 或本人 id |
@@ -131,12 +134,15 @@ pnpm run dev
 | 技能点 | 代码位置 | 用途 |
 |--------|----------|------|
 | `runAgentStream` + `runPipelineStream` | `apps/agents/src/agentflow/`、`pipeline/graph/stream.ts` | LangGraph 编排 + SSE |
-| `getCompiledPipelineGraph` | `pipeline/graph/compile.ts` | Intake → KM → FactChecker → Analyst |
+| `getCompiledPipelineGraph` | `pipeline/graph/compile.ts` | Intake → KM → FactChecker → **ContentOrganizer** → Analyst |
 | `parseIntakeDecision` / `defaultIntakeDecision` | `pipeline/parse-intake.ts` | 解析 Intake 路由 JSON |
 | `completeIntakeCoordinator` | `agentflow/agents/online/intake-coordinator/` | 一次 `invoke` → 路由 JSON |
 | `retrieveKnowledge` + `vectorRetrieve` | `agentflow/agents/online/knowledge-manager/` | 向量 + 关键词 + LLM 精排 |
 | `completeFactCheck` | `agentflow/agents/online/fact-checker/` | 证据包核查；打回再检索 |
+| `organizeKnowledge` | `agentflow/agents/online/content-organizer/` | hits Zod 规范化 + path 去重 |
 | `streamAnalyzeInformation` | `agentflow/agents/online/information-analyst/` | 流式 thinking + assistant |
 | `verify:fact-checker` / `verify:fact-checker:pipeline` | `apps/agents/scripts/` | FactChecker 本地验证 |
+| `verify:content-organizer` / `verify:agent-schemas` | `apps/agents/scripts/` | ContentOrganizer / 全 Agent Zod |
+| `verify:embed-batches` | `apps/agents/scripts/` | Indexer p-limit 分批逻辑 |
 | `indexAllCorpora` | `agentflow/agents/offline/knowledge-indexer/` | 离线 corpus → Chroma |
-| `logAgentIn` / `logAgentOut` | `packages/agent-shared/src/agent-log.ts` | 调试：含 FactChecker 🔍 |
+| `logAgentIn` / `logAgentOut` | `packages/agent-shared/src/agent-log.ts` | 调试：含 FactChecker 🔍、ContentOrganizer 📋 |

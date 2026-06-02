@@ -4,16 +4,17 @@
 
 本文描述 FamBrain 多 Agent 的 **全局链路**、**在线编排**、**单 Agent 实现**（含规则 / 文件 / 方法），以及路由契约与 SSE 事件。
 
-## P0 在线四 Agent 角色
+## P0 在线五 Agent 角色
 
 | 英文名 | 中文名 | 职责 |
 |--------|--------|------|
 | `IntakeCoordinator` | 入口接线员 | 接收输入、理解意图、拆分任务、产出路由 JSON |
 | `KnowledgeManager` | 知识管理员 | 检索知识库，返回 `hits` / `coverage` / `notes` |
 | `FactChecker` | 事实核查员 | **检索后、生成前**审查证据包；不足时打回再检索（最多 1 次） |
-| `InformationAnalyst` | 信息分析师 | 对检索结果分析、归纳并回答 |
+| `ContentOrganizer` | 内容整理师 | **核查通过后**对 `hits` 做 Zod 规范化与 path 去重，再交给分析师 |
+| `InformationAnalyst` | 信息分析师 | 对整理后的检索结果分析、归纳并回答 |
 
-**里程碑：** 用户提问 → 意图识别 → 检索 → **证据核查** → 分析 → 回答。（LangGraph 编排 **已实现**；KM：**向量 + 关键词 fallback**；FactChecker：**D5 已接入**，跨轮 cache 见 [坑点 §2.2](./04-pitfalls.md)。）
+**里程碑：** 用户提问 → 意图识别 → 检索 → **证据核查** → **内容整理** → 分析 → 回答。（LangGraph 编排 **已实现**；KM：**向量 + 关键词 fallback**；FactChecker / ContentOrganizer：**D5/D6 已接入**，跨轮 cache 见 [坑点 §2.2](./04-pitfalls.md)。）
 
 ## 全链路总览（离线入库 + 在线对话）
 
@@ -32,9 +33,10 @@ flowchart TB
     P -->|clarify / chitchat| R1[briefReply / 澄清]
     P -->|needsRetrieval| KM[KnowledgeManager<br/>知识管理员]
     KM --> FC[FactChecker<br/>事实核查员]
-    FC -->|passed 或已重试| IA[InformationAnalyst<br/>信息分析师]
+    FC -->|passed 或已重试| CO[ContentOrganizer<br/>内容整理师]
     FC -->|未通过且 retry&lt;1| KM
-    P -->|direct_answer 等| FC2[FactChecker 可选] --> IA
+    CO --> IA[InformationAnalyst<br/>信息分析师]
+    P -->|direct_answer 等| FC2[FactChecker 可选] --> CO2[ContentOrganizer] --> IA
     IA --> OUT[assistant 入库]
   end
 
@@ -42,7 +44,7 @@ flowchart TB
   MD -.->|关键词 fallback| KM
 ```
 
-> **进度（2026-06）：** 离线 `KnowledgeIndexer` ✅；在线 KM 已接 Chroma `vectorRetrieve` + 关键词 fallback；`FactChecker` 已接入 LangGraph（`pipeline/graph/compile.ts`）。
+> **进度（2026-06-02）：** 离线 `KnowledgeIndexer` ✅（p-limit 分批 embed）；在线 KM 已接 Chroma `vectorRetrieve` + 关键词 fallback；`FactChecker` + **`ContentOrganizer`** 已接入 LangGraph（`pipeline/graph/compile.ts`）；在线 Agent JSON 解析均走 Zod。
 
 ## P0 在线编排流程
 
@@ -60,9 +62,10 @@ flowchart TD
   C -->|其它需下游| FC0[FactChecker]
 
   F --> FC[FactChecker]
-  FC -->|checkerPassed 或 retryCount ≥ 1| G[InformationAnalyst]
+  FC -->|checkerPassed 或 retryCount ≥ 1| CO[ContentOrganizer]
   FC -->|!checkerPassed 且 retryCount = 0| F
-  FC0 --> G
+  CO --> G[InformationAnalyst]
+  FC0 --> CO0[ContentOrganizer] --> G
   G --> H[assistant 入库]
   D --> H
 ```
@@ -87,7 +90,7 @@ flowchart TD
   SCAN --> READ["readFile 每篇 md"]
   READ --> SPLIT["splitMarkdownToDocuments()"]
   SPLIT --> META["chunkMetadataSchema 校验"]
-  META --> EMBED["OllamaEmbedding + fromDocuments"]
+  META --> EMBED["addDocumentsWithEmbedLimit<br/>p-limit 分批 embed"]
   EMBED --> CHROMA[("Chroma collection<br/>全量 delete + 重建")]
 ```
 
@@ -100,8 +103,8 @@ flowchart TD
 | 4 | 读正文 | UTF-8 读全文 | `index-one-user.ts` | `readFile()` |
 | 5 | 分块 | 按 `##` 切；无 `##` 整篇 1 块；`id_`=user:path:index | `split-markdown.ts` | `splitMarkdownToDocuments()` |
 | 6 | metadata | path / title / chunkIndex / corpusUserId | `chunk-metadata.ts` | `chunkMetadataSchema.parse()` |
-| 7 | embed | `OLLAMA_MODEL_EMBED`（默认 nomic-embed-text） | `index-one-user.ts`, `config/index.ts` | `OllamaEmbedding`, `Settings.embedModel` |
-| 8 | 存 Chroma | collection=`fambrain_corpus_<userId>`；**先删后建**（全量幂等） | `index-one-user.ts`, `constants.ts` | `ChromaVectorStore`, `VectorStoreIndex.fromDocuments()`, `getChromaServerUrl()` |
+| 7 | embed | `OLLAMA_MODEL_EMBED`（默认 nomic-embed-text）；**p-limit** 限制并发批次数 | `embed-batches.ts`, `index-one-user.ts` | `addDocumentsWithEmbedLimit()`, `getEmbedIndexOptions()` |
+| 8 | 存 Chroma | collection=`fambrain_corpus_<userId>`；**先删后建**（全量幂等） | `index-one-user.ts`, `constants.ts` | `ChromaVectorStore`, `getChromaServerUrl()` |
 | 9 | 日志 | JSON 结构化 | `index.ts` | `indexerLogger`（pino） |
 
 **前置：** 终端 1 `pnpm run chroma:server`；Ollama 可访问且已 pull embed 模型。
@@ -110,7 +113,7 @@ flowchart TD
 
 **职责：** 只产 **路由 JSON**，不写终稿、不检索。
 
-**技术：** LangChain `ChatOllama`、`SystemMessage` / `HumanMessage`。
+**技术：** LangChain `ChatOllama`、`SystemMessage` / `HumanMessage`；输出 **Zod**（`intakeRoutingSchema`）。
 
 ```mermaid
 flowchart TD
@@ -127,7 +130,7 @@ flowchart TD
 |------|--------|------|------|------|
 | 1 | 拼 prompt | 系统指令定义 intent / searchQuery 等 | `IntakeCoordinator/prompt.ts` | `prompt` |
 | 2 | 调模型 | 一次 `invoke`；模型见 `OLLAMA_MODEL_INTAKE_COORDINATOR` | `IntakeCoordinator/ollama-chat.ts` | `completeIntakeCoordinator()` |
-| 3 | 解析 JSON | 抠 JSON；失败不抛给用户 | `pipeline/parse-intake.ts` | `parseIntakeDecision()` |
+| 3 | 解析 JSON | 抠 JSON → **Zod parse**；失败不抛给用户 | `parse-intake.ts`, `schema.ts` | `parseIntakeDecision()`, `intakeRoutingSchema` |
 | 4 | 兜底 | 解析失败 → `needsRetrieval=true` 保守查库 | `pipeline/parse-intake.ts` | `defaultIntakeDecision()` |
 | 5 | 编排 | LangGraph 条件边 | `pipeline/graph/compile.ts` | `getCompiledPipelineGraph()` |
 
@@ -160,7 +163,7 @@ flowchart TD
 
 **职责：** 审查当轮 `hits` / `coverage` 是否足以回答 `userQuestion`；**不写终稿**。`passed=false` 时产出 `refinedSearchQuery`，编排器最多再打回 KM **1 次**。
 
-**技术：** LangChain `ChatOllama`；规则兜底 `buildRuleBasedFactCheck()`；`retryCount≥1` 时代码强制放行。
+**技术：** LangChain `ChatOllama`；规则兜底 `buildRuleBasedFactCheck()`；输出 **Zod**（`factCheckerResultSchema`）；`retryCount≥1` 时代码强制放行。
 
 ```mermaid
 flowchart TD
@@ -169,24 +172,25 @@ flowchart TD
   NORM -->|passed=false, retry=0| REWRITE["更新 decision.searchQuery"]
   NORM -->|passed=true 或 retry≥1| NOTES["合并 checkerNotes → notes"]
   REWRITE --> RET["retrieval 节点再打回"]
-  NOTES --> IA["InformationAnalyst"]
+  NOTES --> CO["ContentOrganizer"]
+  CO --> IA["InformationAnalyst"]
 ```
 
 | 步骤 | 做什么 | 规则 | 文件 | 方法 |
 |------|--------|------|------|------|
 | 1 | 输入 | 含 `retryCount`（0=首次，1=已重试） | `fact-checker/prompt.ts` | `FactCheckerInput` |
 | 2 | 调模型 | 与 Intake 同 `OLLAMA_MODEL_INTAKE_COORDINATOR` | `check-facts.ts` | `completeFactCheck()` |
-| 3 | 解析 | JSON → `passed` / `evidenceScore` / `issues` | `check-helpers.ts` | `normalizeFactCheckerResult()` |
+| 3 | 解析 | JSON → **Zod** → `passed` / `evidenceScore` / `issues` | `check-helpers.ts`, `schema.ts` | `normalizeFactCheckerResult()` |
 | 4 | 兜底 | LLM 失败走规则；重试后强制 `passed=true` | `check-helpers.ts` | `buildRuleBasedFactCheck()` |
-| 5 | 编排 | `checkerPassed` → analyst 或 retrieval | `pipeline/graph/compile.ts` | `factCheckerNode()`, `routeAfterFactChecker()` |
+| 5 | 编排 | `checkerPassed` → contentOrganizer 或 retrieval | `pipeline/graph/compile.ts` | `factCheckerNode()`, `routeAfterFactChecker()` |
 
 **验证：** `pnpm run verify:fact-checker`（规则）、`pnpm run verify:fact-checker:pipeline`（全链路）。跨轮重复问仍全量检索见 [坑点 §2.2](./04-pitfalls.md)。
 
 ### 5. InformationAnalyst — 信息分析师 ✅
 
-**职责：** 据 `hits` 写终稿；无证据时 `insufficientEvidence`，禁止编造履历。
+**职责：** 据整理后的 `hits` 写终稿；无证据时 `insufficientEvidence`，禁止编造履历。
 
-**技术：** Ollama 流式（thinking + assistant）；终稿 JSON 解析。
+**技术：** Ollama 流式（thinking + assistant）；终稿 JSON **Zod**（`analystResultSchema`）。
 
 ```mermaid
 flowchart TD
@@ -203,9 +207,36 @@ flowchart TD
 |------|--------|------|------|------|
 | 1 | 输入 | 只认上游 hits；不自己检索 | `InformationAnalyst/prompt.ts` | `InformationAnalystInput` |
 | 2 | 流式 | thinking + assistant SSE | `InformationAnalyst/stream.ts` | `streamAnalyzeInformation()` |
-| 3 | 终稿 JSON | answer / citations / insufficientEvidence | `analyze-helpers.ts` | `normalizeAnalystResult()` |
+| 3 | 终稿 JSON | answer / citations / insufficientEvidence；**Zod parse** | `analyze-helpers.ts`, `schema.ts` | `normalizeAnalystResult()` |
 | 4 | 兜底 | 解析失败用 hits 拼可读回答 | `analyze-helpers.ts` | `buildFallbackAnswer()` |
 | 5 | 落库 | LangGraph `analyst` 节点 + SSE custom 流 | `pipeline/graph/compile.ts`, `stream.ts` | `analystNode()`, `streamAnalyzeInformation()` |
+
+### 6. ContentOrganizer — 内容整理师（D6）✅
+
+**职责：** 在 FactChecker 放行后、Analyst 生成前，对 `hits` 做 **Zod 规范化**、**同 path 去重**、excerpt 合并；空 hits 时将 `coverage` 降为 `none`。**不调 LLM**。
+
+**技术：** Zod（`knowledgeHitsSchema`）；规则合并（`organizeHits` / `dedupeCitations`）。
+
+```mermaid
+flowchart TD
+  IN["hits + coverage + notes"] --> ZOD["parseKnowledgeHits()"]
+  ZOD --> DEDUP["organizeHits()<br/>path 去重 + excerpt 合并"]
+  DEDUP --> COV{coverage 调整}
+  COV -->|hits 为空| NONE[coverage = none]
+  COV -->|有 hits| KEEP[保留 coverage]
+  NONE --> OUT[整理后 hits / coverage / notes]
+  KEEP --> OUT
+```
+
+| 步骤 | 做什么 | 规则 | 文件 | 方法 |
+|------|--------|------|------|------|
+| 1 | 输入 | 上游 KM + FactChecker 的 `hits` / `coverage` / `notes` | `content-organizer/prompt.ts` | `ContentOrganizerInput` |
+| 2 | Zod 校验 | 丢弃非法 hit 字段 | `content-organizer/schema.ts` | `parseKnowledgeHits()` |
+| 3 | path 去重 | 同 path 保留最高 relevance；excerpt 合并（≤320 字） | `organize-hits.ts` | `organizeHits()`, `normalizeDocPath()` |
+| 4 | coverage | hits 为空 → `none` | `organize-knowledge.ts` | `organizeKnowledge()` |
+| 5 | 编排 | FactChecker 后固定进入 | `pipeline/graph/compile.ts` | `contentOrganizerNode()` |
+
+**验证：** `pnpm run verify:content-organizer`；全 Agent schema：`pnpm run verify:agent-schemas`。
 
 ## 路由字段（IntakeCoordinator 输出）
 
@@ -227,8 +258,8 @@ flowchart TD
 |------|----------|--------------|
 | `intent === "clarify"` 且 `clarifyingQuestion` 有值 | `respondEarly` | 澄清提问 |
 | `intent` 为 `chitchat` / `out_of_scope` 且 `briefReply` 有值 | `respondEarly` | 简短回复 |
-| `needsRetrieval === true` | KM → **FactChecker** →（可选再打回 KM）→ Analyst | SSE：检索 → 核查 → 整理回答 |
-| `needsRetrieval === false` 且无 `briefReply` | FactChecker → Analyst（`hits` 常为空） | 不查库长答 |
+| `needsRetrieval === true` | KM → **FactChecker** → **ContentOrganizer** →（可选再打回 KM）→ Analyst | SSE：检索 → 核查 → **整理证据** → 整理回答 |
+| `needsRetrieval === false` 且无 `briefReply` | FactChecker → **ContentOrganizer** → Analyst（`hits` 常为空） | 不查库长答 |
 | FactChecker `passed=false` 且 `retryCount<1` | 再 `retrieval` → 再 **FactChecker** | 同轮可能见两次「核查证据…」 |
 | 其余 | `respondEarly` | 简短说明或请用户补充 |
 
@@ -237,7 +268,7 @@ flowchart TD
 | `event` | 含义 |
 |---------|------|
 | `meta` | 用户消息已落库（含真实 `id`） |
-| `step` | 编排进度：`intake` / `retrieval` / `fact_checker` / `analyst`，`status` 为 `running` \| `done` |
+| `step` | 编排进度：`intake` / `retrieval` / `fact_checker` / **`content_organizer`** / `analyst`，`status` 为 `running` \| `done` |
 | `thinking` | 信息分析师推理流（若模型/Ollama 支持） |
 | `assistant` | 面向用户的正文增量（流结束后以 `answer` 写入 DB） |
 | `done` | 流结束，含 user/assistant 消息 id 与终稿 `content` |

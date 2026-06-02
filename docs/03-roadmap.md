@@ -20,9 +20,9 @@
 ### P0 自测
 
 1. 「你好」→ 短回复（闲聊 / `briefReply`）。
-2. 「城管平台用了什么技术」→ step「检索知识库…」→ **「核查证据…」** →「整理回答…」→ 最终回答；无语料时可能二次检索（见 [坑点 D5-1](./04-pitfalls.md)）。
+2. 「城管平台用了什么技术」→ step「检索知识库…」→ **「核查证据…」** → **「整理证据…」** →「整理回答…」→ 最终回答；无语料时可能二次检索（见 [坑点 D5-1](./04-pitfalls.md)）。
 3. Ollama 未启动时应收到 `error` 事件，用户消息仍可能已保存。
-4. **（可选自动化）** `cd apps/agents && pnpm run verify:fact-checker && pnpm run verify:fact-checker:pipeline`
+4. **（可选自动化）** `cd apps/agents && pnpm run verify:fact-checker && pnpm run verify:fact-checker:pipeline && pnpm run verify:content-organizer && pnpm run verify:agent-schemas && pnpm run verify:embed-batches`
 
 ### Golden 问法（回归）
 
@@ -44,12 +44,12 @@
 
 | Agent | 中文名 | 类型 | 状态 | 流程图 |
 |-------|--------|------|------|--------|
-| `KnowledgeIndexer` | 知识入库师 | ✅ 已实现 | 离线入库完成（A1）；p-limit 增量待增强 | [§1](./02-agent-flows.md#1-knowledgeindexer--知识入库师-) |
-| `IntakeCoordinator` | 入口接线员 | 维持 + Zod 化 | ✅ P0；Zod 待 D6 | [§2](./02-agent-flows.md#2-intakecoordinator--入口接线员-) |
-| `KnowledgeManager` | 知识管理员 | 增强 | ✅ P0 关键词；**D3 接 Chroma 向量** | [§3](./02-agent-flows.md#3-knowledgemanager--知识管理员--p0--d3-向量) |
-| `InformationAnalyst` | 信息分析师 | 维持 + Zod 化 | ✅ P0；Zod 待 D6 | [§4](./02-agent-flows.md#4-informationanalyst--信息分析师-) |
-| `FactChecker` | 事实核查员 | 新建 | **🔄 D5 已接入**（证据包核查；Zod / 跨轮 cache 待消坑） | [§4](./02-agent-flows.md#4-factchecker--事实核查员-d5-) |
-| `ContentOrganizer` | 内容整理师 | 新建 | ⬜ D6 | — |
+| `KnowledgeIndexer` | 知识入库师 | ✅ 已实现 | 离线入库完成（A1）；**p-limit 分批 embed**（`INDEX_EMBED_*`） | [§1](./02-agent-flows.md#1-knowledgeindexer--知识入库师-) |
+| `IntakeCoordinator` | 入口接线员 | 维持 + Zod 化 | ✅ P0；**Zod schema**（`intakeRoutingSchema`） | [§2](./02-agent-flows.md#2-intakecoordinator--入口接线员-) |
+| `KnowledgeManager` | 知识管理员 | 增强 | ✅ P0 关键词；**D3 接 Chroma 向量**；KM 输出 **Zod** | [§3](./02-agent-flows.md#3-knowledgemanager--知识管理员--p0--d3-向量) |
+| `InformationAnalyst` | 信息分析师 | 维持 + Zod 化 | ✅ P0；**Zod schema**（终稿 JSON） | [§5](./02-agent-flows.md#5-informationanalyst--信息分析师-) |
+| `FactChecker` | 事实核查员 | 新建 | **🔄 D5 已接入**（证据包核查 + **Zod**；跨轮 cache 待消坑） | [§4](./02-agent-flows.md#4-factchecker--事实核查员-d5-) |
+| `ContentOrganizer` | 内容整理师 | 新建 | **✅ D6 已接入**（hits 去重 / 规范化 → Analyst 前） | [§6](./02-agent-flows.md#6-contentorganizer--内容整理师-d6-) |
 | LangGraph 编排 | — | 迁移 | **✅** `pipeline/graph` StateGraph | [P0 在线编排](./02-agent-flows.md#p0-在线编排流程) |
 | `DocParser` | 文档解析师 | 触达 | ⬜ D7 | — |
 | `ContentSummarizer` | 内容摘要师 | 触达 | ⬜ D9 | — |
@@ -60,10 +60,10 @@
 |--------|-------|------|----------|
 | **P0 必验收** | 知识入库师 | CLI 全量入库 | LlamaIndex、ChromaDB、Ollama Embed、Zod、Pino |
 | **P0 必验收** | 知识管理员 | 向量为主 + 关键词 fallback | LangChain、LlamaIndex、ChromaDB、LangSmith |
-| **P0 必验收** | 事实核查员 | **检索后**审 `hits`/`coverage`；`passed=false` 时改写 `searchQuery` 并**最多再检索 1 次**；生成后 citation 校验待后续 | LangGraph、ChatOllama、规则兜底；Zod 待 D6 |
-| **P0 必验收** | 内容整理师 | citations 去重、统一格式 | LangChain、Zod |
-| **P0 必验收** | 编排层 | `runPipelineStream` → `StateGraph` | LangGraph、LangSmith |
-| **P1 增强** | 入口接线员 / 信息分析师 | JSON 改 Zod 校验 | LangChain、Zod |
+| **P0 必验收** | 事实核查员 | **检索后**审 `hits`/`coverage`；`passed=false` 时改写 `searchQuery` 并**最多再检索 1 次**；生成后 citation 校验待后续 | LangGraph、ChatOllama、规则兜底、**Zod** |
+| **P0 必验收** | 内容整理师 | hits **path 去重**、excerpt 合并、Zod 规范化；Analyst citations 去重 API | Zod、`organizeKnowledge` |
+| **P0 必验收** | 编排层 | `runPipelineStream` → `StateGraph`（含 **contentOrganizer** 节点） | LangGraph、LangSmith |
+| **P1 增强** | 入口接线员 / 信息分析师 / KM / FactChecker | 在线 Agent JSON **已 Zod 化**（`verify:agent-schemas`） | LangChain、Zod |
 | **P1 触达** | 文档解析师 / 内容摘要师 | 最小单路径样例 | Docling、p-limit、Ollama |
 | **P2 延后** | Agno 对比 | `experiments/agno-minimal/` | Agno |
 
@@ -71,12 +71,12 @@
 
 | 天 | 焦点 | Agent | 技术 | 状态 |
 |----|------|-------|------|------|
-| D1 | 环境与 Chroma | 知识入库师（骨架） | Chroma、Ollama embed、p-limit | **✅ 完成** |
+| D1 | 环境与 Chroma | 知识入库师（骨架） | Chroma、Ollama embed、p-limit | **✅ 完成**（p-limit 分批 embed 2026-06-02） |
 | D2 | 分块入库 | 知识入库师（完成） | LlamaIndex、Pino、Zod | **✅ 基本完成** |
-| D3 | 检索切换 | 知识管理员 | LlamaIndex retriever、关键词 fallback | **⬜ 下一步** |
+| D3 | 检索切换 | 知识管理员 | LlamaIndex retriever、关键词 fallback | **✅ 完成** |
 | D4 | LangGraph 迁移 | 编排 | StateGraph、`runPipelineStream` | **✅** |
 | D5 | 核查闭环 | 事实核查员 | `completeFactCheck`、checker→retrieval 条件边；Zod / 跨轮 cache 见 [坑点 §2.2](./04-pitfalls.md) | **🔄** 已接入，**D5-消坑**待做 |
-| D6 | 整理与 schema | 内容整理师 | Intake/Analyst Zod | ⬜ |
+| D6 | 整理与 schema | 内容整理师 | ContentOrganizer 入图；全 Agent JSON Zod | **✅ 完成** |
 | D7 | 解析触达 | 文档解析师 | Docling 单 PDF | ⬜ |
 | D8 | 记忆/对比触达 | — | Mem0 / LangMem；Recall 对比 | ⬜ |
 | D9 | 扩展触达 | 内容摘要师；MCP | Vercel AI / MCP 实验 | ⬜ |
@@ -89,14 +89,14 @@
 | # | 类别 | 验收项 | 通过标准 | 状态 |
 |----|------|--------|----------|------|
 | A1 | Agent | 知识入库师 | 入库后 Chroma 有记录；重复执行幂等 | **✅ 已通过** |
-| A2 | Agent | 知识管理员 | 口语问法 vector hits ≥1，`path` 在 `corpus/` 下 | ⬜ |
+| A2 | Agent | 知识管理员 | 口语问法 vector hits ≥1，`path` 在 `corpus/` 下 | **🔄** 向量已接；Golden 待回归 |
 | A3 | Agent | 事实核查员 | 无 hits 不编造；打回后最多再检索 1 次；`retryCount≥1` 强制放行 | **🔄** 脚本 `verify:fact-checker` / `verify:fact-checker:pipeline` 已通过；Golden 待回归 |
-| A4 | Agent | 内容整理师 | 统一 citations；同 path 不重复 | ⬜ |
-| A5 | 编排 | LangGraph | 节点 ≥5（含 factChecker）；checker→retrieval 条件边；SSE `fact_checker` | **🔄** 图与 step 已接；ContentOrganizer 未接 |
+| A4 | Agent | 内容整理师 | hits path 去重；`dedupeCitations`；脚本 `verify:content-organizer` | **✅** 脚本已通过；Golden 待回归 |
+| A5 | 编排 | LangGraph | 节点 ≥6（含 factChecker、**contentOrganizer**）；checker→retrieval 条件边；SSE `fact_checker` / **`content_organizer`** | **✅** 图与 step 已接 |
 | A6 | 回归 | P0 能力 | [P0 自测 3 条](#p0-自测) + G1～G5 共 8 条，**≥7 条通过** | 进行中 |
 | T1 | 技术 | 17 项总表 | 1～6、14 为 ✅；12 或 13 至少其一 ✅；7～11、15～17 触达 | 进行中 |
 | T2 | 技术 | 可观测 | 1 次完整链路 trace 或结构化日志 | 部分（Pino 入库） |
-| D1 | 文档 | docs 更新 | Agent 表与 17 项 ✅/⬜ 同步 | **🔄** 2026-06 同步 D5 / FactChecker |
+| D1 | 文档 | docs 更新 | Agent 表与 17 项 ✅/⬜ 同步 | **🔄** 2026-06-02 同步 D6 / ContentOrganizer / Zod / p-limit |
 
 ---
 
@@ -118,11 +118,11 @@
 | 序号 | 技术名称 | 所属类别 | 核心作用 | 落地 | 落地说明 |
 |------|----------|----------|----------|------|----------|
 | 1 | LangChain | AI 基础框架 | 模型调用、工具、链式任务 | ✅ | `ChatOllama`、Message（Intake/KM）；Tool/Memory 未用 |
-| 2 | LangGraph | 多 Agent 编排 | 状态图、条件分支、循环 | ⬜ | P0 手写 `runPipelineStream`；P1 迁入 StateGraph |
-| 3 | LlamaIndex | RAG 框架 | 索引、分片、检索 | ✅ | 入库已用；**在线 retriever 待 D3** |
-| 4 | ChromaDB | 向量数据库 | Embedding 存储与检索 | ✅ | 离线入库；**在线检索待 D3** |
+| 2 | LangGraph | 多 Agent 编排 | 状态图、条件分支、循环 | ✅ | `pipeline/graph` StateGraph（Intake → KM → FC → **Organizer** → Analyst） |
+| 3 | LlamaIndex | RAG 框架 | 索引、分片、检索 | ✅ | 离线入库 + **在线 `vectorRetrieve`** |
+| 4 | ChromaDB | 向量数据库 | Embedding 存储与检索 | ✅ | 离线入库 + **在线检索** |
 | 5 | Ollama | 本地模型 | 离线跑开源模型 | ✅ | chat + embed + 流式 thinking |
-| 6 | Zod | 结构化校验 | Schema 约束 LLM/API 输出 | ✅ | 注册/会话 + 入库 metadata；Intake/Analyst 待 Zod 化 |
+| 6 | Zod | 结构化校验 | Schema 约束 LLM/API 输出 | ✅ | 注册/会话 + 入库 metadata；**在线 Agent JSON 均已 schema**（`verify:agent-schemas`） |
 | 7 | Mem0 | 高级记忆 | 跨会话语义记忆 | ⬜ | 多轮仅靠 DB messages |
 | 8 | Docling | 文档解析 | PDF/DOC 预处理 | ⬜ | 规划 **文档解析师** |
 | 9 | Vercel AI SDK | 轻量 AI SDK | 流式、多模型 | ⬜ | 主链仍自研 SSE |
@@ -130,12 +130,12 @@
 | 11 | LangMem | 记忆增强 | 会话摘要、压缩 | ⬜ | 未用 |
 | 12 | LangSmith | 链路追踪 | 可视化执行链 | ⬜ | 调试用 `agent-log` |
 | 13 | Pino | 日志框架 | 结构化运行日志 | ✅ | 知识入库师 `indexerLogger` |
-| 14 | p-limit | 并发控制 | 限制 embed 并发 | ⬜ | 已安装；Indexer 待接入 |
+| 14 | p-limit | 并发控制 | 限制 embed 并发 | ✅ | Indexer `addDocumentsWithEmbedLimit`（`INDEX_EMBED_CONCURRENCY` / `BATCH_SIZE`） |
 | 15 | TypeBox | 结构校验 | Zod 替代学习 | ⬜ | 实验对比 |
 | 16 | MCP SDK | 模型上下文协议 | 标准化工具交互 | ⬜ | 未接入应用 |
 | 17 | Recall | 轻量 RAG | 对比 LlamaIndex | ⬜ | 实验对比 |
 
-**统计（2026-05）：** ✅ **7 项**已接入或部分接入（Ollama、Zod、LangChain、LlamaIndex 入库、ChromaDB 入库、Pino、LangChain 核心调用）。
+**统计（2026-06-02）：** ✅ **9 项**已接入或部分接入（Ollama、Zod、LangChain、LangGraph、LlamaIndex、ChromaDB、p-limit、Pino、LangChain 核心调用）。
 
 ### P1 技术覆盖计划（17 项 × 触达方式）
 
@@ -165,7 +165,7 @@
 |--------|--------|------|
 | ChatOllama / Message | P0 | 已有，保持 |
 | StructuredTool / DynamicTool | P0 | ≥2 个 Tool |
-| StructuredOutputParser / Zod | P0 | 全部 Agent JSON 过 schema |
+| StructuredOutputParser / Zod | P0 | 全部 Agent JSON 过 schema ✅ |
 | bindTools（可选） | P1 | 1 个试验路由 |
 | ConversationSummaryBuffer / LangMem | P1 | 长对话 1 条用例 |
 
@@ -214,10 +214,10 @@
 |------|------------|---------------------------------------------|
 | 推理规划 | LangGraph StateGraph、ConditionalEdges | 意图误判、任务拆分、过早终止 |
 | 工具调用 | LangChain DynamicTool、bindTools | 工具选错、死循环、不可解析 |
-| 幻觉控制 | FactChecker、向量反向验证 | 信息捏造、断章取义 |
-| 多 Agent 协作 | LangGraph 条件回退 | 重复输出、协商死循环 |
+| 幻觉控制 | FactChecker、ContentOrganizer、向量反向验证 | 信息捏造、断章取义 |
+| 多 Agent 协作 | LangGraph 条件回退、ContentOrganizer 去重 | 重复输出、协商死循环 |
 | 记忆管理 | SummaryBuffer、共享状态 | 关键信息遗忘、上下文污染 |
 | 可观测性 | streamEvents、调试面板 | 推理黑盒（#18 部分 ✅） |
 | **P0 已落地** | `runPipelineStream`、关键词 RAG、`coalesceRetrieval` | P0-1～10 |
 
-**口述建议：** 先讲 17 项里已 ✅ 的 **7 项** + P0 踩坑 **5～6 条**，再带「其余见 P1/P2 路线图」。
+**口述建议：** 先讲 17 项里已 ✅ 的 **9 项** + P0 踩坑 **5～6 条**，再带「其余见 P1/P2 路线图」。
