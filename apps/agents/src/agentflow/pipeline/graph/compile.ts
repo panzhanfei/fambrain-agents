@@ -59,7 +59,10 @@ async function intakeNode(
   state: PipelineGraphState
 ): Promise<Partial<PipelineGraphState>> {
   try {
-    const intakeRaw = await completeIntakeCoordinator(state.history);
+    const intakeRaw = await completeIntakeCoordinator(state.intakeHistory, {
+      memoryBlock: state.memoryBlock,
+      intakeHistory: state.intakeHistory,
+    });
     const decision =
       parseIntakeDecision(intakeRaw) ??
       defaultIntakeDecision(state.userQuestion);
@@ -210,6 +213,7 @@ async function analystNode(
       hits: state.hits,
       coverage: state.coverage,
       notes: state.notes,
+      memoryBlock: state.memoryBlock,
     });
 
     let result = await gen.next();

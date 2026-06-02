@@ -11,6 +11,8 @@ export type AgentPipelineContext = {
   /** 本次检索 `data/doc/users/<corpusUserId>/corpus/` 使用的语料归属用户 */
   corpusUserId: string;
   displayName: string;
+  /** 当前会话 id（LangMem 会话摘要按会话存储） */
+  conversationId: string;
 };
 
 /** Orchestrator 向 HTTP 层推送的流式事件 */

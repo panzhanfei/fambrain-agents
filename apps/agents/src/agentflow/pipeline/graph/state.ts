@@ -37,6 +37,10 @@ export const PipelineGraphAnnotation = Annotation.Root({
   checkerPassed: Annotation<boolean>,
   /** 核查打回后的再检索次数（最多 1 次） */
   retryCount: Annotation<number>,
+  /** Mem0 + LangMem 注入块（供 Intake / Analyst） */
+  memoryBlock: Annotation<string | null>,
+  /** Intake 使用的截断历史（LangMem 保留最近 N 轮） */
+  intakeHistory: Annotation<DbChatTurn[]>,
 });
 
 export type PipelineGraphState = typeof PipelineGraphAnnotation.State;

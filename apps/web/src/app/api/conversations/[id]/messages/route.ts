@@ -131,6 +131,7 @@ export async function POST(
         actorUserId: session.userId,
         corpusUserId,
         displayName: session.displayName,
+        conversationId,
       },
     });
   } catch (e) {

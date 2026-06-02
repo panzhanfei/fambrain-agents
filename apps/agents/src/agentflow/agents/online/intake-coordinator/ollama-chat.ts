@@ -2,6 +2,7 @@ import {
   AIMessage,
   HumanMessage,
   SystemMessage,
+  type BaseMessage,
 } from "@langchain/core/messages";
 import { ChatOllama } from "@langchain/ollama";
 
@@ -46,19 +47,32 @@ function textFromResponse(content: AIMessage["content"]): string {
 
 /** 服务端对接 Ollama：系统指令 + 最近轮次，`invoke` 一次拿回复 */
 export async function completeIntakeCoordinator(
-  history: DbChatTurn[]
+  history: DbChatTurn[],
+  options?: {
+    memoryBlock?: string | null;
+    intakeHistory?: DbChatTurn[];
+  }
 ): Promise<string> {
-  const recent = history.length > 40 ? history.slice(-40) : history;
+  const recent = options?.intakeHistory ?? history;
+  const trimmed = recent.length > 40 ? recent.slice(-40) : recent;
 
   logAgentIn("IntakeCoordinator", "对话历史（最近轮次）", {
-    turnCount: recent.length,
-    turns: recent.map((t) => ({ role: t.role, content: t.content })),
+    turnCount: trimmed.length,
+    hasMemoryBlock: Boolean(options?.memoryBlock),
+    turns: trimmed.map((t) => ({ role: t.role, content: t.content })),
   });
 
-  const ai = await llm.invoke([
-    new SystemMessage(prompt),
-    ...recent.map(turnToMessage),
-  ]);
+  const messages: BaseMessage[] = [new SystemMessage(prompt)];
+  if (options?.memoryBlock) {
+    messages.push(
+      new SystemMessage(
+        `以下为用户记忆上下文（Mem0 / LangMem），供理解指代与偏好，勿当作知识库 hits：\n\n${options.memoryBlock}`
+      )
+    );
+  }
+  messages.push(...trimmed.map(turnToMessage));
+
+  const ai = await llm.invoke(messages);
 
   const raw =
     textFromResponse(ai.content) ||

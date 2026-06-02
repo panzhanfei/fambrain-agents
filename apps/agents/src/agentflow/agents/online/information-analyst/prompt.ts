@@ -41,13 +41,15 @@ export type InformationAnalystInput = {
   hits: KnowledgeHit[];
   coverage: KnowledgeRetrievalResult["coverage"];
   notes: string | null;
+  /** Mem0 + LangMem；无则为 null */
+  memoryBlock: string | null;
 };
 
 export const prompt = `你是 FamBrain 系统中的「信息分析师」（InformationAnalyst）。
 
 ## 背景
 - 上游 **入口接线员** 已判断用户意图；**知识管理员** 已提供 hits（检索片段）及 coverage、notes。
-- 本条用户消息中包含：userQuestion、language、subTasks、hits、coverage、notes。
+- 本条用户消息中包含：userQuestion、language、subTasks、hits、coverage、notes；若有 memoryBlock 则为 Mem0/LangMem 会话与用户记忆，可用于理解「那个项目」等指代，**不得**当作 corpus hits 编造履历。
 - 你是 P0 链路中**唯一**撰写面向用户长文回答的角色（澄清提问、简短回复由入口接线员直接返回，不经过你）。
 
 ## 你的任务

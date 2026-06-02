@@ -106,6 +106,7 @@ function testAnalyst() {
     ],
     coverage: "sufficient",
     notes: null,
+    memoryBlock: null,
   });
 
   const r = parseAnalystResult(

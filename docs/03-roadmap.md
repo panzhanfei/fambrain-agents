@@ -48,7 +48,7 @@
 | `IntakeCoordinator` | 入口接线员 | 维持 + Zod 化 | ✅ P0；**Zod schema**（`intakeRoutingSchema`） | [§2](./02-agent-flows.md#2-intakecoordinator--入口接线员-) |
 | `KnowledgeManager` | 知识管理员 | 增强 | ✅ P0 关键词；**D3 接 Chroma 向量**；KM 输出 **Zod** | [§3](./02-agent-flows.md#3-knowledgemanager--知识管理员--p0--d3-向量) |
 | `InformationAnalyst` | 信息分析师 | 维持 + Zod 化 | ✅ P0；**Zod schema**（终稿 JSON） | [§5](./02-agent-flows.md#5-informationanalyst--信息分析师-) |
-| `FactChecker` | 事实核查员 | 新建 | **🔄 D5 已接入**（证据包核查 + **Zod**；跨轮 cache 待消坑） | [§4](./02-agent-flows.md#4-factchecker--事实核查员-d5-) |
+| `FactChecker` | 事实核查员 | 新建 | **✅ D5 已接入**（证据包核查 + **Zod**；跨轮 cache → **消坑 sprint 末段**） | [§4](./02-agent-flows.md#4-factchecker--事实核查员-d5-) |
 | `ContentOrganizer` | 内容整理师 | 新建 | **✅ D6 已接入**（hits 去重 / 规范化 → Analyst 前） | [§6](./02-agent-flows.md#6-contentorganizer--内容整理师-d6-) |
 | LangGraph 编排 | — | 迁移 | **✅** `pipeline/graph` StateGraph | [P0 在线编排](./02-agent-flows.md#p0-在线编排流程) |
 | `DocParser` | 文档解析师 | 触达 | ⬜ D7 | — |
@@ -75,14 +75,16 @@
 | D2 | 分块入库 | 知识入库师（完成） | LlamaIndex、Pino、Zod | **✅ 基本完成** |
 | D3 | 检索切换 | 知识管理员 | LlamaIndex retriever、关键词 fallback | **✅ 完成** |
 | D4 | LangGraph 迁移 | 编排 | StateGraph、`runPipelineStream` | **✅** |
-| D5 | 核查闭环 | 事实核查员 | `completeFactCheck`、checker→retrieval 条件边；Zod / 跨轮 cache 见 [坑点 §2.2](./04-pitfalls.md) | **🔄** 已接入，**D5-消坑**待做 |
+| D5 | 核查闭环 | 事实核查员 | `completeFactCheck`、checker→retrieval 条件边；**Zod** | **✅ 已接入** |
 | D6 | 整理与 schema | 内容整理师 | ContentOrganizer 入图；全 Agent JSON Zod | **✅ 完成** |
 | D7 | 解析触达 | 文档解析师 | Docling 单 PDF | ⬜ |
 | D8 | 记忆/对比触达 | — | Mem0 / LangMem；Recall 对比 | ⬜ |
 | D9 | 扩展触达 | 内容摘要师；MCP | Vercel AI / MCP 实验 | ⬜ |
-| D10 | 回归 + 文档 | 全链路 | A1～T2、G1～G5 | 进行中 |
+| D10 | 回归 + 文档 | 全链路 | A1～T2、G1～G5（**不含消坑**） | 进行中 |
 
 > **风险：** 10 天内 17 项全 ✅ 不现实；**验收以 A1～A6、T1 必做项、T2 为准**。
+>
+> **消坑节奏：** D7～D10 只做 **Agent 触达 + 基础回归**；KM 空 hits、跨轮重复检索等 **集中消坑** 放在 **核心 Agent 全部接完后** 的独立 sprint（约 4～5 天），见 [坑点 §三 · 集中消坑计划](./04-pitfalls.md#三集中消坑计划核心-agent-完成后--4-天)。顺序：消坑 D1～D4（KM / 召回 / 多轮 / 回归）→ **消坑 D5-消坑**（跨轮 cache，**最后做**）。
 
 ### P1 验收标准
 

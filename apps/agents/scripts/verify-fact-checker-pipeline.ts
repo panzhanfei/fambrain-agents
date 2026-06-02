@@ -10,6 +10,7 @@ const context = {
   actorUserId: "verify-fact-checker",
   corpusUserId: "verify-fact-checker",
   displayName: "验证用户",
+  conversationId: "verify-fact-checker-conv",
 };
 
 async function runCase(label: string, userQuestion: string) {

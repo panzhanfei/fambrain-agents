@@ -11,5 +11,6 @@ export const pipelineStreamBodySchema = z.object({
     actorUserId: z.string().min(1),
     corpusUserId: z.string().min(1),
     displayName: z.string().min(1),
+    conversationId: z.string().min(1),
   }),
 });

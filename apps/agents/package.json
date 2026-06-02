@@ -14,7 +14,8 @@
     "verify:fact-checker:pipeline": "tsx --env-file=../../.env scripts/verify-fact-checker-pipeline.ts",
     "verify:content-organizer": "tsx scripts/verify-content-organizer.ts",
     "verify:agent-schemas": "tsx scripts/verify-agent-schemas.ts",
-    "verify:embed-batches": "tsx scripts/verify-embed-batches.ts"
+    "verify:embed-batches": "tsx scripts/verify-embed-batches.ts",
+    "verify:memory": "tsx --env-file=../../.env scripts/verify-memory.ts"
   },
   "dependencies": {
     "@fambrain/agent-config": "workspace:*",
@@ -28,6 +29,7 @@
     "chromadb": "1.10.3",
     "dotenv": "^17.4.2",
     "langchain": "^1.4.0",
+    "mem0ai": "^2.4.6",
     "p-limit": "^3.1.0",
     "pino": "^10.3.1",
     "zod": "^4.4.3"

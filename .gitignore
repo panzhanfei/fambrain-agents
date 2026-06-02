@@ -26,6 +26,12 @@ package-lock.json
 /data/chroma/*
 !/data/chroma/.gitkeep
 
+# Mem0 / LangMem 本地存储
+/data/memory/*
+!/data/memory/.gitkeep
+!/data/memory/mem0/.gitkeep
+!/data/memory/sessions/.gitkeep
+
 # 入库 CLI 日志
 /logs/*
 !/logs/.gitkeep

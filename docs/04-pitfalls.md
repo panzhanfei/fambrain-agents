@@ -182,7 +182,7 @@
 
 **完成标准（核心 Agent + 消坑）：**
 
-- [x] 在线链路（P0）：Intake → KM（向量 + 关键词）→ **FactChecker** → Analyst（ContentOrganizer ⬜ D6）
+- [x] 在线链路（P0）：Intake → KM（向量 + 关键词）→ **FactChecker** → **ContentOrganizer** → Analyst
 - [ ] Golden **G1～G5 ≥4 条稳定通过**（允许 G5 clarify 行为一致即可）
 - [ ] D3-2 **不可复现**（12 candidates → hits 必 ≥1）
 - [ ] 踩坑表 D3-* 与 P0-4 / P0-6 状态更新为 ✅ 或 🔄 有明确遗留

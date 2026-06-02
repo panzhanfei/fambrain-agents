@@ -2,7 +2,7 @@
 
 基于 **Next.js（App Router）** 的家庭协作型对话应用：注册登录、成员审核、会话持久化，以及 **P0 多 Agent 聊天闭环**（意图路由 → 知识库检索 → 归纳回答，SSE 流式）。
 
-**当前进度：** 离线入库 ✅（p-limit embed）；在线 LangGraph（Intake → KM → **FactChecker** → **ContentOrganizer** → Analyst）、向量检索 ✅；D5/D6 已接入；在线 Agent JSON 已 Zod 化；跨轮 cache 待消坑。详见 [路线图](docs/03-roadmap.md) · [流程图](docs/02-agent-flows.md) · [坑点](docs/04-pitfalls.md)。
+**当前进度：** 离线入库 ✅（p-limit embed）；在线 LangGraph（Intake → KM → **FactChecker** → **ContentOrganizer** → Analyst）、向量检索 ✅；D5/D6 已接入；在线 Agent JSON 已 Zod 化。下一步 D7～D10 触达 + 回归；**消坑 sprint 放最后**（见 [坑点 §三](docs/04-pitfalls.md#三集中消坑计划核心-agent-完成后--4-天)）。详见 [路线图](docs/03-roadmap.md) · [流程图](docs/02-agent-flows.md) · [坑点](docs/04-pitfalls.md)。
 
 ## 快速开始
 

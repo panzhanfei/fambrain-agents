@@ -8,6 +8,10 @@ import type {
 
 import { getCompiledPipelineGraph } from "./compile";
 import type { PipelineGraphState } from "./state";
+import {
+  persistPipelineMemory,
+  preparePipelineMemory,
+} from "@/agentflow/memory";
 
 type PipelineStepName =
   | "intake"
@@ -34,7 +38,9 @@ function* emitAssistant(answer: string): Generator<AgentStreamEvent> {
 function buildInitialState(
   history: DbChatTurn[],
   context: AgentPipelineContext,
-  userQuestion: string
+  userQuestion: string,
+  memoryBlock: string | null,
+  intakeHistory: DbChatTurn[]
 ): PipelineGraphState {
   return {
     history,
@@ -49,6 +55,8 @@ function buildInitialState(
     exitEarly: false,
     checkerPassed: true,
     retryCount: 0,
+    memoryBlock,
+    intakeHistory,
   };
 }
 
@@ -81,10 +89,30 @@ export async function* runPipelineStream(
     actorUserId: context.actorUserId,
     corpusUserId: context.corpusUserId,
     displayName: context.displayName,
+    conversationId: context.conversationId,
   });
 
+  const memory = await preparePipelineMemory({
+    context,
+    history,
+    userQuestion,
+  });
+
+  if (memory.promptBlock) {
+    logAgentOut("Pipeline", "记忆上下文", {
+      sessionSummary: memory.sessionSummary,
+      userMemories: memory.userMemories,
+    });
+  }
+
   const graph = getCompiledPipelineGraph();
-  const input = buildInitialState(history, context, userQuestion);
+  const input = buildInitialState(
+    history,
+    context,
+    userQuestion,
+    memory.promptBlock,
+    memory.intakeHistory
+  );
 
   let finalState: PipelineGraphState = input;
   let activeStep: PipelineStepName | null = "intake";
@@ -209,6 +237,12 @@ export async function* runPipelineStream(
       answer: finalState.answer,
     });
     yield* emitAssistant(finalState.answer);
+    await persistPipelineMemory({
+      context,
+      history,
+      userQuestion,
+      answer: finalState.answer,
+    }).catch(() => undefined);
     return { answer: finalState.answer };
   }
 
@@ -219,6 +253,13 @@ export async function* runPipelineStream(
   if (!finalState.answer) {
     yield* emitAssistant(answer);
   }
+
+  await persistPipelineMemory({
+    context,
+    history,
+    userQuestion,
+    answer,
+  }).catch(() => undefined);
 
   return { answer };
 }
