@@ -12,6 +12,10 @@ import {
 } from "@/agentflow/knowledge";
 
 import { corpusCollectionName } from "./constants";
+import {
+  addDocumentsWithEmbedLimit,
+  getEmbedIndexOptions,
+} from "./embed-batches";
 import { listMarkdownFiles, toRepoPath } from "./list-markdown-files";
 import { splitMarkdownToDocuments } from "./split-markdown";
 
@@ -51,16 +55,20 @@ export async function indexOneCorpusUser(
   await deleteChromaCollection(collectionName);
   logger.info({ corpusUserId, collectionName }, "deleted old collection");
 
-  // ④ embed + 写入（内部会调 Ollama，可能较慢）
+  // ④ embed + 写入（p-limit 限制并发批次数，避免打满 Ollama）
+  const embedOptions = getEmbedIndexOptions();
   logger.info(
-    { corpusUserId, fileCount: mdFiles.length, chunkCount: docs.length },
+    {
+      corpusUserId,
+      fileCount: mdFiles.length,
+      chunkCount: docs.length,
+      ...embedOptions,
+    },
     "indexing started"
   );
 
   const vectorStore = new Chroma(embeddings, chromaLibArgs(collectionName));
-  await vectorStore.addDocuments(docs, {
-    ids: docs.map((doc) => doc.id ?? ""),
-  });
+  await addDocumentsWithEmbedLimit(vectorStore, docs, logger, embedOptions);
 
   logger.info(
     {

@@ -9,6 +9,11 @@ import { indexOneCorpusUser } from "./index-one-user";
 import { listCorpusUserIds } from "./list-corpus-users";
 
 export { corpusCollectionName, getChromaServerUrl } from "./constants";
+export {
+  addDocumentsWithEmbedLimit,
+  getEmbedIndexOptions,
+  type EmbedIndexOptions,
+} from "./embed-batches";
 export { indexOneCorpusUser, type IndexOneUserResult } from "./index-one-user";
 export { listCorpusUserIds } from "./list-corpus-users";
 export { listMarkdownFiles, toRepoPath } from "./list-markdown-files";
