@@ -1,8 +1,8 @@
 import type { AgentPipelineContext, DbChatTurn } from "@fambrain/agent-types";
 
 import { getMemoryConfig } from "./config";
-import { persistSessionSummary } from "./langmem-session";
-import { addTurnToMem0 } from "./mem0-store";
+import { persistSessionSummary } from "./langmem";
+import { addTurnToMem0 } from "./mem0";
 
 /** 本轮有终稿后：异步写入 Mem0 + 更新 LangMem 会话摘要（失败不中断主链路） */
 export async function persistPipelineMemory(input: {

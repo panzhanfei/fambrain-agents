@@ -19,7 +19,7 @@ import {
   type KnowledgeManagerInput,
   type KnowledgeRetrievalResult,
 } from "./prompt";
-import { parseJsonObject } from "@/agentflow/json-parse";
+import { parseJsonObject } from "@/agentflow/utils";
 import { parseKnowledgeRetrievalResult } from "./schema";
 const MAX_CANDIDATES = 12;
 const MAX_HITS = 5;

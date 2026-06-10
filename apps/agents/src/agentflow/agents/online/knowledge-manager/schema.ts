@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-import { nullableTrimmedString, unitInterval } from "@/agentflow/zod-utils";
+import { nullableTrimmedString, unitInterval } from "@/agentflow/utils";
 
 import type { KnowledgeHit, KnowledgeRetrievalResult } from "./prompt";
 

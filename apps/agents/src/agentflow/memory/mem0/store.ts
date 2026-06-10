@@ -1,9 +1,10 @@
 import { mkdir } from "node:fs/promises";
 import path from "node:path";
 
+import { logAgentIn, logAgentOut } from "@fambrain/agent-shared/agent-log";
 import { Memory } from "mem0ai/oss";
 
-import { getMemoryConfig } from "./config";
+import { getMemoryConfig } from "../config";
 
 type Mem0SearchHit = {
   memory?: string;
@@ -18,6 +19,15 @@ async function ensureClient(): Promise<Memory | null> {
 
   if (!client) {
     await mkdir(path.dirname(cfg.mem0HistoryDbPath), { recursive: true });
+    logAgentOut("Mem0", "客户端初始化", {
+      ollamaBaseUrl: cfg.ollamaBaseUrl,
+      ollamaChatModel: cfg.ollamaChatModel,
+      ollamaEmbedModel: cfg.ollamaEmbedModel,
+      historyDbPath: cfg.mem0HistoryDbPath,
+      vectorCollection: "fambrain_user_memories",
+      embeddingDims: 768,
+      searchLimit: cfg.mem0SearchLimit,
+    });
     client = new Memory({
       llm: {
         provider: "ollama",
@@ -67,20 +77,39 @@ export async function searchUserMemories(
   userId: string,
   query: string
 ): Promise<string[]> {
+  const cfg = getMemoryConfig();
+  if (!cfg.mem0Enabled) {
+    logAgentOut("Mem0", "search 跳过（MEM0_ENABLED=false）", { userId, query });
+    return [];
+  }
+
   const memory = await ensureClient();
   if (!memory) return [];
+
+  logAgentIn("Mem0", "search 请求", {
+    userId,
+    query,
+    limit: cfg.mem0SearchLimit,
+  });
 
   try {
     const raw = await memory.search(query, {
       userId,
-      limit: getMemoryConfig().mem0SearchLimit,
+      limit: cfg.mem0SearchLimit,
     });
-    return extractMemoryTexts(raw);
+    const texts = extractMemoryTexts(raw);
+    logAgentOut("Mem0", "search 响应", {
+      userId,
+      query,
+      raw,
+      extractedCount: texts.length,
+      extracted: texts,
+    });
+    return texts;
   } catch (e) {
-    console.warn(
-      "[Mem0] search failed:",
-      e instanceof Error ? e.message : String(e)
-    );
+    const message = e instanceof Error ? e.message : String(e);
+    console.warn("[Mem0] search failed:", message);
+    logAgentOut("Mem0", "search 失败", { userId, query, error: message });
     return [];
   }
 }
@@ -91,21 +120,37 @@ export async function addTurnToMem0(
   userQuestion: string,
   assistantAnswer: string
 ): Promise<void> {
+  const cfg = getMemoryConfig();
+  if (!cfg.mem0Enabled) {
+    logAgentOut("Mem0", "add 跳过（MEM0_ENABLED=false）", { userId });
+    return;
+  }
+
   const memory = await ensureClient();
   if (!memory) return;
 
+  logAgentIn("Mem0", "add 请求", {
+    userId,
+    userQuestion,
+    assistantAnswer,
+    metadata: { source: "fambrain_pipeline" },
+  });
+
   try {
-    await memory.add(
+    const result = await memory.add(
       [
         { role: "user", content: userQuestion },
         { role: "assistant", content: assistantAnswer },
       ],
       { userId, metadata: { source: "fambrain_pipeline" } }
     );
+    logAgentOut("Mem0", "add 响应", {
+      userId,
+      result,
+    });
   } catch (e) {
-    console.warn(
-      "[Mem0] add failed:",
-      e instanceof Error ? e.message : String(e)
-    );
+    const message = e instanceof Error ? e.message : String(e);
+    console.warn("[Mem0] add failed:", message);
+    logAgentOut("Mem0", "add 失败", { userId, error: message });
   }
 }

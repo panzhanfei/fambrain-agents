@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-import { nullableTrimmedString } from "@/agentflow/zod-utils";
+import { nullableTrimmedString } from "@/agentflow/utils";
 
 import type { ContentSummaryResult } from "./prompt";
 

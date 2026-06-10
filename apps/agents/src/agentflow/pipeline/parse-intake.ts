@@ -1,5 +1,5 @@
 import { parseIntakeRoutingDecision } from "@/agentflow/agents/online/intake-coordinator/schema";
-import { parseJsonObject } from "@/agentflow/json-parse";
+import { parseJsonObject } from "@/agentflow/utils";
 import type { IntakeRoutingDecision } from "@/agentflow/agents/online/intake-coordinator";
 
 /** 从接线员回复里解析路由 JSON */

@@ -6,7 +6,8 @@ export type AgentLogName =
   | "FactChecker"
   | "ContentOrganizer"
   | "InformationAnalyst"
-  | "Pipeline";
+  | "Pipeline"
+  | "Mem0";
 
 const AGENT_EMOJI: Record<AgentLogName, string> = {
   IntakeCoordinator: "🎫",
@@ -15,6 +16,7 @@ const AGENT_EMOJI: Record<AgentLogName, string> = {
   ContentOrganizer: "📋",
   InformationAnalyst: "🧠",
   Pipeline: "🛤️",
+  Mem0: "💾",
 };
 
 const MAX_JSON_CHARS = 6_000;

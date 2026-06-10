@@ -9,9 +9,3 @@ export type PipelineMemoryContext = {
   /** 供 Intake 使用的截断历史（LangMem 启用时保留最近 N 轮） */
   intakeHistory: import("@fambrain/agent-types").DbChatTurn[];
 };
-
-export type SessionSummaryRecord = {
-  conversationId: string;
-  summary: string;
-  updatedAt: string;
-};

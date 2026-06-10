@@ -20,7 +20,7 @@ async function main() {
     resetMemoryConfigCache,
   } = await import("../src/agentflow/memory/index.ts");
   const { summarizeSessionTurns } = await import(
-    "../src/agentflow/memory/langmem-session.ts"
+    "../src/agentflow/memory/langmem/index.ts"
   );
   resetMemoryConfigCache();
 

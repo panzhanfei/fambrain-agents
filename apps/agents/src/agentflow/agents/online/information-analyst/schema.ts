@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 import { dedupeCitations } from "@/agentflow/agents/online/content-organizer";
-import { unitInterval } from "@/agentflow/zod-utils";
+import { unitInterval } from "@/agentflow/utils";
 
 import type { Citation, InformationAnalystResult } from "./prompt";
 

@@ -6,7 +6,7 @@ import { ChatOllama } from "@langchain/ollama";
 
 import type { DbChatTurn } from "@fambrain/agent-types";
 
-import { getMemoryConfig } from "./config";
+import { getMemoryConfig } from "../config";
 import type { SessionSummaryRecord } from "./types";
 
 /**

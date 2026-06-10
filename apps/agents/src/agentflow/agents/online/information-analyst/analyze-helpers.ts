@@ -1,5 +1,5 @@
 import { dedupeCitations } from "@/agentflow/agents/online/content-organizer";
-import { parseJsonObject } from "@/agentflow/json-parse";
+import { parseJsonObject } from "@/agentflow/utils";
 
 import type {
   Citation,

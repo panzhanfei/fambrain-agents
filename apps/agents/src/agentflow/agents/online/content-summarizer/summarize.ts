@@ -8,7 +8,7 @@ import { ChatOllama } from "@langchain/ollama";
 import { getAgentsConfig } from "@fambrain/agent-config";
 import { logAgentIn, logAgentOut } from "@fambrain/agent-shared/agent-log";
 
-import { parseJsonObject } from "@/agentflow/json-parse";
+import { parseJsonObject } from "@/agentflow/utils";
 import { parseContentSummaryResult } from "./schema";
 import {
   prompt,

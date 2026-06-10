@@ -13,15 +13,9 @@ import { completeFactCheck } from "@/agentflow/agents/online/fact-checker";
 import { completeIntakeCoordinator } from "@/agentflow/agents/online/intake-coordinator";
 import { streamAnalyzeInformation } from "@/agentflow/agents/online/information-analyst";
 import { retrieveKnowledge } from "@/agentflow/agents/online/knowledge-manager";
-import {
-  defaultIntakeDecision,
-  parseIntakeDecision,
-} from "../parse-intake";
+import { defaultIntakeDecision, parseIntakeDecision } from "../parse-intake";
 
-import {
-  PipelineGraphAnnotation,
-  type PipelineGraphState,
-} from "./state";
+import { PipelineGraphAnnotation, type PipelineGraphState } from "./state";
 
 function routeAfterIntake(
   state: PipelineGraphState
@@ -171,11 +165,7 @@ async function factCheckerNode(
       notes: mergeAnalystNotes(state.notes, result.checkerNotes),
     };
 
-    if (
-      !result.passed &&
-      result.refinedSearchQuery &&
-      state.retryCount < 1
-    ) {
+    if (!result.passed && result.refinedSearchQuery && state.retryCount < 1) {
       patch.decision = {
         ...decision,
         searchQuery: result.refinedSearchQuery,
@@ -351,8 +341,9 @@ function buildPipelineGraph() {
     .addEdge("respondEarly", END);
 }
 
-let compiledGraph: ReturnType<ReturnType<typeof buildPipelineGraph>["compile"]> | null =
-  null;
+let compiledGraph: ReturnType<
+  ReturnType<typeof buildPipelineGraph>["compile"]
+> | null = null;
 
 export function getCompiledPipelineGraph() {
   if (!compiledGraph) {

@@ -2,8 +2,8 @@ import type { AgentPipelineContext, DbChatTurn } from "@fambrain/agent-types";
 
 import { buildMemoryPromptBlock } from "./build-prompt-block";
 import { getMemoryConfig } from "./config";
-import { loadSessionSummary, trimHistoryForIntake } from "./langmem-session";
-import { searchUserMemories } from "./mem0-store";
+import { loadSessionSummary, trimHistoryForIntake } from "./langmem";
+import { searchUserMemories } from "./mem0";
 import type { PipelineMemoryContext } from "./types";
 
 /** 每轮 pipeline 开始前：加载 Mem0 + LangMem，供 Intake / Analyst 注入 */

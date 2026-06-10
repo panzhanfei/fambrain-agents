@@ -4,7 +4,7 @@ import {
   nonEmptyStringArray,
   nullableTrimmedString,
   unitInterval,
-} from "@/agentflow/zod-utils";
+} from "@/agentflow/utils";
 
 import type { IntakeRoutingDecision } from "./prompt";
 

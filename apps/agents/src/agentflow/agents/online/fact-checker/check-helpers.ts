@@ -1,4 +1,4 @@
-import { parseJsonObject } from "@/agentflow/json-parse";
+import { parseJsonObject } from "@/agentflow/utils";
 
 import type { FactCheckerInput, FactCheckerIssue, FactCheckerResult } from "./prompt";
 import { parseFactCheckerResult } from "./schema";
