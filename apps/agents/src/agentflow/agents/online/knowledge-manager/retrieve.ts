@@ -12,7 +12,7 @@ import { getAgentsConfig } from "@fambrain/agent-config";
 import { logAgentIn, logAgentOut } from "@fambrain/agent-shared/agent-log";
 import { listMarkdownFiles, toRepoPath } from "@/agentflow/agents/offline/knowledge-indexer";
 import { listCorpusScanRoots, SCAN_FOLDERS } from "@/agentflow/knowledge";
-import { vectorRetrieve } from "./vector-retrieve";
+import { searchCorpusVectors } from "@/agentflow/knowledge/corpus-vector";
 import {
   prompt,
   type KnowledgeHit,
@@ -211,7 +211,7 @@ async function loadCandidates(input: KnowledgeManagerInput) {
   if (input.candidates.length > 0) return input.candidates;
   // 1. 先试向量
   try {
-    const vectorHits = await vectorRetrieve(
+    const vectorHits = await searchCorpusVectors(
       input.corpusUserId,
       [input.searchQuery, ...input.topics, ...input.subTasks].join(" ")
     );

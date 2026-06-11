@@ -1,9 +1,20 @@
 export {
-  createOllamaEmbeddings,
   chromaLibArgs,
+  corpusCollectionName,
+  createOllamaEmbeddings,
   deleteChromaCollection,
+  getChromaServerUrl,
+  indexCorpusDocuments,
   openCorpusVectorStore,
-} from "./chroma-rag";
+  searchCorpusVectors,
+  type CorpusVectorHit,
+  type CorpusVectorIndexResult,
+} from "./corpus-vector";
+export {
+  addDocumentsWithEmbedLimit,
+  getEmbedIndexOptions,
+  type EmbedIndexOptions,
+} from "./embed-batches";
 export { chunkMetadataSchema, type ChunkMetadata } from "./chunk-metadata";
 export {
   DOC_ROOT,
