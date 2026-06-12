@@ -18,15 +18,19 @@ CHROMA_URL="${CHROMA_SERVER_URL:-http://${CHROMA_HOST}:${CHROMA_PORT}}"
 CHROMA_URL="${CHROMA_URL%/}"
 
 chroma_ready() {
-  curl -sf "${CHROMA_URL}/api/v2/heartbeat" >/dev/null 2>&1 \
-    || curl -sf "${CHROMA_URL}/api/v1/heartbeat" >/dev/null 2>&1
+  curl -sf "${CHROMA_URL}/api/v2/heartbeat" >/dev/null 2>&1
 }
 
 wait_for_chroma() {
+  local pid="${1:-}"
+  local wait_sec="${CHROMA_WAIT_SEC:-90}"
   local i
-  for i in $(seq 1 30); do
+  for i in $(seq 1 "$wait_sec"); do
     if chroma_ready; then
       return 0
+    fi
+    if [[ -n "$pid" ]] && ! kill -0 "$pid" 2>/dev/null; then
+      return 1
     fi
     sleep 1
   done
@@ -40,7 +44,7 @@ else
   bash "$ROOT/scripts/chroma-server.sh" &
   chroma_pid=$!
 
-  if ! wait_for_chroma; then
+  if ! wait_for_chroma "$chroma_pid"; then
     kill "$chroma_pid" 2>/dev/null || true
     echo "[index:corpus] Chroma 启动超时 (${CHROMA_URL})" >&2
     exit 1

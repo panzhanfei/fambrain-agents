@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+import { logAgentStep } from "@fambrain/agent-shared/agent-log";
+
 import { nullableTrimmedString, unitInterval } from "@/agentflow/utils";
 
 import type { FactCheckerResult } from "./prompt";
@@ -30,8 +32,15 @@ function enforceRetryCap(
   result: FactCheckerResult,
   retryCount: number
 ): FactCheckerResult {
-  if (retryCount < 1 || result.passed) return result;
-  return {
+  if (retryCount < 1 || result.passed) {
+    logAgentStep("FactChecker", "Zod · retryCap 未触发", {
+      retryCount,
+      passed: result.passed,
+    });
+    return result;
+  }
+
+  const capped: FactCheckerResult = {
     passed: true,
     evidenceScore: Math.min(result.evidenceScore, 0.35),
     refinedSearchQuery: null,
@@ -47,6 +56,12 @@ function enforceRetryCap(
           },
         ],
   };
+  logAgentStep("FactChecker", "Zod · retryCap 强制放行", {
+    retryCount,
+    before: result,
+    after: capped,
+  });
+  return capped;
 }
 
 /** 校验并规范化事实核查员模型输出的 JSON；retryCount≥1 时强制放行 */
@@ -55,10 +70,22 @@ export function parseFactCheckerResult(
   fallback: FactCheckerResult,
   retryCount: number
 ): FactCheckerResult {
+  logAgentStep("FactChecker", "Zod · 开始校验", {
+    retryCount,
+    rawType: raw === null ? "null" : typeof raw,
+    raw,
+  });
+
   const parsed = factCheckerResultSchema.safeParse(raw);
   if (!parsed.success) {
+    logAgentStep("FactChecker", "Zod · 校验失败，回退规则结果", {
+      zodError: parsed.error.flatten(),
+      fallback,
+    });
     return enforceRetryCap(fallback, retryCount);
   }
+
+  logAgentStep("FactChecker", "Zod · 校验通过", parsed.data);
 
   let result: FactCheckerResult = {
     passed: parsed.data.passed,
@@ -68,7 +95,11 @@ export function parseFactCheckerResult(
     issues: parsed.data.issues,
   };
 
-  if (result.passed) {
+  if (result.passed && result.refinedSearchQuery) {
+    logAgentStep("FactChecker", "Zod · 清理 refinedSearchQuery", {
+      reason: "passed=true 时不应保留改写检索词",
+      dropped: result.refinedSearchQuery,
+    });
     result = { ...result, refinedSearchQuery: null };
   }
 

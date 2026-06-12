@@ -1,6 +1,7 @@
-# FamBrain 一键编排（本地 / 服务器）
+# FamBrain Docker 编排（web + agents + chroma）
+# Ollama 不在此编排内，请在 .env 配置外部地址（如局域网台式机）
 # 用法：pnpm docker:up
-# 端口从仓库根 .env 读取：PORT / AGENTS_PORT / OLLAMA_PORT / CHROMA_PORT
+# 端口从仓库根 .env 读取：PORT / AGENTS_PORT / CHROMA_PORT
 
 services:
   web:
@@ -31,23 +32,12 @@ services:
     environment:
       AGENTS_PORT: ${AGENTS_PORT:-3001}
       JWT_SECRET: ${JWT_SECRET:-fambrain-docker-dev-secret-change-me!!}
-      OLLAMA_BASE_URL: http://ollama:11434
       CHROMA_SERVER_URL: http://chroma:8000
     volumes:
       - fambrain-doc:/app/data/doc
       - fambrain-chroma:/app/data/chroma
     depends_on:
-      - ollama
       - chroma
-    restart: unless-stopped
-
-  ollama:
-    image: ollama/ollama:latest
-    env_file: .env
-    ports:
-      - "${OLLAMA_PORT:-11434}:11434"
-    volumes:
-      - ollama-data:/root/.ollama
     restart: unless-stopped
 
   chroma:
@@ -66,4 +56,3 @@ volumes:
   fambrain-db:
   fambrain-doc:
   fambrain-chroma:
-  ollama-data:

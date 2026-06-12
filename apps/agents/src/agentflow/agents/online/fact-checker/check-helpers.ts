@@ -1,3 +1,5 @@
+import { logAgentStep } from "@fambrain/agent-shared/agent-log";
+
 import { parseJsonObject } from "@/agentflow/utils";
 
 import type { FactCheckerInput, FactCheckerIssue, FactCheckerResult } from "./prompt";
@@ -58,31 +60,61 @@ function hitMatchScore(
   return matched / tokens.length;
 }
 
+const RELEVANCE_THRESHOLD = 0.2;
+
+function scoreHits(input: FactCheckerInput) {
+  return input.hits.map((h) => ({
+    path: h.path,
+    title: h.title,
+    relevance: h.relevance,
+    matchScore: hitMatchScore(input, h.excerpt, h.path),
+    excerptPreview: h.excerpt.slice(0, 120),
+  }));
+}
+
 function hitsLookRelevant(input: FactCheckerInput): boolean {
   if (input.hits.length === 0) return false;
-  const scores = input.hits.map((h) =>
-    hitMatchScore(input, h.excerpt, h.path)
-  );
-  return Math.max(...scores) >= 0.2;
+  const scores = scoreHits(input).map((h) => h.matchScore);
+  return Math.max(...scores) >= RELEVANCE_THRESHOLD;
 }
 
 /** LLM 不可用或解析失败时的规则兜底 */
 export function buildRuleBasedFactCheck(
   input: FactCheckerInput
 ): FactCheckerResult {
+  const tokens = tokenize(
+    input.searchQuery,
+    input.userQuestion,
+    ...input.subTasks
+  );
+  logAgentStep("FactChecker", "规则兜底 · 开始", {
+    needsRetrieval: input.needsRetrieval,
+    retryCount: input.retryCount,
+    hitCount: input.hits.length,
+    coverage: input.coverage,
+    searchQuery: input.searchQuery,
+    tokens,
+    relevanceThreshold: RELEVANCE_THRESHOLD,
+  });
+
   if (!input.needsRetrieval) {
-    return {
+    const result: FactCheckerResult = {
       passed: true,
       evidenceScore: 0.5,
       refinedSearchQuery: null,
       checkerNotes: null,
       issues: [],
     };
+    logAgentStep("FactChecker", "规则兜底 · 分支 skip_no_retrieval", {
+      reason: "needsRetrieval=false，无需查库，直接放行",
+      result,
+    });
+    return result;
   }
 
   if (input.retryCount >= 1) {
     const noHits = input.hits.length === 0 || input.coverage === "none";
-    return {
+    const result: FactCheckerResult = {
       passed: true,
       evidenceScore: noHits ? 0.15 : 0.45,
       refinedSearchQuery: null,
@@ -98,6 +130,12 @@ export function buildRuleBasedFactCheck(
           ]
         : [],
     };
+    logAgentStep("FactChecker", "规则兜底 · 分支 force_pass_after_retry", {
+      reason: "retryCount≥1，不再打回检索",
+      noHits,
+      result,
+    });
+    return result;
   }
 
   const issues: FactCheckerIssue[] = [];
@@ -105,7 +143,7 @@ export function buildRuleBasedFactCheck(
 
   if (hits.length === 0 && coverage === "none") {
     const refined = buildRefinedSearchQuery(input);
-    return {
+    const result: FactCheckerResult = {
       passed: false,
       evidenceScore: 0.12,
       refinedSearchQuery: refined,
@@ -117,6 +155,12 @@ export function buildRuleBasedFactCheck(
         },
       ],
     };
+    logAgentStep("FactChecker", "规则兜底 · 分支 no_hits_first_attempt", {
+      reason: "hits=0 且 coverage=none，首次检索打回",
+      refinedSearchQuery: refined,
+      result,
+    });
+    return result;
   }
 
   if (hits.length > 0 && coverage === "none") {
@@ -124,13 +168,21 @@ export function buildRuleBasedFactCheck(
       code: "coverage_mismatch",
       message: "有命中片段但 coverage 为 none。",
     });
-    return {
+    const refined = buildRefinedSearchQuery(input);
+    const result: FactCheckerResult = {
       passed: false,
       evidenceScore: 0.25,
-      refinedSearchQuery: buildRefinedSearchQuery(input),
+      refinedSearchQuery: refined,
       checkerNotes: null,
       issues,
     };
+    logAgentStep("FactChecker", "规则兜底 · 分支 coverage_mismatch_hits_none", {
+      reason: "有 hits 但 coverage=none",
+      hitScores: scoreHits(input),
+      refinedSearchQuery: refined,
+      result,
+    });
+    return result;
   }
 
   if (hits.length === 0 && coverage === "sufficient") {
@@ -138,20 +190,38 @@ export function buildRuleBasedFactCheck(
       code: "coverage_mismatch",
       message: "coverage 为 sufficient 但无 hits。",
     });
-    return {
+    const refined = buildRefinedSearchQuery(input);
+    const result: FactCheckerResult = {
       passed: false,
       evidenceScore: 0.2,
-      refinedSearchQuery: buildRefinedSearchQuery(input),
+      refinedSearchQuery: refined,
       checkerNotes: null,
       issues,
     };
+    logAgentStep(
+      "FactChecker",
+      "规则兜底 · 分支 coverage_mismatch_empty_hits_sufficient",
+      {
+        reason: "coverage=sufficient 但 hits=0",
+        refinedSearchQuery: refined,
+        result,
+      }
+    );
+    return result;
   }
 
-  if (hits.length > 0 && !hitsLookRelevant(input)) {
-    return {
+  const hitScores = scoreHits(input);
+  const maxMatchScore = hitScores.length
+    ? Math.max(...hitScores.map((h) => h.matchScore))
+    : 0;
+  const relevant = hitsLookRelevant(input);
+
+  if (hits.length > 0 && !relevant) {
+    const refined = buildRefinedSearchQuery(input);
+    const result: FactCheckerResult = {
       passed: false,
       evidenceScore: 0.2,
-      refinedSearchQuery: buildRefinedSearchQuery(input),
+      refinedSearchQuery: refined,
       checkerNotes: null,
       issues: [
         {
@@ -160,6 +230,13 @@ export function buildRuleBasedFactCheck(
         },
       ],
     };
+    logAgentStep("FactChecker", "规则兜底 · 分支 hits_irrelevant", {
+      reason: `maxMatchScore=${maxMatchScore.toFixed(3)} < ${RELEVANCE_THRESHOLD}`,
+      hitScores,
+      refinedSearchQuery: refined,
+      result,
+    });
+    return result;
   }
 
   const topRelevance = Math.max(...hits.map((h) => h.relevance), 0);
@@ -175,12 +252,20 @@ export function buildRuleBasedFactCheck(
     checkerNotes = "证据部分覆盖，分析师须标注未覆盖点，勿推断具体日期或职级。";
   }
 
-  return {
+  const result: FactCheckerResult = {
     passed: true,
     evidenceScore: Math.min(1, evidenceScore),
     refinedSearchQuery: null,
     checkerNotes,
     issues,
   };
+  logAgentStep("FactChecker", "规则兜底 · 分支 pass_with_hits", {
+    reason: "hits 相关且 coverage 可接受",
+    maxMatchScore,
+    topRelevance,
+    hitScores,
+    result,
+  });
+  return result;
 }
 

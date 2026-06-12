@@ -6,7 +6,7 @@
  * 需 Ollama embed + Chroma 已入库。
  */
 
-import { vectorRetrieve } from "../../src/agentflow/agents/online/knowledge-manager/vector-retrieve.ts";
+import { searchCorpusVectors } from "../../src/agentflow/knowledge/corpus-vector.ts";
 import { recallKeywordRetrieve } from "../../src/agentflow/knowledge/recall-keyword-retrieve.ts";
 
 function printHits(
@@ -39,12 +39,12 @@ async function main() {
   console.log(`query=${query}`);
 
   const [vectorHits, recallHits] = await Promise.all([
-    vectorRetrieve(corpusUserId, query, 8),
+    searchCorpusVectors(corpusUserId, query, 8),
     recallKeywordRetrieve(corpusUserId, query, 8),
   ]);
 
   printHits(
-    "LlamaIndex + Chroma (vectorRetrieve)",
+    "LangChain + Chroma (searchCorpusVectors)",
     vectorHits.map((h) => ({ path: h.path, title: h.title, score: h.score }))
   );
   printHits("Recall keyword (recallKeywordRetrieve)", recallHits);
