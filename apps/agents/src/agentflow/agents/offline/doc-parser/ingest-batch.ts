@@ -1,7 +1,7 @@
 import pLimit from "p-limit";
 import type { Logger } from "pino";
 import { indexOneCorpusUser } from "@/agentflow/agents/offline/knowledge-indexer";
-import type { CorpusCategory } from "@/agentflow/knowledge";
+import type { CorpusCategory } from "@fambrain/corpus";
 import { docParserLogger } from "./logger";
 import { buildOutputPaths, parseDocumentBuffer, } from "./parse-file";
 import { docParseBatchResultSchema, docParseFileResultSchema, type DocParseBatchResult, type DocParseFileResult, } from "./schema";

@@ -9,7 +9,7 @@ export { corpusCollectionName, getChromaServerUrl } from "./constants";
 export { addDocumentsWithEmbedLimit, getEmbedIndexOptions, type EmbedIndexOptions, } from "./embed-batches";
 export { indexOneCorpusUser, type IndexOneUserResult } from "./index-one-user";
 export { listCorpusUserIds } from "./list-corpus-users";
-export { listMarkdownFiles, toRepoPath } from "./list-markdown-files";
+export { listMarkdownFiles, toRepoPath } from "@fambrain/corpus";
 export { splitMarkdownToDocuments } from "./split-markdown";
 export const indexerLogger = pino({
     name: "fambrain-indexer",

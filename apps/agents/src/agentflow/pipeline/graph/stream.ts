@@ -2,7 +2,10 @@ import { logAgentIn, logAgentOut } from "@fambrain/agent-shared/agent-log";
 import type { AgentPipelineContext, AgentPipelineResult, AgentStreamEvent, DbChatTurn, } from "@fambrain/agent-types";
 import { getCompiledPipelineGraph } from "./compile";
 import type { PipelineGraphState } from "./state";
-import { persistPipelineMemory, preparePipelineMemory, } from "@/agentflow/memory";
+import {
+  persistPipelineMemory,
+  preparePipelineMemory,
+} from "@fambrain/agent-memory";
 type PipelineStepName = "intake" | "retrieval" | "fact_checker" | "content_summarizer" | "content_organizer" | "analyst";
 type AnalystStreamChunk = {
     type: "thinking";

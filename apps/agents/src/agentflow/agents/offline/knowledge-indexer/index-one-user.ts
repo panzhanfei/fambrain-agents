@@ -1,9 +1,13 @@
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import type { Logger } from "pino";
-import { getUserCorpusRoot, indexCorpusDocuments } from "@/agentflow/knowledge";
+import {
+  getUserCorpusRoot,
+  indexCorpusDocuments,
+  listMarkdownFiles,
+  toRepoPath,
+} from "@fambrain/corpus";
 import { getEmbedIndexOptions } from "./embed-batches";
-import { listMarkdownFiles, toRepoPath } from "./list-markdown-files";
 import { splitMarkdownToDocuments } from "./split-markdown";
 export type IndexOneUserResult = {
     fileCount: number;

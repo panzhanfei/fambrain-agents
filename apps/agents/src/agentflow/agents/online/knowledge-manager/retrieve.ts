@@ -9,15 +9,13 @@
  */
 import { readFile } from "node:fs/promises";
 import path from "node:path";
-import { AIMessage, HumanMessage, SystemMessage, } from "@langchain/core/messages";
+import { HumanMessage, SystemMessage, } from "@langchain/core/messages";
 import { ChatOllama } from "@langchain/ollama";
 import { getAgentsConfig } from "@fambrain/agent-config";
 import { logAgentIn, logAgentOut, logAgentStep, } from "@fambrain/agent-shared/agent-log";
-import { listMarkdownFiles, toRepoPath, } from "@/agentflow/agents/offline/knowledge-indexer";
-import { listCorpusScanRoots, SCAN_FOLDERS } from "@/agentflow/knowledge";
-import { searchCorpusVectors } from "@/agentflow/knowledge/corpus-vector";
+import { listCorpusScanRoots, listMarkdownFiles, SCAN_FOLDERS, searchCorpusVectors, toRepoPath, } from "@fambrain/corpus";
 import { prompt, type KnowledgeHit, type KnowledgeManagerInput, type KnowledgeRetrievalResult, } from "./prompt";
-import { parseJsonObject } from "@/agentflow/utils";
+import { parseJsonObject, textFromResponse } from "@/agentflow/utils";
 import { parseKnowledgeRetrievalResult } from "./schema";
 /**
  * 召回候选上限：与向量 topK 对齐。
@@ -196,28 +194,6 @@ async (corpusUserId: string, searchQuery: string, topics: string[] = [], subTask
         title,
         body,
     }));
-};
-const textFromResponse = (content: AIMessage["content"]): string => {
-    if (typeof content === "string")
-        return content.trim();
-    if (Array.isArray(content)) {
-        return content
-            .map((p) => typeof p === "string"
-            ? p
-            : p &&
-                typeof p === "object" &&
-                "text" in p &&
-                typeof (p as {
-                    text: string;
-                }).text === "string"
-                ? (p as {
-                    text: string;
-                }).text
-                : "")
-            .join("")
-            .trim();
-    }
-    return "";
 };
 const retrieveByKeywords = (input: Pick<KnowledgeManagerInput, "searchQuery" | "topics" | "subTasks">, candidates: KnowledgeManagerInput["candidates"]): KnowledgeRetrievalResult => {
     const tokens = tokenize(input.searchQuery, ...input.topics, ...input.subTasks);

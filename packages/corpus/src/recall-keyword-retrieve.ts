@@ -1,6 +1,6 @@
 import { readFile } from "node:fs/promises";
 import path from "node:path";
-import { listMarkdownFiles, toRepoPath } from "@/agentflow/agents/offline/knowledge-indexer";
+import { listMarkdownFiles, toRepoPath } from "./list-markdown-files";
 import { listCorpusScanRoots, SCAN_FOLDERS } from "./doc-paths";
 const CJK_RUN = /^[\u4e00-\u9fff]+$/;
 const tokenize = (...parts: string[]): string[] => {

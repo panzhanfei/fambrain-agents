@@ -1,5 +1,5 @@
 import { Document } from "@langchain/core/documents";
-import { chunkMetadataSchema } from "@/agentflow/knowledge";
+import { chunkMetadataSchema } from "@fambrain/corpus";
 const titleFromMarkdown = (fileName: string, body: string): string => {
     const line = body.match(/^#\s+(.+)$/m)?.[1]?.trim();
     return line || fileName.replace(/\.md$/i, "");

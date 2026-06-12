@@ -31,6 +31,8 @@
     "@fambrain/agent-shared": "workspace:*",
     "@fambrain/agent-types": "workspace:*",
     "@fambrain/auth": "workspace:*",
+    "@fambrain/agent-memory": "workspace:*",
+    "@fambrain/corpus": "workspace:*",
     "@langchain/community": "^1.1.28",
     "@langchain/core": "^1.1.46",
     "@langchain/langgraph": "^1.3.2",

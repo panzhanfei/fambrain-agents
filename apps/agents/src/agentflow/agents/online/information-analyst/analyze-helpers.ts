@@ -1,8 +1,6 @@
 import { dedupeCitations } from "@/agentflow/agents/online/content-organizer";
-import { parseJsonObject } from "@/agentflow/utils";
 import type { Citation, InformationAnalystInput, InformationAnalystResult, } from "./prompt";
 import { parseAnalystResult } from "./schema";
-export { parseJsonObject };
 export { parseAnalystResult as normalizeAnalystResult };
 export const buildFallbackAnswer = (input: InformationAnalystInput): InformationAnalystResult => {
     const { userQuestion, hits, coverage, notes, language } = input;

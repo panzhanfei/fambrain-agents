@@ -15,7 +15,7 @@ const main = async () => {
     await writeFile(path.join(uploads, "demo.pdf"), "pdf-bytes");
     const prevDocRoot = process.env.FAMBRAIN_DOC_ROOT_OVERRIDE;
     process.env.FAMBRAIN_DOC_ROOT_OVERRIDE = tmp;
-    const { listVaultFiles } = await import("../src/agentflow/knowledge/index.ts");
+    const { listVaultFiles } = await import("@fambrain/corpus");
     const files = await listVaultFiles(userId);
     assert.equal(files.length, 1);
     assert.match(files[0].relativePath, /originals\/uploads\/demo\.pdf$/);

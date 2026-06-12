@@ -1,6 +1,6 @@
 import path from "node:path";
 import { getAgentsConfig } from "@fambrain/agent-config";
-import { findMonorepoRoot } from "@/agentflow/knowledge/repo-root";
+import { findMonorepoRoot } from "@fambrain/corpus";
 const envFlag = (name: string, defaultOn = true): boolean => {
     const raw = process.env[name];
     if (raw === undefined || raw.trim() === "")

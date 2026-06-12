@@ -1,7 +1,8 @@
 import { getAgentsConfig } from "@fambrain/agent-config";
 import { logAgentIn, logAgentOut } from "@fambrain/agent-shared/agent-log";
 import { streamOllamaNative } from "@fambrain/agent-shared/ollama-native-stream";
-import { buildFallbackAnswer, normalizeAnalystResult, parseJsonObject, } from "./analyze-helpers";
+import { parseJsonObject } from "@/agentflow/utils";
+import { buildFallbackAnswer, normalizeAnalystResult, } from "./analyze-helpers";
 import { prompt, type InformationAnalystInput, type InformationAnalystResult, } from "./prompt";
 type AnalystStreamChunk = {
     type: "thinking";

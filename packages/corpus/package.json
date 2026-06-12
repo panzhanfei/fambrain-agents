@@ -1,0 +1,24 @@
+{
+  "name": "@fambrain/corpus",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./corpus-vector": "./src/corpus-vector.ts"
+  },
+  "dependencies": {
+    "@fambrain/agent-config": "workspace:*",
+    "@langchain/community": "^1.1.28",
+    "@langchain/core": "^1.1.46",
+    "@langchain/ollama": "^1.2.7",
+    "chromadb": "1.10.3",
+    "p-limit": "^3.1.0",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@types/node": "^20.19.41",
+    "pino": "^10.3.1",
+    "typescript": "^5"
+  }
+}

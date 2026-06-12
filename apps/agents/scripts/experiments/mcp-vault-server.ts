@@ -8,7 +8,7 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
-import { listVaultFiles } from "../../src/agentflow/knowledge/list-vault-files.ts";
+import { listVaultFiles } from "@fambrain/corpus";
 const server = new McpServer({
     name: "fambrain-vault",
     version: "0.1.0",

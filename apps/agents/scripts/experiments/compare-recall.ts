@@ -5,8 +5,8 @@
  *
  * 需 Ollama embed + Chroma 已入库。
  */
-import { searchCorpusVectors } from "../../src/agentflow/knowledge/corpus-vector.ts";
-import { recallKeywordRetrieve } from "../../src/agentflow/knowledge/recall-keyword-retrieve.ts";
+import { searchCorpusVectors } from "@fambrain/corpus/corpus-vector";
+import { recallKeywordRetrieve } from "@fambrain/corpus";
 const printHits = (label: string, hits: {
     path: string;
     title: string;

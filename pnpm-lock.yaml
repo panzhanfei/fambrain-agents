@@ -16,6 +16,9 @@ importers:
       '@fambrain/agent-config':
         specifier: workspace:*
         version: link:../../packages/agent-config
+      '@fambrain/agent-memory':
+        specifier: workspace:*
+        version: link:../../packages/agent-memory
       '@fambrain/agent-shared':
         specifier: workspace:*
         version: link:../../packages/agent-shared
@@ -25,6 +28,9 @@ importers:
       '@fambrain/auth':
         specifier: workspace:*
         version: link:../../packages/auth
+      '@fambrain/corpus':
+        specifier: workspace:*
+        version: link:../../packages/corpus
       '@langchain/community':
         specifier: ^1.1.28
         version: 1.1.28(3a5025439e5838e6b943f91ed4bbf359)
@@ -157,6 +163,37 @@ importers:
         specifier: ^4.4.3
         version: 4.4.3
 
+  packages/agent-memory:
+    dependencies:
+      '@fambrain/agent-config':
+        specifier: workspace:*
+        version: link:../agent-config
+      '@fambrain/agent-shared':
+        specifier: workspace:*
+        version: link:../agent-shared
+      '@fambrain/agent-types':
+        specifier: workspace:*
+        version: link:../agent-types
+      '@fambrain/corpus':
+        specifier: workspace:*
+        version: link:../corpus
+      '@langchain/core':
+        specifier: ^1.1.46
+        version: 1.1.46(@opentelemetry/api@1.9.1)(openai@6.39.0(ws@8.20.1)(zod@4.4.3))(ws@8.20.1)
+      '@langchain/ollama':
+        specifier: ^1.2.7
+        version: 1.2.7(@langchain/core@1.1.46(@opentelemetry/api@1.9.1)(openai@6.39.0(ws@8.20.1)(zod@4.4.3))(ws@8.20.1))
+      mem0ai:
+        specifier: ^2.4.6
+        version: 2.4.6(@anthropic-ai/sdk@0.27.3)(@azure/identity@4.13.1)(@azure/search-documents@12.2.0)(@cloudflare/workers-types@4.20260531.1)(@google/genai@1.52.0(@modelcontextprotocol/sdk@1.29.0(@cfworker/json-schema@4.1.1)(zod@4.4.3)))(@langchain/core@1.1.46(@opentelemetry/api@1.9.1)(openai@6.39.0(ws@8.20.1)(zod@4.4.3))(ws@8.20.1))(@mistralai/mistralai@1.15.1)(@qdrant/js-client-rest@1.13.0(typescript@5.9.3))(@supabase/supabase-js@2.106.2)(@types/jest@29.5.14)(@types/pg@8.11.0)(better-sqlite3@12.10.0)(cloudflare@4.5.0)(groq-sdk@0.3.0)(neo4j-driver@5.28.3)(ollama@0.6.3)(pg@8.11.3)(redis@4.7.1)(ws@8.20.1)
+    devDependencies:
+      '@types/node':
+        specifier: ^20.19.41
+        version: 20.19.41
+      typescript:
+        specifier: ^5
+        version: 5.9.3
+
   packages/agent-shared:
     dependencies:
       '@fambrain/agent-config':
@@ -182,6 +219,40 @@ importers:
       zod:
         specifier: ^4.4.3
         version: 4.4.3
+
+  packages/corpus:
+    dependencies:
+      '@fambrain/agent-config':
+        specifier: workspace:*
+        version: link:../agent-config
+      '@langchain/community':
+        specifier: ^1.1.28
+        version: 1.1.28(3a5025439e5838e6b943f91ed4bbf359)
+      '@langchain/core':
+        specifier: ^1.1.46
+        version: 1.1.46(@opentelemetry/api@1.9.1)(openai@6.39.0(ws@8.20.1)(zod@4.4.3))(ws@8.20.1)
+      '@langchain/ollama':
+        specifier: ^1.2.7
+        version: 1.2.7(@langchain/core@1.1.46(@opentelemetry/api@1.9.1)(openai@6.39.0(ws@8.20.1)(zod@4.4.3))(ws@8.20.1))
+      chromadb:
+        specifier: 1.10.3
+        version: 1.10.3(openai@6.39.0(ws@8.20.1)(zod@4.4.3))
+      p-limit:
+        specifier: ^3.1.0
+        version: 3.1.0
+      zod:
+        specifier: ^4.4.3
+        version: 4.4.3
+    devDependencies:
+      '@types/node':
+        specifier: ^20.19.41
+        version: 20.19.41
+      pino:
+        specifier: ^10.3.1
+        version: 10.3.1
+      typescript:
+        specifier: ^5
+        version: 5.9.3
 
   packages/db:
     dependencies:
@@ -7248,8 +7319,8 @@ snapshots:
       '@next/eslint-plugin-next': 16.2.6
       eslint: 9.39.4(jiti@2.7.0)
       eslint-import-resolver-node: 0.3.10
-      eslint-import-resolver-typescript: 3.10.1(eslint-plugin-import@2.32.0(@typescript-eslint/parser@8.59.3(eslint@9.39.4(jiti@2.7.0))(typescript@5.9.3))(eslint@9.39.4(jiti@2.7.0)))(eslint@9.39.4(jiti@2.7.0))
-      eslint-plugin-import: 2.32.0(@typescript-eslint/parser@8.59.3(eslint@9.39.4(jiti@2.7.0))(typescript@5.9.3))(eslint-import-resolver-typescript@3.10.1(eslint-plugin-import@2.32.0(@typescript-eslint/parser@8.59.3(eslint@9.39.4(jiti@2.7.0))(typescript@5.9.3))(eslint@9.39.4(jiti@2.7.0)))(eslint@9.39.4(jiti@2.7.0)))(eslint@9.39.4(jiti@2.7.0))
+      eslint-import-resolver-typescript: 3.10.1(eslint-plugin-import@2.32.0)(eslint@9.39.4(jiti@2.7.0))
+      eslint-plugin-import: 2.32.0(@typescript-eslint/parser@8.59.3(eslint@9.39.4(jiti@2.7.0))(typescript@5.9.3))(eslint-import-resolver-typescript@3.10.1)(eslint@9.39.4(jiti@2.7.0))
       eslint-plugin-jsx-a11y: 6.10.2(eslint@9.39.4(jiti@2.7.0))
       eslint-plugin-react: 7.37.5(eslint@9.39.4(jiti@2.7.0))
       eslint-plugin-react-hooks: 7.1.1(eslint@9.39.4(jiti@2.7.0))
@@ -7271,7 +7342,7 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  eslint-import-resolver-typescript@3.10.1(eslint-plugin-import@2.32.0(@typescript-eslint/parser@8.59.3(eslint@9.39.4(jiti@2.7.0))(typescript@5.9.3))(eslint@9.39.4(jiti@2.7.0)))(eslint@9.39.4(jiti@2.7.0)):
+  eslint-import-resolver-typescript@3.10.1(eslint-plugin-import@2.32.0)(eslint@9.39.4(jiti@2.7.0)):
     dependencies:
       '@nolyfill/is-core-module': 1.0.39
       debug: 4.4.3
@@ -7282,22 +7353,22 @@ snapshots:
       tinyglobby: 0.2.16
       unrs-resolver: 1.11.1
     optionalDependencies:
-      eslint-plugin-import: 2.32.0(@typescript-eslint/parser@8.59.3(eslint@9.39.4(jiti@2.7.0))(typescript@5.9.3))(eslint-import-resolver-typescript@3.10.1(eslint-plugin-import@2.32.0(@typescript-eslint/parser@8.59.3(eslint@9.39.4(jiti@2.7.0))(typescript@5.9.3))(eslint@9.39.4(jiti@2.7.0)))(eslint@9.39.4(jiti@2.7.0)))(eslint@9.39.4(jiti@2.7.0))
+      eslint-plugin-import: 2.32.0(@typescript-eslint/parser@8.59.3(eslint@9.39.4(jiti@2.7.0))(typescript@5.9.3))(eslint-import-resolver-typescript@3.10.1)(eslint@9.39.4(jiti@2.7.0))
     transitivePeerDependencies:
       - supports-color
 
-  eslint-module-utils@2.12.1(@typescript-eslint/parser@8.59.3(eslint@9.39.4(jiti@2.7.0))(typescript@5.9.3))(eslint-import-resolver-node@0.3.10)(eslint-import-resolver-typescript@3.10.1(eslint-plugin-import@2.32.0(@typescript-eslint/parser@8.59.3(eslint@9.39.4(jiti@2.7.0))(typescript@5.9.3))(eslint@9.39.4(jiti@2.7.0)))(eslint@9.39.4(jiti@2.7.0)))(eslint@9.39.4(jiti@2.7.0)):
+  eslint-module-utils@2.12.1(@typescript-eslint/parser@8.59.3(eslint@9.39.4(jiti@2.7.0))(typescript@5.9.3))(eslint-import-resolver-node@0.3.10)(eslint-import-resolver-typescript@3.10.1)(eslint@9.39.4(jiti@2.7.0)):
     dependencies:
       debug: 3.2.7
     optionalDependencies:
       '@typescript-eslint/parser': 8.59.3(eslint@9.39.4(jiti@2.7.0))(typescript@5.9.3)
       eslint: 9.39.4(jiti@2.7.0)
       eslint-import-resolver-node: 0.3.10
-      eslint-import-resolver-typescript: 3.10.1(eslint-plugin-import@2.32.0(@typescript-eslint/parser@8.59.3(eslint@9.39.4(jiti@2.7.0))(typescript@5.9.3))(eslint@9.39.4(jiti@2.7.0)))(eslint@9.39.4(jiti@2.7.0))
+      eslint-import-resolver-typescript: 3.10.1(eslint-plugin-import@2.32.0)(eslint@9.39.4(jiti@2.7.0))
     transitivePeerDependencies:
       - supports-color
 
-  eslint-plugin-import@2.32.0(@typescript-eslint/parser@8.59.3(eslint@9.39.4(jiti@2.7.0))(typescript@5.9.3))(eslint-import-resolver-typescript@3.10.1(eslint-plugin-import@2.32.0(@typescript-eslint/parser@8.59.3(eslint@9.39.4(jiti@2.7.0))(typescript@5.9.3))(eslint@9.39.4(jiti@2.7.0)))(eslint@9.39.4(jiti@2.7.0)))(eslint@9.39.4(jiti@2.7.0)):
+  eslint-plugin-import@2.32.0(@typescript-eslint/parser@8.59.3(eslint@9.39.4(jiti@2.7.0))(typescript@5.9.3))(eslint-import-resolver-typescript@3.10.1)(eslint@9.39.4(jiti@2.7.0)):
     dependencies:
       '@rtsao/scc': 1.1.0
       array-includes: 3.1.9
@@ -7308,7 +7379,7 @@ snapshots:
       doctrine: 2.1.0
       eslint: 9.39.4(jiti@2.7.0)
       eslint-import-resolver-node: 0.3.10
-      eslint-module-utils: 2.12.1(@typescript-eslint/parser@8.59.3(eslint@9.39.4(jiti@2.7.0))(typescript@5.9.3))(eslint-import-resolver-node@0.3.10)(eslint-import-resolver-typescript@3.10.1(eslint-plugin-import@2.32.0(@typescript-eslint/parser@8.59.3(eslint@9.39.4(jiti@2.7.0))(typescript@5.9.3))(eslint@9.39.4(jiti@2.7.0)))(eslint@9.39.4(jiti@2.7.0)))(eslint@9.39.4(jiti@2.7.0))
+      eslint-module-utils: 2.12.1(@typescript-eslint/parser@8.59.3(eslint@9.39.4(jiti@2.7.0))(typescript@5.9.3))(eslint-import-resolver-node@0.3.10)(eslint-import-resolver-typescript@3.10.1)(eslint@9.39.4(jiti@2.7.0))
       hasown: 2.0.3
       is-core-module: 2.16.2
       is-glob: 4.0.3
@@ -7888,7 +7959,7 @@ snapshots:
       jsonwebtoken: 9.0.3
       load-esm: 1.0.3
       mime-types: 2.1.35
-      retry-axios: 2.6.0(axios@1.16.1(debug@4.3.4))
+      retry-axios: 2.6.0(axios@1.16.1)
       tough-cookie: 4.1.3
     transitivePeerDependencies:
       - supports-color
@@ -9087,7 +9158,7 @@ snapshots:
       path-parse: 1.0.7
       supports-preserve-symlinks-flag: 1.0.0
 
-  retry-axios@2.6.0(axios@1.16.1(debug@4.3.4)):
+  retry-axios@2.6.0(axios@1.16.1):
     dependencies:
       axios: 1.16.1(debug@4.3.4)
 

@@ -1,7 +1,6 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { toRepoPath } from "@/agentflow/agents/offline/knowledge-indexer/list-markdown-files";
-import { getCorpusImportDir, getVaultUploadsRoot, type CorpusCategory, } from "@/agentflow/knowledge";
+import { getCorpusImportDir, getVaultUploadsRoot, toRepoPath, type CorpusCategory, } from "@fambrain/corpus";
 import type { ParsedDocument } from "./schema";
 export const saveOriginalToVault = async (actorUserId: string, fileName: string, buffer: Buffer): Promise<string> => {
     const uploadsRoot = getVaultUploadsRoot(actorUserId);

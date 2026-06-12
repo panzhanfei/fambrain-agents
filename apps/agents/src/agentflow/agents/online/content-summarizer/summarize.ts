@@ -1,8 +1,8 @@
-import { AIMessage, HumanMessage, SystemMessage, } from "@langchain/core/messages";
+import { HumanMessage, SystemMessage, } from "@langchain/core/messages";
 import { ChatOllama } from "@langchain/ollama";
 import { getAgentsConfig } from "@fambrain/agent-config";
 import { logAgentIn, logAgentOut } from "@fambrain/agent-shared/agent-log";
-import { parseJsonObject } from "@/agentflow/utils";
+import { parseJsonObject, textFromResponse } from "@/agentflow/utils";
 import { parseContentSummaryResult } from "./schema";
 import { prompt, type ContentSummarizerInput, type ContentSummaryResult, } from "./prompt";
 const MAX_INPUT_CHARS = 12000;
@@ -11,28 +11,6 @@ const llm = new ChatOllama({
     baseUrl: ollama.baseUrl,
     model: ollama.models.intakeCoordinator,
 });
-const textFromResponse = (content: AIMessage["content"]): string => {
-    if (typeof content === "string")
-        return content.trim();
-    if (Array.isArray(content)) {
-        return content
-            .map((p) => typeof p === "string"
-            ? p
-            : p &&
-                typeof p === "object" &&
-                "text" in p &&
-                typeof (p as {
-                    text: string;
-                }).text === "string"
-                ? (p as {
-                    text: string;
-                }).text
-                : "")
-            .join("")
-            .trim();
-    }
-    return "";
-};
 const buildFallback = (input: ContentSummarizerInput): ContentSummaryResult => {
     const trimmed = input.text.replace(/\s+/g, " ").trim();
     const preview = trimmed.slice(0, 280);

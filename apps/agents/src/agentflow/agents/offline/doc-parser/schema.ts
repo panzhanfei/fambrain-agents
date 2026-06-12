@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { SCAN_FOLDERS } from "@/agentflow/knowledge";
+import { SCAN_FOLDERS } from "@fambrain/corpus";
 export const docParseCategorySchema = z.enum(SCAN_FOLDERS);
 export const docParseFormatSchema = z.enum([
     "pdf",

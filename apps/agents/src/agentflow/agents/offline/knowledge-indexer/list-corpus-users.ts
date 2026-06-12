@@ -1,7 +1,6 @@
 import { readdir } from "node:fs/promises";
 import path from "node:path";
-import { DOC_ROOT, DOC_USERS_DIR, getUserCorpusRoot, } from "@/agentflow/knowledge";
-import { listMarkdownFiles } from "./list-markdown-files";
+import { DOC_ROOT, DOC_USERS_DIR, getUserCorpusRoot, listMarkdownFiles, } from "@fambrain/corpus";
 export const listCorpusUserIds = async (): Promise<string[]> => {
     const usersRoot = path.join(DOC_ROOT, DOC_USERS_DIR);
     let entries;

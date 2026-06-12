@@ -1,1 +1,1 @@
-export { corpusCollectionName, getChromaServerUrl } from "@/agentflow/knowledge/corpus-vector";
+export { corpusCollectionName, getChromaServerUrl } from "@fambrain/corpus/corpus-vector";
