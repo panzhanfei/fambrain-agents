@@ -17,9 +17,9 @@ import { defaultIntakeDecision, parseIntakeDecision } from "../parse-intake";
 
 import { PipelineGraphAnnotation, type PipelineGraphState } from "./state";
 
-function routeAfterIntake(
+const routeAfterIntake = (
   state: PipelineGraphState
-): "respondEarly" | "retrieval" | "factChecker" | "contentSummarizer" {
+): "respondEarly" | "retrieval" | "factChecker" | "contentSummarizer" => {
   if (state.exitEarly || state.error) return "respondEarly";
 
   const decision = state.decision;
@@ -48,29 +48,29 @@ function routeAfterIntake(
   }
 
   return "factChecker";
-}
+};
 
-function routeAfterRetrieval(
+const routeAfterRetrieval = (
   state: PipelineGraphState
-): "factChecker" | "contentSummarizer" {
+): "factChecker" | "contentSummarizer" => {
   if (state.decision?.intent === "summarize_content") {
     return "contentSummarizer";
   }
   return "factChecker";
-}
+};
 
-function routeAfterFactChecker(
+const routeAfterFactChecker = (
   state: PipelineGraphState
-): "retrieval" | "contentOrganizer" {
+): "retrieval" | "contentOrganizer" => {
   if (!state.checkerPassed && state.retryCount < 1) {
     return "retrieval";
   }
   return "contentOrganizer";
-}
+};
 
-async function intakeNode(
+const intakeNode = async (
   state: PipelineGraphState
-): Promise<Partial<PipelineGraphState>> {
+): Promise<Partial<PipelineGraphState>> => {
   try {
     const intakeRaw = await completeIntakeCoordinator(state.intakeHistory, {
       memoryBlock: state.memoryBlock,
@@ -91,11 +91,11 @@ async function intakeNode(
       exitEarly: true,
     };
   }
-}
+};
 
-async function retrievalNode(
+const retrievalNode = async (
   state: PipelineGraphState
-): Promise<Partial<PipelineGraphState>> {
+): Promise<Partial<PipelineGraphState>> => {
   const decision = state.decision;
   if (!decision) {
     return { error: "缺少入口路由决策" };
@@ -125,21 +125,21 @@ async function retrievalNode(
       retryCount: fromRetry ? state.retryCount + 1 : state.retryCount,
     };
   }
-}
+};
 
-function mergeAnalystNotes(
+const mergeAnalystNotes = (
   kmNotes: string | null,
   checkerNotes: string | null
-): string | null {
+): string | null => {
   const parts = [kmNotes, checkerNotes].filter(
     (n): n is string => typeof n === "string" && n.trim().length > 0
   );
   return parts.length > 0 ? parts.join(" ") : null;
-}
+};
 
-async function factCheckerNode(
+const factCheckerNode = async (
   state: PipelineGraphState
-): Promise<Partial<PipelineGraphState>> {
+): Promise<Partial<PipelineGraphState>> => {
   const decision = state.decision;
   if (!decision) {
     return { checkerPassed: true };
@@ -185,11 +185,11 @@ async function factCheckerNode(
     logAgentOut("Pipeline", "事实核查（异常，放行）", { error: msg });
     return { checkerPassed: true, error: msg };
   }
-}
+};
 
-async function contentSummarizerNode(
+const contentSummarizerNode = async (
   state: PipelineGraphState
-): Promise<Partial<PipelineGraphState>> {
+): Promise<Partial<PipelineGraphState>> => {
   const decision = state.decision;
   if (!decision) {
     return {
@@ -229,11 +229,11 @@ async function contentSummarizerNode(
       exitEarly: true,
     };
   }
-}
+};
 
-async function contentOrganizerNode(
+const contentOrganizerNode = async (
   state: PipelineGraphState
-): Promise<Partial<PipelineGraphState>> {
+): Promise<Partial<PipelineGraphState>> => {
   const organized = organizeKnowledge({
     hits: state.hits,
     coverage: state.coverage,
@@ -245,12 +245,12 @@ async function contentOrganizerNode(
     coverage: organized.coverage,
     notes: organized.notes,
   };
-}
+};
 
-async function analystNode(
+const analystNode = async (
   state: PipelineGraphState,
   config: LangGraphRunnableConfig
-): Promise<Partial<PipelineGraphState>> {
+): Promise<Partial<PipelineGraphState>> => {
   const decision = state.decision;
   if (!decision) {
     return { answer: "（未能理解您的问题，请换一种方式描述）" };
@@ -285,11 +285,11 @@ async function analystNode(
     write?.({ type: "assistant", text: answer });
     return { error: msg, answer };
   }
-}
+};
 
-function respondEarlyNode(
+const respondEarlyNode = (
   state: PipelineGraphState
-): Partial<PipelineGraphState> {
+): Partial<PipelineGraphState> => {
   if (state.answer) {
     return { exitEarly: true };
   }
@@ -320,9 +320,9 @@ function respondEarlyNode(
     answer: "（未能生成回复，请稍后重试）",
     exitEarly: true,
   };
-}
+};
 
-function buildPipelineGraph() {
+const buildPipelineGraph = () => {
   return new StateGraph(PipelineGraphAnnotation)
     .addNode("intake", intakeNode)
     .addNode("retrieval", retrievalNode)
@@ -339,15 +339,15 @@ function buildPipelineGraph() {
     .addEdge("contentOrganizer", "analyst")
     .addEdge("analyst", END)
     .addEdge("respondEarly", END);
-}
+};
 
 let compiledGraph: ReturnType<
   ReturnType<typeof buildPipelineGraph>["compile"]
 > | null = null;
 
-export function getCompiledPipelineGraph() {
+export const getCompiledPipelineGraph = () => {
   if (!compiledGraph) {
     compiledGraph = buildPipelineGraph().compile();
   }
   return compiledGraph;
-}
+};
