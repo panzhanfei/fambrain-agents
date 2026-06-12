@@ -17,7 +17,7 @@ const corpusFolders = ["experience", "projects", "personal"];
 const CORPUS = "corpus";
 const VAULT = "vault";
 
-function resolveOwnerFromDb() {
+const resolveOwnerFromDb = () => {
   const dbPath = path.join(repoRoot, "packages/db/prisma/dev.db");
   const db = new Database(dbPath, { readonly: true });
   try {
@@ -34,18 +34,18 @@ function resolveOwnerFromDb() {
   } finally {
     db.close();
   }
-}
+};
 
-async function exists(p) {
+const exists = async (p) => {
   try {
     await stat(p);
     return true;
   } catch {
     return false;
   }
-}
+};
 
-async function moveDir(from, to, label) {
+const moveDir = async (from, to, label) => {
   if (!(await exists(from))) {
     console.log(`跳过（不存在）：${label}`);
     return;

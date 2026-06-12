@@ -16,7 +16,7 @@ const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), ".."
 const docRoot = path.join(repoRoot, "data/doc");
 const folders = ["experience", "projects", "personal"];
 
-function resolveCorpusUserIdFromDb() {
+const resolveCorpusUserIdFromDb = () => {
   const dbPath = path.join(repoRoot, "packages/db/prisma/dev.db");
   const db = new Database(dbPath, { readonly: true });
   try {
@@ -32,9 +32,9 @@ function resolveCorpusUserIdFromDb() {
   } finally {
     db.close();
   }
-}
+};
 
-async function exists(p) {
+const exists = async (p) => {
   try {
     await stat(p);
     return true;

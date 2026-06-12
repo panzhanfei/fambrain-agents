@@ -6,41 +6,42 @@
  * 若未调用模型，编排器应直接组装符合 {@link KnowledgeRetrievalResult} 的对象。
  */
 export type KnowledgeHit = {
-  /** 相对仓库的路径，如 src/doc/users/<userId>/corpus/projects/城市管理平台.md */
-  path: string;
-  /** 文档标题或首行标题，便于引用 */
-  title: string;
-  /** 与查询最相关的原文摘录，须来自候选片段，勿编造 */
-  excerpt: string;
-  /** 0–1，与 searchQuery 的相关度 */
-  relevance: number;
+    /** 相对仓库的路径，如 src/doc/users/<userId>/corpus/projects/城市管理平台.md */
+    path: string;
+    /** 文档标题或首行标题，便于引用 */
+    title: string;
+    /** 与查询最相关的原文摘录，须来自候选片段，勿编造 */
+    excerpt: string;
+    /** 0–1，与 searchQuery 的相关度 */
+    relevance: number;
 };
-
 export type KnowledgeRetrievalResult = {
-  /** 命中片段，按 relevance 降序，最多 5 条 */
-  hits: KnowledgeHit[];
-  /**
-   * 证据是否足够回答上游问题
-   * - sufficient：hits 能支撑分析
-   * - partial：有部分相关，分析时宜标注不确定
-   * - none：无有效命中
-   */
-  coverage: "sufficient" | "partial" | "none";
-  /** 给信息分析师的简短备注；无则 null */
-  notes: string | null;
+    /** 命中片段，按 relevance 降序，最多 5 条 */
+    hits: KnowledgeHit[];
+    /**
+     * 证据是否足够回答上游问题
+     * - sufficient：hits 能支撑分析
+     * - partial：有部分相关，分析时宜标注不确定
+     * - none：无有效命中
+     */
+    coverage: "sufficient" | "partial" | "none";
+    /** 给信息分析师的简短备注；无则 null */
+    notes: string | null;
 };
-
 /** 编排器传入本 Agent 的上下文（写入 HumanMessage，非模型臆造） */
 export type KnowledgeManagerInput = {
-  /** 语料归属用户 id，对应 `src/doc/users/<corpusUserId>/corpus/` */
-  corpusUserId: string;
-  searchQuery: string;
-  topics: string[];
-  subTasks: string[];
-  /** 服务端预检索的候选段落（path + 正文片段） */
-  candidates: { path: string; title: string; body: string }[];
+    /** 语料归属用户 id，对应 `src/doc/users/<corpusUserId>/corpus/` */
+    corpusUserId: string;
+    searchQuery: string;
+    topics: string[];
+    subTasks: string[];
+    /** 服务端预检索的候选段落（path + 正文片段） */
+    candidates: {
+        path: string;
+        title: string;
+        body: string;
+    }[];
 };
-
 export const prompt = `你是 FamBrain 系统中的「知识管理员」（KnowledgeManager）。
 
 ## 背景

@@ -1,84 +1,62 @@
-import {
-  AIMessage,
-  HumanMessage,
-  SystemMessage,
-  type BaseMessage,
-} from "@langchain/core/messages";
+import { AIMessage, HumanMessage, SystemMessage, type BaseMessage, } from "@langchain/core/messages";
 import { ChatOllama } from "@langchain/ollama";
-
 import { getAgentsConfig } from "@fambrain/agent-config";
 import { logAgentIn, logAgentOut } from "@fambrain/agent-shared/agent-log";
 import type { DbChatTurn } from "@fambrain/agent-types";
-
 import { prompt } from "./prompt";
-
 const { ollama } = getAgentsConfig();
-
 const llm = new ChatOllama({
-  baseUrl: ollama.baseUrl,
-  model: ollama.models.intakeCoordinator,
+    baseUrl: ollama.baseUrl,
+    model: ollama.models.intakeCoordinator,
 });
-
-function turnToMessage(t: DbChatTurn) {
-  if (t.role === "user") return new HumanMessage(t.content);
-  if (t.role === "assistant") return new AIMessage(t.content);
-  return new SystemMessage(t.content);
-}
-
-function textFromResponse(content: AIMessage["content"]): string {
-  if (typeof content === "string") return content.trim();
-  if (Array.isArray(content)) {
-    return content
-      .map((p) =>
-        typeof p === "string"
-          ? p
-          : p &&
-              typeof p === "object" &&
-              "text" in p &&
-              typeof (p as { text: string }).text === "string"
-            ? (p as { text: string }).text
-            : ""
-      )
-      .join("")
-      .trim();
-  }
-  return "";
-}
-
-/** 服务端对接 Ollama：系统指令 + 最近轮次，`invoke` 一次拿回复 */
-export async function completeIntakeCoordinator(
-  history: DbChatTurn[],
-  options?: {
+const turnToMessage = (t: DbChatTurn) => {
+    if (t.role === "user")
+        return new HumanMessage(t.content);
+    if (t.role === "assistant")
+        return new AIMessage(t.content);
+    return new SystemMessage(t.content);
+};
+const textFromResponse = (content: AIMessage["content"]): string => {
+    if (typeof content === "string")
+        return content.trim();
+    if (Array.isArray(content)) {
+        return content
+            .map((p) => typeof p === "string"
+            ? p
+            : p &&
+                typeof p === "object" &&
+                "text" in p &&
+                typeof (p as {
+                    text: string;
+                }).text === "string"
+                ? (p as {
+                    text: string;
+                }).text
+                : "")
+            .join("")
+            .trim();
+    }
+    return "";
+};
+export const completeIntakeCoordinator = async (history: DbChatTurn[], options?: {
     memoryBlock?: string | null;
     intakeHistory?: DbChatTurn[];
-  }
-): Promise<string> {
-  const recent = options?.intakeHistory ?? history;
-  const trimmed = recent.length > 40 ? recent.slice(-40) : recent;
-
-  logAgentIn("IntakeCoordinator", "对话历史（最近轮次）", {
-    turnCount: trimmed.length,
-    hasMemoryBlock: Boolean(options?.memoryBlock),
-    turns: trimmed.map((t) => ({ role: t.role, content: t.content })),
-  });
-
-  const messages: BaseMessage[] = [new SystemMessage(prompt)];
-  if (options?.memoryBlock) {
-    messages.push(
-      new SystemMessage(
-        `以下为用户记忆上下文（Mem0 / LangMem），供理解指代与偏好，勿当作知识库 hits：\n\n${options.memoryBlock}`
-      )
-    );
-  }
-  messages.push(...trimmed.map(turnToMessage));
-
-  const ai = await llm.invoke(messages);
-
-  const raw =
-    textFromResponse(ai.content) ||
-    "（模型未返回助手文本：请确认 Ollama 已启动且模型已拉取）";
-
-  logAgentOut("IntakeCoordinator", "路由 JSON（原始）", raw);
-
-  return raw;
-}
+}): Promise<string> => {
+    const recent = options?.intakeHistory ?? history;
+    const trimmed = recent.length > 40 ? recent.slice(-40) : recent;
+    logAgentIn("IntakeCoordinator", "对话历史（最近轮次）", {
+        turnCount: trimmed.length,
+        hasMemoryBlock: Boolean(options?.memoryBlock),
+        turns: trimmed.map((t) => ({ role: t.role, content: t.content })),
+    });
+    const messages: BaseMessage[] = [new SystemMessage(prompt)];
+    if (options?.memoryBlock) {
+        messages.push(new SystemMessage(`以下为用户记忆上下文（Mem0 / LangMem），供理解指代与偏好，勿当作知识库 hits：\n\n${options.memoryBlock}`));
+    }
+    messages.push(...trimmed.map(turnToMessage));
+    const ai = await llm.invoke(messages);
+    const raw = textFromResponse(ai.content) ||
+        "（模型未返回助手文本：请确认 Ollama 已启动且模型已拉取）";
+    logAgentOut("IntakeCoordinator", "路由 JSON（原始）", raw);
+    return raw;
+};

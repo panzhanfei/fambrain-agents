@@ -5,41 +5,34 @@
  * 期望输出形状见 {@link IntakeRoutingDecision}（由服务端解析，勿在 JSON 外加说明文字）。
  */
 export type IntakeRoutingDecision = {
-  /** 主意图分类 */
-  intent:
-    | "retrieve_and_answer"
-    | "summarize_content"
-    | "direct_answer"
-    | "clarify"
-    | "chitchat"
-    | "out_of_scope";
-  /** 是否需要 KnowledgeManager 检索个人知识库 */
-  needsRetrieval: boolean;
-  /**
-   * 供检索用的查询句：中文为主，可含英文技术词；
-   * 应脱离寒暄、指代词，保留实体（公司/项目/技术栈/时间）。
-   */
-  searchQuery: string;
-  /** 可选子任务拆分，每项一句、可独立检索或分析 */
-  subTasks: string[];
-  /** 主题标签，便于过滤语料（见 doc：experience / projects / personal） */
-  topics: string[];
-  /** 用户主要使用的语言 */
-  language: "zh" | "en" | "mixed";
-  /** 0–1，对 intent 与 searchQuery 的把握 */
-  confidence: number;
-  /**
-   * intent 为 clarify 时：向用户提出的单个澄清问题；
-   * 其他 intent 为 null。
-   */
-  clarifyingQuestion: string | null;
-  /**
-   * 仅当 needsRetrieval 为 false 且无需下游长分析时，
-   * 可给用户的极短回复（≤80 字）；否则必须为 null。
-   */
-  briefReply: string | null;
+    /** 主意图分类 */
+    intent: "retrieve_and_answer" | "summarize_content" | "direct_answer" | "clarify" | "chitchat" | "out_of_scope";
+    /** 是否需要 KnowledgeManager 检索个人知识库 */
+    needsRetrieval: boolean;
+    /**
+     * 供检索用的查询句：中文为主，可含英文技术词；
+     * 应脱离寒暄、指代词，保留实体（公司/项目/技术栈/时间）。
+     */
+    searchQuery: string;
+    /** 可选子任务拆分，每项一句、可独立检索或分析 */
+    subTasks: string[];
+    /** 主题标签，便于过滤语料（见 doc：experience / projects / personal） */
+    topics: string[];
+    /** 用户主要使用的语言 */
+    language: "zh" | "en" | "mixed";
+    /** 0–1，对 intent 与 searchQuery 的把握 */
+    confidence: number;
+    /**
+     * intent 为 clarify 时：向用户提出的单个澄清问题；
+     * 其他 intent 为 null。
+     */
+    clarifyingQuestion: string | null;
+    /**
+     * 仅当 needsRetrieval 为 false 且无需下游长分析时，
+     * 可给用户的极短回复（≤80 字）；否则必须为 null。
+     */
+    briefReply: string | null;
 };
-
 export const prompt = `你是 FamBrain 系统中的「入口接线员」（IntakeCoordinator）。
 
 ## 背景

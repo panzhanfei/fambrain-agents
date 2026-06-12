@@ -9,10 +9,9 @@
  * 依赖仓库根目录 .env（见 apps/agents/package.json 的 --env-file）
  */
 import { indexAllCorpora } from "@fambrain/agents";
-
 indexAllCorpora()
-  .then(() => process.exit(0))
-  .catch((err) => {
+    .then(() => process.exit(0))
+    .catch((err) => {
     console.error(err);
     process.exit(1);
-  });
+});

@@ -1,9 +1,5 @@
 import type { IntakeRoutingDecision } from "@/agentflow/agents/online/intake-coordinator";
-import type {
-  KnowledgeHit,
-  KnowledgeRetrievalResult,
-} from "@/agentflow/agents/online/knowledge-manager";
-
+import type { KnowledgeHit, KnowledgeRetrievalResult, } from "@/agentflow/agents/online/knowledge-manager";
 /**
  * FactChecker 系统指令（D5 / P0）。
  * 职责：在信息分析师动笔前，审查知识管理员产出的 hits / coverage 是否足以回答用户问题；
@@ -11,62 +7,52 @@ import type {
  *
  * 期望输出见 {@link FactCheckerResult}；编排器将 passed 映射为 checkerPassed。
  */
-export type FactCheckerIssueCode =
-  | "no_hits_when_needed"
-  | "hits_irrelevant"
-  | "coverage_mismatch"
-  | "excerpt_too_weak"
-  | "subtask_uncovered"
-  | "entity_missing";
-
+export type FactCheckerIssueCode = "no_hits_when_needed" | "hits_irrelevant" | "coverage_mismatch" | "excerpt_too_weak" | "subtask_uncovered" | "entity_missing";
 export type FactCheckerIssue = {
-  /** 问题类别，便于日志与规则兜底 */
-  code: FactCheckerIssueCode;
-  /** 一句中文说明，勿冗长 */
-  message: string;
+    /** 问题类别，便于日志与规则兜底 */
+    code: FactCheckerIssueCode;
+    /** 一句中文说明，勿冗长 */
+    message: string;
 };
-
 export type FactCheckerResult = {
-  /**
-   * true：当前证据可交给信息分析师（含「确无命中、由分析师声明不足」的情形）。
-   * false：建议再打回知识管理员检索；仅当 retryCount 为 0 时编排器会重试。
-   */
-  passed: boolean;
-  /** 0–1，对「hits 能否支撑回答 userQuestion / subTasks」的自评 */
-  evidenceScore: number;
-  /**
-   * passed 为 false 时：改写后的检索句，供再打回检索使用；
-   * 须脱离寒暄、保留实体，可合并 subTasks 关键词。通过时为 null。
-   */
-  refinedSearchQuery: string | null;
-  /** 给信息分析师或编排日志的一句备注；无则 null */
-  checkerNotes: string | null;
-  /** 未通过或需警示时的具体问题；通过且无警示时可为 [] */
-  issues: FactCheckerIssue[];
+    /**
+     * true：当前证据可交给信息分析师（含「确无命中、由分析师声明不足」的情形）。
+     * false：建议再打回知识管理员检索；仅当 retryCount 为 0 时编排器会重试。
+     */
+    passed: boolean;
+    /** 0–1，对「hits 能否支撑回答 userQuestion / subTasks」的自评 */
+    evidenceScore: number;
+    /**
+     * passed 为 false 时：改写后的检索句，供再打回检索使用；
+     * 须脱离寒暄、保留实体，可合并 subTasks 关键词。通过时为 null。
+     */
+    refinedSearchQuery: string | null;
+    /** 给信息分析师或编排日志的一句备注；无则 null */
+    checkerNotes: string | null;
+    /** 未通过或需警示时的具体问题；通过且无警示时可为 [] */
+    issues: FactCheckerIssue[];
 };
-
 /** 编排器传入本 Agent 的上下文（写入 HumanMessage） */
 export type FactCheckerInput = {
-  /** 用户本轮原始问题 */
-  userQuestion: string;
-  /** 入口接线员路由（本条消息内嵌 decision 各字段） */
-  intent: IntakeRoutingDecision["intent"];
-  needsRetrieval: boolean;
-  searchQuery: string;
-  subTasks: string[];
-  topics: string[];
-  language: IntakeRoutingDecision["language"];
-  /** 知识管理员产出 */
-  hits: KnowledgeHit[];
-  coverage: KnowledgeRetrievalResult["coverage"];
-  notes: string | null;
-  /**
-   * 已为第几次检索后的核查：0 表示首次（打回后编排器会 +1 再检索），
-   * 1 表示已重试过一次，此时不得再因「无命中」打回。
-   */
-  retryCount: number;
+    /** 用户本轮原始问题 */
+    userQuestion: string;
+    /** 入口接线员路由（本条消息内嵌 decision 各字段） */
+    intent: IntakeRoutingDecision["intent"];
+    needsRetrieval: boolean;
+    searchQuery: string;
+    subTasks: string[];
+    topics: string[];
+    language: IntakeRoutingDecision["language"];
+    /** 知识管理员产出 */
+    hits: KnowledgeHit[];
+    coverage: KnowledgeRetrievalResult["coverage"];
+    notes: string | null;
+    /**
+     * 已为第几次检索后的核查：0 表示首次（打回后编排器会 +1 再检索），
+     * 1 表示已重试过一次，此时不得再因「无命中」打回。
+     */
+    retryCount: number;
 };
-
 export const prompt = `你是 FamBrain 系统中的「事实核查员」（FactChecker）。
 
 ## 背景

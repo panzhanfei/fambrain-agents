@@ -5,58 +5,45 @@
  *
  * 需 Ollama embed + Chroma 已入库。
  */
-
 import { searchCorpusVectors } from "../../src/agentflow/knowledge/corpus-vector.ts";
 import { recallKeywordRetrieve } from "../../src/agentflow/knowledge/recall-keyword-retrieve.ts";
-
-function printHits(
-  label: string,
-  hits: { path: string; title: string; score?: number }[]
-) {
-  console.log(`\n=== ${label} (${hits.length}) ===`);
-  for (const [i, h] of hits.entries()) {
-    const score =
-      "score" in h && typeof h.score === "number"
-        ? ` score=${h.score.toFixed(3)}`
-        : "";
-    console.log(`${i + 1}. ${h.path}${score}`);
-    console.log(`   ${h.title}`);
-  }
-}
-
-async function main() {
-  const corpusUserId = process.argv[2]?.trim();
-  const query = process.argv.slice(3).join(" ").trim();
-
-  if (!corpusUserId || !query) {
-    console.error(
-      "Usage: pnpm run experiment:recall-compare -- <corpusUserId> \"<query>\""
-    );
-    process.exit(1);
-  }
-
-  console.log(`corpusUserId=${corpusUserId}`);
-  console.log(`query=${query}`);
-
-  const [vectorHits, recallHits] = await Promise.all([
-    searchCorpusVectors(corpusUserId, query, 8),
-    recallKeywordRetrieve(corpusUserId, query, 8),
-  ]);
-
-  printHits(
-    "LangChain + Chroma (searchCorpusVectors)",
-    vectorHits.map((h) => ({ path: h.path, title: h.title, score: h.score }))
-  );
-  printHits("Recall keyword (recallKeywordRetrieve)", recallHits);
-
-  const vectorPaths = new Set(vectorHits.map((h) => h.path));
-  const recallPaths = new Set(recallHits.map((h) => h.path));
-  const overlap = [...vectorPaths].filter((p) => recallPaths.has(p));
-  console.log(`\npath overlap: ${overlap.length} / vector ${vectorPaths.size}`);
-  if (overlap.length) console.log(overlap.join("\n"));
-}
-
+const printHits = (label: string, hits: {
+    path: string;
+    title: string;
+    score?: number;
+}[]) => {
+    console.log(`\n=== ${label} (${hits.length}) ===`);
+    for (const [i, h] of hits.entries()) {
+        const score = "score" in h && typeof h.score === "number"
+            ? ` score=${h.score.toFixed(3)}`
+            : "";
+        console.log(`${i + 1}. ${h.path}${score}`);
+        console.log(`   ${h.title}`);
+    }
+};
+const main = async () => {
+    const corpusUserId = process.argv[2]?.trim();
+    const query = process.argv.slice(3).join(" ").trim();
+    if (!corpusUserId || !query) {
+        console.error("Usage: pnpm run experiment:recall-compare -- <corpusUserId> \"<query>\"");
+        process.exit(1);
+    }
+    console.log(`corpusUserId=${corpusUserId}`);
+    console.log(`query=${query}`);
+    const [vectorHits, recallHits] = await Promise.all([
+        searchCorpusVectors(corpusUserId, query, 8),
+        recallKeywordRetrieve(corpusUserId, query, 8),
+    ]);
+    printHits("LangChain + Chroma (searchCorpusVectors)", vectorHits.map((h) => ({ path: h.path, title: h.title, score: h.score })));
+    printHits("Recall keyword (recallKeywordRetrieve)", recallHits);
+    const vectorPaths = new Set(vectorHits.map((h) => h.path));
+    const recallPaths = new Set(recallHits.map((h) => h.path));
+    const overlap = [...vectorPaths].filter((p) => recallPaths.has(p));
+    console.log(`\npath overlap: ${overlap.length} / vector ${vectorPaths.size}`);
+    if (overlap.length)
+        console.log(overlap.join("\n"));
+};
 main().catch((err) => {
-  console.error(err);
-  process.exit(1);
+    console.error(err);
+    process.exit(1);
 });

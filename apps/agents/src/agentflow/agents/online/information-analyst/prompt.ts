@@ -1,8 +1,4 @@
-import type {
-  KnowledgeHit,
-  KnowledgeRetrievalResult,
-} from "@/agentflow/agents/online/knowledge-manager";
-
+import type { KnowledgeHit, KnowledgeRetrievalResult, } from "@/agentflow/agents/online/knowledge-manager";
 /**
  * InformationAnalyst 系统指令（P0）。
  * 职责：基于检索片段（或空检索）归纳、对比并生成面向用户的最终回答。
@@ -10,41 +6,38 @@ import type {
  * 期望输出见 {@link InformationAnalystResult}；编排器将 answer 写入助手消息。
  */
 export type Citation = {
-  /** 引用来源路径，须与 KnowledgeHit.path 一致 */
-  path: string;
-  /** 支撑结论的原文短引（来自 hit.excerpt，勿编造） */
-  excerpt: string;
+    /** 引用来源路径，须与 KnowledgeHit.path 一致 */
+    path: string;
+    /** 支撑结论的原文短引（来自 hit.excerpt，勿编造） */
+    excerpt: string;
 };
-
 export type InformationAnalystResult = {
-  /** 面向用户的完整回答，Markdown _plain 文本即可 */
-  answer: string;
-  /** 文内结论对应的来源列表，至少在与履历/项目相关时提供 1 条 */
-  citations: Citation[];
-  /** 0–1，对回答可靠性的自评 */
-  confidence: number;
-  /**
-   * 证据不足时为 true：须在 answer 中明确说明「知识库未覆盖」，
-   * 且不得捏造用户经历。
-   */
-  insufficientEvidence: boolean;
+    /** 面向用户的完整回答，Markdown _plain 文本即可 */
+    answer: string;
+    /** 文内结论对应的来源列表，至少在与履历/项目相关时提供 1 条 */
+    citations: Citation[];
+    /** 0–1，对回答可靠性的自评 */
+    confidence: number;
+    /**
+     * 证据不足时为 true：须在 answer 中明确说明「知识库未覆盖」，
+     * 且不得捏造用户经历。
+     */
+    insufficientEvidence: boolean;
 };
-
 /** 编排器传入本 Agent 的上下文（写入 HumanMessage） */
 export type InformationAnalystInput = {
-  /** 用户本轮原始问题 */
-  userQuestion: string;
-  /** 入口接线员的路由信息（语言、子任务等） */
-  language: "zh" | "en" | "mixed";
-  subTasks: string[];
-  /** 知识管理员产出；无检索时为空数组 */
-  hits: KnowledgeHit[];
-  coverage: KnowledgeRetrievalResult["coverage"];
-  notes: string | null;
-  /** Mem0 + LangMem；无则为 null */
-  memoryBlock: string | null;
+    /** 用户本轮原始问题 */
+    userQuestion: string;
+    /** 入口接线员的路由信息（语言、子任务等） */
+    language: "zh" | "en" | "mixed";
+    subTasks: string[];
+    /** 知识管理员产出；无检索时为空数组 */
+    hits: KnowledgeHit[];
+    coverage: KnowledgeRetrievalResult["coverage"];
+    notes: string | null;
+    /** Mem0 + LangMem；无则为 null */
+    memoryBlock: string | null;
 };
-
 export const prompt = `你是 FamBrain 系统中的「信息分析师」（InformationAnalyst）。
 
 ## 背景

@@ -7,197 +7,193 @@
  *
  * --llm  额外调用 Ollama 跑 completeFactCheck（需本地 Ollama 已启动）
  */
-
-import {
-  buildRuleBasedFactCheck,
-  completeFactCheck,
-  type FactCheckerInput,
-  type FactCheckerResult,
-} from "../src/agentflow/agents/online/fact-checker/index.ts";
-
+import { buildRuleBasedFactCheck, completeFactCheck, type FactCheckerInput, type FactCheckerResult, } from "../src/agentflow/agents/online/fact-checker/index.ts";
 const runLlm = process.argv.includes("--llm");
-
 type Case = {
-  name: string;
-  input: FactCheckerInput;
-  expect: (r: FactCheckerResult) => void;
+    name: string;
+    input: FactCheckerInput;
+    expect: (r: FactCheckerResult) => void;
 };
-
 const cases: Case[] = [
-  {
-    name: "无需检索 → 直接放行",
-    input: {
-      userQuestion: "React 和 Vue 的区别是什么？",
-      intent: "direct_answer",
-      needsRetrieval: false,
-      searchQuery: "",
-      subTasks: [],
-      topics: [],
-      language: "zh",
-      hits: [],
-      coverage: "none",
-      notes: null,
-      retryCount: 0,
-    },
-    expect: (r) => {
-      if (!r.passed) throw new Error("应 passed=true");
-    },
-  },
-  {
-    name: "首次无命中 → 打回并带 refinedSearchQuery",
-    input: {
-      userQuestion: "城管平台用了什么技术？",
-      intent: "retrieve_and_answer",
-      needsRetrieval: true,
-      searchQuery: "城管",
-      subTasks: ["列出技术栈"],
-      topics: ["project"],
-      language: "zh",
-      hits: [],
-      coverage: "none",
-      notes: null,
-      retryCount: 0,
-    },
-    expect: (r) => {
-      if (r.passed) throw new Error("应 passed=false");
-      if (!r.refinedSearchQuery?.trim()) {
-        throw new Error("应提供 refinedSearchQuery");
-      }
-    },
-  },
-  {
-    name: "已重试仍无命中 → 强制放行",
-    input: {
-      userQuestion: "城管平台用了什么技术？",
-      intent: "retrieve_and_answer",
-      needsRetrieval: true,
-      searchQuery: "西安奥卡云 城市管理平台 React TypeScript",
-      subTasks: [],
-      topics: ["project"],
-      language: "zh",
-      hits: [],
-      coverage: "none",
-      notes: null,
-      retryCount: 1,
-    },
-    expect: (r) => {
-      if (!r.passed) throw new Error("retryCount=1 应 passed=true");
-      if (!r.checkerNotes?.includes("未覆盖")) {
-        throw new Error("应有分析师勿编造的 checkerNotes");
-      }
-    },
-  },
-  {
-    name: "命中相关 → 通过",
-    input: {
-      userQuestion: "城管平台用了什么技术？",
-      intent: "retrieve_and_answer",
-      needsRetrieval: true,
-      searchQuery: "城市管理平台 React TypeScript",
-      subTasks: ["技术栈"],
-      topics: ["project"],
-      language: "zh",
-      hits: [
-        {
-          path: "src/doc/users/demo/corpus/projects/城市管理平台.md",
-          title: "城市管理平台",
-          excerpt: "技术栈：React 18、TypeScript、Vite、Ant Design、微信小程序。",
-          relevance: 0.88,
+    {
+        name: "无需检索 → 直接放行",
+        input: {
+            userQuestion: "React 和 Vue 的区别是什么？",
+            intent: "direct_answer",
+            needsRetrieval: false,
+            searchQuery: "",
+            subTasks: [],
+            topics: [],
+            language: "zh",
+            hits: [],
+            coverage: "none",
+            notes: null,
+            retryCount: 0,
         },
-      ],
-      coverage: "partial",
-      notes: null,
-      retryCount: 0,
-    },
-    expect: (r) => {
-      if (!r.passed) throw new Error("应 passed=true");
-      if (r.evidenceScore < 0.4) throw new Error("evidenceScore 过低");
-    },
-  },
-  {
-    name: "命中跑偏 → 打回",
-    input: {
-      userQuestion: "E-HR 用的什么数据库？",
-      intent: "retrieve_and_answer",
-      needsRetrieval: true,
-      searchQuery: "E-HR 数据库 Prisma",
-      subTasks: [],
-      topics: ["project"],
-      language: "zh",
-      hits: [
-        {
-          path: "src/doc/users/demo/corpus/projects/sentinel.md",
-          title: "Sentinel 监控",
-          excerpt: "Prometheus Grafana 告警规则与大盘配置。",
-          relevance: 0.3,
+        expect: (r) => {
+            if (!r.passed)
+                throw new Error("应 passed=true");
         },
-      ],
-      coverage: "partial",
-      notes: null,
-      retryCount: 0,
     },
-    expect: (r) => {
-      if (r.passed) throw new Error("应 passed=false（命中与问题无关）");
-      if (!r.refinedSearchQuery?.toLowerCase().includes("e-hr")) {
-        throw new Error("refinedSearchQuery 应含 E-HR 相关词");
-      }
+    {
+        name: "首次无命中 → 打回并带 refinedSearchQuery",
+        input: {
+            userQuestion: "城管平台用了什么技术？",
+            intent: "retrieve_and_answer",
+            needsRetrieval: true,
+            searchQuery: "城管",
+            subTasks: ["列出技术栈"],
+            topics: ["project"],
+            language: "zh",
+            hits: [],
+            coverage: "none",
+            notes: null,
+            retryCount: 0,
+        },
+        expect: (r) => {
+            if (r.passed)
+                throw new Error("应 passed=false");
+            if (!r.refinedSearchQuery?.trim()) {
+                throw new Error("应提供 refinedSearchQuery");
+            }
+        },
     },
-  },
+    {
+        name: "已重试仍无命中 → 强制放行",
+        input: {
+            userQuestion: "城管平台用了什么技术？",
+            intent: "retrieve_and_answer",
+            needsRetrieval: true,
+            searchQuery: "西安奥卡云 城市管理平台 React TypeScript",
+            subTasks: [],
+            topics: ["project"],
+            language: "zh",
+            hits: [],
+            coverage: "none",
+            notes: null,
+            retryCount: 1,
+        },
+        expect: (r) => {
+            if (!r.passed)
+                throw new Error("retryCount=1 应 passed=true");
+            if (!r.checkerNotes?.includes("未覆盖")) {
+                throw new Error("应有分析师勿编造的 checkerNotes");
+            }
+        },
+    },
+    {
+        name: "命中相关 → 通过",
+        input: {
+            userQuestion: "城管平台用了什么技术？",
+            intent: "retrieve_and_answer",
+            needsRetrieval: true,
+            searchQuery: "城市管理平台 React TypeScript",
+            subTasks: ["技术栈"],
+            topics: ["project"],
+            language: "zh",
+            hits: [
+                {
+                    path: "src/doc/users/demo/corpus/projects/城市管理平台.md",
+                    title: "城市管理平台",
+                    excerpt: "技术栈：React 18、TypeScript、Vite、Ant Design、微信小程序。",
+                    relevance: 0.88,
+                },
+            ],
+            coverage: "partial",
+            notes: null,
+            retryCount: 0,
+        },
+        expect: (r) => {
+            if (!r.passed)
+                throw new Error("应 passed=true");
+            if (r.evidenceScore < 0.4)
+                throw new Error("evidenceScore 过低");
+        },
+    },
+    {
+        name: "命中跑偏 → 打回",
+        input: {
+            userQuestion: "E-HR 用的什么数据库？",
+            intent: "retrieve_and_answer",
+            needsRetrieval: true,
+            searchQuery: "E-HR 数据库 Prisma",
+            subTasks: [],
+            topics: ["project"],
+            language: "zh",
+            hits: [
+                {
+                    path: "src/doc/users/demo/corpus/projects/sentinel.md",
+                    title: "Sentinel 监控",
+                    excerpt: "Prometheus Grafana 告警规则与大盘配置。",
+                    relevance: 0.3,
+                },
+            ],
+            coverage: "partial",
+            notes: null,
+            retryCount: 0,
+        },
+        expect: (r) => {
+            if (r.passed)
+                throw new Error("应 passed=false（命中与问题无关）");
+            if (!r.refinedSearchQuery?.toLowerCase().includes("e-hr")) {
+                throw new Error("refinedSearchQuery 应含 E-HR 相关词");
+            }
+        },
+    },
 ];
-
-function printResult(name: string, r: FactCheckerResult) {
-  console.log(`  passed=${r.passed} score=${r.evidenceScore.toFixed(2)}`);
-  if (r.refinedSearchQuery) console.log(`  refinedSearchQuery: ${r.refinedSearchQuery}`);
-  if (r.checkerNotes) console.log(`  checkerNotes: ${r.checkerNotes}`);
-  if (r.issues.length) {
-    console.log(`  issues: ${r.issues.map((i) => i.code).join(", ")}`);
-  }
-}
-
-async function main() {
-  console.log("=== FactChecker 规则兜底（buildRuleBasedFactCheck）===\n");
-  let failed = 0;
-
-  for (const c of cases) {
-    process.stdout.write(`• ${c.name} … `);
-    try {
-      const r = buildRuleBasedFactCheck(c.input);
-      c.expect(r);
-      console.log("OK");
-      printResult(c.name, r);
-    } catch (e) {
-      failed += 1;
-      console.log("FAIL");
-      console.error(`  ${e instanceof Error ? e.message : String(e)}`);
+const printResult = (name: string, r: FactCheckerResult) => {
+    console.log(`  passed=${r.passed} score=${r.evidenceScore.toFixed(2)}`);
+    if (r.refinedSearchQuery)
+        console.log(`  refinedSearchQuery: ${r.refinedSearchQuery}`);
+    if (r.checkerNotes)
+        console.log(`  checkerNotes: ${r.checkerNotes}`);
+    if (r.issues.length) {
+        console.log(`  issues: ${r.issues.map((i) => i.code).join(", ")}`);
     }
-    console.log();
-  }
-
-  if (runLlm) {
-    console.log("=== FactChecker LLM（completeFactCheck，需 Ollama）===\n");
-    const sample = cases[3].input;
-    try {
-      const r = await completeFactCheck(sample);
-      console.log("• 有命中样本 … OK");
-      printResult("LLM 样本", r);
-      if (!r.passed) {
-        failed += 1;
-        console.error("  期望 LLM 也通过有命中样本");
-      }
-    } catch (e) {
-      failed += 1;
-      console.error("• LLM 调用失败:", e instanceof Error ? e.message : String(e));
+};
+const main = async () => {
+    console.log("=== FactChecker 规则兜底（buildRuleBasedFactCheck）===\n");
+    let failed = 0;
+    for (const c of cases) {
+        process.stdout.write(`• ${c.name} … `);
+        try {
+            const r = buildRuleBasedFactCheck(c.input);
+            c.expect(r);
+            console.log("OK");
+            printResult(c.name, r);
+        }
+        catch (e) {
+            failed += 1;
+            console.log("FAIL");
+            console.error(`  ${e instanceof Error ? e.message : String(e)}`);
+        }
+        console.log();
     }
-    console.log();
-  } else {
-    console.log("跳过 LLM（加 --llm 可测 completeFactCheck + Ollama）\n");
-  }
-
-  if (failed > 0) {
-    console.error(`共 ${failed} 项失败`);
-    process.exit(1);
-  }
-  console.log("全部通过。");
-}
-
+    if (runLlm) {
+        console.log("=== FactChecker LLM（completeFactCheck，需 Ollama）===\n");
+        const sample = cases[3].input;
+        try {
+            const r = await completeFactCheck(sample);
+            console.log("• 有命中样本 … OK");
+            printResult("LLM 样本", r);
+            if (!r.passed) {
+                failed += 1;
+                console.error("  期望 LLM 也通过有命中样本");
+            }
+        }
+        catch (e) {
+            failed += 1;
+            console.error("• LLM 调用失败:", e instanceof Error ? e.message : String(e));
+        }
+        console.log();
+    }
+    else {
+        console.log("跳过 LLM（加 --llm 可测 completeFactCheck + Ollama）\n");
+    }
+    if (failed > 0) {
+        console.error(`共 ${failed} 项失败`);
+        process.exit(1);
+    }
+    console.log("全部通过。");
+};
 main();
