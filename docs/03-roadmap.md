@@ -89,7 +89,143 @@
 
 > **风险：** 10 天内 17 项全 ✅ 不现实；**验收以 A1～A6、T1 必做项、T2 为准**。
 >
-> **消坑节奏：** D7～D10 只做 **Agent 触达 + 基础回归**；KM 空 hits、跨轮重复检索等 **集中消坑** 放在 **核心 Agent 全部接完后** 的独立 sprint（约 4～5 天），见 [坑点 §三 · 集中消坑计划](./04-pitfalls.md#三集中消坑计划核心-agent-完成后--4-天)。顺序：消坑 D1～D4（KM / 召回 / 多轮 / 回归）→ **消坑 D5-消坑**（跨轮 cache，**最后做**）。
+> **消坑节奏（2026-06 更新）：** P1 十日开发（D1～D9）已基本完成；**质量冲刺 10 日 + 总复盘 1 日** 见下节 [质量冲刺 — 10 日计划](#质量冲刺--10-日计划2026-06)。原 [坑点 §三 · 集中消坑计划](./04-pitfalls.md#三集中消坑计划核心-agent-完成后--4-天) 的 D1～D5-消坑 / R6 条目并入该计划按天交付。
+
+---
+
+## 质量冲刺 — 10 日计划（2026-06）
+
+**定位：** 在线 Agent 复盘已完成（Intake → KM → FactChecker → ContentOrganizer → Analyst；摘要分支 ContentSummarizer）。本阶段不新增 Agent，专注 **Golden 回归、检索质量、跨轮 cache、系统化 eval、SLO/可观测**，并在第 11 天做全链路总复盘。
+
+**原则：**
+
+1. **Golden 先行** — 先测后改，每日改完跑一遍分数表。
+2. **依赖顺序** — Golden 基线 → cache → KM 硬坑 → eval → SLO；**rerank 可砍 scope**，用 path 加权 / topics 引导顶替。
+3. **完成标准对齐** [坑点 §三 完成标准](./04-pitfalls.md#三集中消坑计划核心-agent-完成后--4-天)。
+
+### 总览
+
+| 阶段 | 日历 | 焦点 | 对应坑点 / 验收 |
+|------|------|------|-----------------|
+| 离线复盘 | **第 1 天** | KnowledgeIndexer + DocParser + `@fambrain/corpus` | 搞清语料如何进 Chroma |
+| Golden | **第 2～3 天** | G1～G5 自动化 + 基线分数 | D10、A6 |
+| Cache | **第 4～5 天** | 检索 cache + Intake 重复问 | D5-2、P0-11、#19 |
+| KM 质量 | **第 6～7 天** | coalesce、枚举 R6、可选 rerank | D3-2、R6-1、D3-10 |
+| Eval | **第 8～9 天** | 系统化 eval 脚本 + 报告 | A6 扩展 |
+| SLO / 日志 | **第 10 天** | 耗时、token、结构化记录 | #18 待做 |
+| **总复盘** | **第 11 天** | 离线 + 在线全链路、坑点表、L4 gap | 文档同步 |
+
+### 第 1 天 — 离线 Agent 复盘
+
+| 顺序 | Agent / 模块 | 路径 | 要搞清什么 | 验证 |
+|------|--------------|------|------------|------|
+| 1 | **KnowledgeIndexer** 知识入库师 | `agents/offline/knowledge-indexer/` | md 扫描 → 切块 → embed → Chroma；metadata 里 `path`/`title` | `pnpm run index:corpus`、`verify:embed-batches` |
+| 2 | **DocParser** 文档解析师 | `agents/offline/doc-parser/` | PDF/Word/PPT/图片 → corpus md → 可选入库 | `pnpm run verify:doc-parser` |
+| 3 | **@fambrain/corpus** | `packages/corpus/` | 路径约定、`indexCorpusDocuments`、`searchCorpusVectors` | 对照在线 KM L1a |
+| 4（可选） | ContentSummarizer CLI | `summarize:document` | 离线摘要工具，非主链 | `verify:content-summarizer` |
+
+**当日产出：** 离线链路笔记（或复盘摘要）；确认「在线 hits 从哪来」。
+
+### 第 2～3 天 — Golden 回归（D10）
+
+| 交付 | 说明 |
+|------|------|
+| 脚本 | `scripts/golden-regression.ts`（或扩展现有 verify），自动跑 G1～G5 |
+| 扩展用例 | **G-工作经历**（4 家公司枚举）；**G4-重复问**（同句再问，为 cache 验收预留） |
+| 基线 | 记录首次通过率（目标：**≥4/5**；A6 为 ≥7/8 条时可并入 G-工作经历 + G4-重复问） |
+
+**参考问法：** 见上文 [Golden 问法（回归）](#golden-问法回归)。
+
+**命令（规划）：**
+
+```bash
+cd apps/agents
+pnpm run golden:regression   # 待实现；落地前可手动 P0 自测 + verify:* 组合
+```
+
+### 第 4～5 天 — 检索 cache + 跨轮重复（消坑 D5-消坑）
+
+| 交付 | 改动面 | 通过标准 |
+|------|--------|----------|
+| **检索结果 cache** | `retrieveKnowledge` / `retrievalNode`；key = `corpusUserId + normalizedSearchQuery`；TTL 5～30min | 同会话连续两问 G4 原文，第二次不全量走向量检索 |
+| **Intake 重复问识别** | `intake-coordinator` prompt + `routeAfterIntake` | 归一化后与上一轮 user 相同 + 上轮为检索回答 → 复用或简答 |
+| **FactChecker cache hit** | 可选：cache hit 时规则快检或跳过 LLM | 日志可见 `cacheHit` |
+
+**坑点：** [§2.2 FactChecker 与跨轮重复检索](./04-pitfalls.md#22-factchecker-与跨轮重复检索2026-06--d5-联调)、P0-11、#19。
+
+### 第 6～7 天 — KM 检索质量（消坑 D1 / D2 / R6）
+
+按优先级，**不必一次做完 rerank**：
+
+| 优先级 | 项 | 目标 | 坑 ID |
+|--------|-----|------|-------|
+| P0 | **coalesce 硬兜底** | `candidateCount > 0` 时最终 `hits` 不得为空 | D3-2 |
+| P0 | **枚举型 query** | 「哪几家公司上过班」→ hits/answer 覆盖 experience 下 **4 家** | R6-1 |
+| P1 | path 加权 / topics | G3「项目+技术」优先 `experience/`、`personal/` | D3-10 |
+| P2 | 向量 **rerank** | 降低 FactChecker 打回率；时间不够则延后 | §2.2 +4 |
+
+**Golden：** G-工作经历、G4 稳定；同句再问 hits 数量不骤降（R6-1）。
+
+### 第 8～9 天 — 系统化 eval
+
+**目标：** 从「散落的 `verify:*`」演进为可重复跑的 eval MVP（不必一步到位 MLflow/LangSmith）。
+
+| 交付 | 说明 |
+|------|------|
+| `scripts/eval/golden.json` | 问法 + 断言（path 含、hits≥N、coverage、无幻觉关键词） |
+| `scripts/eval/run-eval.ts` | 调 `runPipelineStream` 或 KM 单测，输出 JSON/Markdown 报告 |
+| **最少 4 项指标** | Golden 通过率；candidates>0 但 hits=0 率（→0）；cache 命中率；端到端 `latencyMs` |
+
+**与 A6 关系：** eval 脚本即 A6 的自动化延伸。
+
+### 第 10 天 — SLO + 记录（#18 剩余）
+
+| 项 | 做法 | 优先级 |
+|----|------|--------|
+| **逐步耗时** | Pipeline 每节点记录 `latencyMs`（intake / retrieval / fact_checker / analyst） | P0 |
+| **Token 估算** | Analyst 流式结束后记录 prompt/ completion 长度或 Ollama 返回 | P1 |
+| **结构化日志** | 每轮一条 JSON：`conversationId`、`steps[]`、`cacheHit`、`issueCodes` | P0 |
+| **前端** | 引用列表 UI、完整调试面板 | P2，时间不够只打日志 |
+
+**坑点：** [#18 推理黑盒](./04-pitfalls.md) 待做项。
+
+### 第 11 天 — 全面总复盘
+
+| 产出 | 内容 |
+|------|------|
+| 全链路图 | 离线入库 + 在线编排（含 cache/eval 新节点） |
+| 分数对比 | Golden / eval 第 1 天 vs 第 10 天 |
+| 坑点表 | 更新 [04-pitfalls.md](./04-pitfalls.md) 中 D3-*、D5-2、R6-* 为 ✅ / 🔄 |
+| 能力自评 | L3 → L4 gap 一页纸（eval 闭环、生产就绪度） |
+| 文档 | 同步 [02-agent-flows.md](./02-agent-flows.md)、本路线图状态列 |
+
+### 10 日冲刺 — 完成标准（勾选）
+
+- [ ] 离线 Agent 复盘笔记（KnowledgeIndexer + DocParser + corpus 包）
+- [ ] Golden **G1～G5 ≥4 条稳定通过**（脚本可重复跑）
+- [ ] **D3-2 不可复现**（12 candidates → hits ≥1）
+- [ ] **D5-2**：同会话 G4 连续两问，第二次命中 cache 或 Intake 复用
+- [ ] **R6-1**：列举型「哪几家公司」→ 4 家且同句再问一致
+- [ ] **eval MVP**：`run-eval` 输出报告（通过率 + 指标 4 项）
+- [ ] **SLO 日志**：每轮至少含 step 耗时；可选 token
+- [ ] 坑点表与路线图状态已更新
+- [ ] 第 11 天总复盘文档或会话纪要归档
+
+### 每日建议节奏
+
+```text
+上午：实现 / 改坑
+下午：跑 Golden + eval，更新分数表
+晚间：只记 3 行 — 今天改了什么、通过率、明天一条 P0
+```
+
+### 范围裁剪（时间不够时）
+
+| 可砍 | 不可砍 |
+|------|--------|
+| rerank、前端 citation UI、LangSmith 接入 | Golden 基线、D3-2 coalesce、检索 cache、eval MVP |
+
+---
 
 ### P1 验收标准
 

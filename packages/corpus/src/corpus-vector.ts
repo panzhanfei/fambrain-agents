@@ -61,12 +61,42 @@ export const searchCorpusVectors = async (corpusUserId: string, searchQuery: str
 };
 export const indexCorpusDocuments = async (corpusUserId: string, docs: Document[], logger: Logger, options: EmbedIndexOptions = getEmbedIndexOptions()): Promise<CorpusVectorIndexResult> => {
     const collectionName = corpusCollectionName(corpusUserId);
+    const chromaUrl = getChromaServerUrl();
+    const { ollama } = getAgentsConfig();
+    logger.info({
+        step: "4a",
+        corpusUserId,
+        collectionName,
+        chromaUrl,
+        embedModel: ollama.models.embed,
+        ollamaBaseUrl: ollama.baseUrl,
+        chunkCount: docs.length,
+    }, "corpus index: config");
+    const tDel = Date.now();
     await deleteChromaCollection(collectionName);
-    logger.info({ corpusUserId, collectionName }, "deleted old collection");
+    logger.info({
+        step: "4b",
+        corpusUserId,
+        collectionName,
+        durationMs: Date.now() - tDel,
+    }, "corpus index: deleted old collection (full rebuild)");
     if (docs.length === 0) {
         return { collectionName, chunkCount: 0 };
     }
+    const tStore = Date.now();
     const vectorStore = new Chroma(createOllamaEmbeddings(), chromaLibArgs(collectionName));
+    logger.info({
+        step: "4c",
+        corpusUserId,
+        collectionName,
+        durationMs: Date.now() - tStore,
+    }, "corpus index: chroma vector store ready");
     await addDocumentsWithEmbedLimit(vectorStore, docs, logger, options);
+    logger.info({
+        step: "4d",
+        corpusUserId,
+        collectionName,
+        chunkCount: docs.length,
+    }, "corpus index: all chunks embedded and stored");
     return { collectionName, chunkCount: docs.length };
 };

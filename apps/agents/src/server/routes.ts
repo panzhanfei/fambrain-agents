@@ -1,4 +1,5 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
+import { getLangSmithStatus } from "@fambrain/agent-config/langsmith";
 import type { AgentStreamEvent } from "@fambrain/agent-types";
 import { runAgentStream } from "@/agentflow";
 import { requireAuth } from "@/server/auth-middleware";
@@ -81,8 +82,18 @@ export const handlePipelineStream = async (req: IncomingMessage, res: ServerResp
     }
 };
 export const handleHealth = (_req: IncomingMessage, res: ServerResponse): void => {
+    const langSmith = getLangSmithStatus();
     res.writeHead(200, { "Content-Type": "application/json" });
-    res.end(JSON.stringify({ ok: true, service: "fambrain-agents" }));
+    res.end(JSON.stringify({
+        ok: true,
+        service: "fambrain-agents",
+        langSmith: {
+            enabled: langSmith.enabled,
+            project: langSmith.project,
+            apiKeyConfigured: langSmith.apiKeyConfigured,
+            uiUrl: langSmith.uiUrl,
+        },
+    }));
 };
 export const handleNotFound = (res: ServerResponse): void => {
     res.writeHead(404, { "Content-Type": "application/json" });

@@ -6,7 +6,7 @@
 
 基于 **Next.js（App Router）** 的家庭协作型对话应用：注册登录、成员审核、会话与消息持久化，以及 **P0 多 Agent 聊天闭环**（意图路由 → 知识库检索 → 归纳回答，SSE 流式）。
 
-**当前进度（2026-06-02）：** 在线 LangGraph 五 Agent 闭环 ✅；**D7 DocParser**、**D8 Mem0/LangMem**、**D9 ContentSummarizer** 与 **MCP / Recall / Vercel AI** 实验脚本已触达。下一步 **D10 Golden 回归**；消坑见 [坑点 §三](./04-pitfalls.md#三集中消坑计划核心-agent-完成后--4-天)。详见 [路线图](./03-roadmap.md) · [流程图](./02-agent-flows.md) · [实验](../experiments/README.md)。
+**当前进度（2026-06）：** 在线 LangGraph 多 Agent 闭环 ✅；`@fambrain/corpus` / `@fambrain/agent-memory` 已抽包。**下一步：** [质量冲刺 10 日计划](./03-roadmap.md#质量冲刺--10-日计划2026-06)；消坑见 [坑点 §三](./04-pitfalls.md#三集中消坑计划核心-agent-完成后--并入-10-日质量冲刺)。详见 [路线图](./03-roadmap.md) · [流程图](./02-agent-flows.md) · [实验](../experiments/README.md)。
 
 ## 应用层技术栈
 

@@ -1,16 +1,17 @@
 /** 各 Agent 控制台日志（服务端调试用） */
-export type AgentLogName = "IntakeCoordinator" | "KnowledgeManager" | "FactChecker" | "ContentOrganizer" | "InformationAnalyst" | "Pipeline" | "Mem0";
+export type AgentLogName = "IntakeCoordinator" | "KnowledgeManager" | "FactChecker" | "ContentOrganizer" | "InformationAnalyst" | "KnowledgeIndexer" | "Pipeline" | "Mem0";
 const AGENT_EMOJI: Record<AgentLogName, string> = {
     IntakeCoordinator: "🎫",
     KnowledgeManager: "📚",
     FactChecker: "🔍",
     ContentOrganizer: "📋",
     InformationAnalyst: "🧠",
+    KnowledgeIndexer: "📦",
     Pipeline: "🛤️",
     Mem0: "💾",
 };
 /** 仅这些 Agent 打印中间步骤（logAgentStep）；其余 Agent 只打 📥/📤 */
-const STEP_VERBOSE_AGENTS: ReadonlySet<AgentLogName> = new Set(["FactChecker"]);
+const STEP_VERBOSE_AGENTS: ReadonlySet<AgentLogName> = new Set(["FactChecker", "KnowledgeIndexer"]);
 const shouldLogAgentOut = (agent: AgentLogName, label: string): boolean => {
     if (agent !== "Pipeline")
         return true;

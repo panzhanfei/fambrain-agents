@@ -1,3 +1,5 @@
+import { ensureAgentsRuntime } from "@/config";
+import { buildLangGraphRunConfig, } from "@fambrain/agent-config/langsmith";
 import { logAgentIn, logAgentOut } from "@fambrain/agent-shared/agent-log";
 import type { AgentPipelineContext, AgentPipelineResult, AgentStreamEvent, DbChatTurn, } from "@fambrain/agent-types";
 import { getCompiledPipelineGraph } from "./compile";
@@ -60,6 +62,7 @@ const shouldRetryRetrieval = (state: PipelineGraphState): boolean => {
  * custom 流转发 thinking / assistant，由 pipeline 映射为 AgentStreamEvent。
  */
 export async function* runPipelineStream(history: DbChatTurn[], context: AgentPipelineContext): AsyncGenerator<AgentStreamEvent, AgentPipelineResult> {
+    ensureAgentsRuntime();
     const userQuestion = lastUserQuestion(history);
     logAgentIn("Pipeline", "本轮开始", {
         userQuestion,
@@ -87,6 +90,12 @@ export async function* runPipelineStream(history: DbChatTurn[], context: AgentPi
     yield { type: "step", name: "intake", status: "running" };
     const stream = await graph.stream(input as Parameters<typeof graph.stream>[0], {
         streamMode: ["updates", "values", "custom"],
+        ...buildLangGraphRunConfig({
+            conversationId: context.conversationId,
+            corpusUserId: context.corpusUserId,
+            actorUserId: context.actorUserId,
+            userQuestion,
+        }),
     });
     const finishStep = function* (name: PipelineStepName) {
         if (activeStep === name) {

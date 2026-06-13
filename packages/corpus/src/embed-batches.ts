@@ -36,16 +36,29 @@ export const addDocumentsWithEmbedLimit = async (vectorStore: Chroma, docs: Docu
     logger.info({ chunkCount: docs.length, batchCount: batches.length, concurrency, batchSize }, "embed batches scheduled");
     let indexed = 0;
     await Promise.all(batches.map((batch, batchIndex) => limit(async () => {
+        const tBatch = Date.now();
+        const batchIds = batch.map((doc) => doc.id ?? "");
+        const batchPaths = batch.map((doc) => String(doc.metadata.path ?? ""));
+        logger.info({
+            step: "4c-embed-start",
+            batchIndex: batchIndex + 1,
+            batchCount: batches.length,
+            batchSize: batch.length,
+            docIds: batchIds,
+            paths: batchPaths,
+        }, "embed batch started");
         await vectorStore.addDocuments(batch, {
-            ids: batch.map((doc) => doc.id ?? ""),
+            ids: batchIds,
         });
         indexed += batch.length;
         logger.info({
+            step: "4c-embed-done",
             batchIndex: batchIndex + 1,
             batchCount: batches.length,
             batchSize: batch.length,
             indexed,
             total: docs.length,
+            durationMs: Date.now() - tBatch,
         }, "embed batch done");
     })));
 };

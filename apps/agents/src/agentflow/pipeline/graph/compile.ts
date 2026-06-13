@@ -274,7 +274,7 @@ const buildPipelineGraph = () => {
 let compiledGraph: ReturnType<ReturnType<typeof buildPipelineGraph>["compile"]> | null = null;
 export const getCompiledPipelineGraph = () => {
     if (!compiledGraph) {
-        compiledGraph = buildPipelineGraph().compile();
+        compiledGraph = buildPipelineGraph().compile({ name: "fambrain-pipeline" });
     }
     return compiledGraph;
 };

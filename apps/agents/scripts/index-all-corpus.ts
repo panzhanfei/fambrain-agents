@@ -5,10 +5,13 @@
  * 用法：
  *   pnpm run index:corpus
  *   LOG_LEVEL=debug pnpm run index:corpus
- *
- * 依赖仓库根目录 .env（见 apps/agents/package.json 的 --env-file）
  */
 import { indexAllCorpora } from "@fambrain/agents";
+import { bootstrapAgentsRuntime, logLangSmithStartup, } from "@/config";
+
+const { langSmith } = bootstrapAgentsRuntime();
+logLangSmithStartup(langSmith, console.log, "[index:corpus]");
+
 indexAllCorpora()
     .then(() => process.exit(0))
     .catch((err) => {

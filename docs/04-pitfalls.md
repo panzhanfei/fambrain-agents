@@ -248,18 +248,21 @@
 
 ---
 
-## 三、集中消坑计划（核心 Agent 完成后 · 4 天）
+## 三、集中消坑计划（核心 Agent 完成后 · 并入 10 日质量冲刺）
 
-> **前置：** 核心 Agent 与 D9 触达已完成 — `FactChecker`（D5）、`ContentOrganizer`（D6）、`DocParser`（D7）、`ContentSummarizer`（D9）、实验脚本（MCP/Recall/Vercel AI）。下一步 **D10 Golden 回归**，再开 **消坑 sprint**。
+> **前置：** 核心 Agent 与 D9 触达已完成 — `FactChecker`（D5）、`ContentOrganizer`（D6）、`DocParser`（D7）、`ContentSummarizer`（D9）、实验脚本（MCP/Recall/Vercel AI）。
+>
+> **执行计划：** 按天排期见 [路线图 · 质量冲刺 10 日计划](./03-roadmap.md#质量冲刺--10-日计划2026-06)。下表为**坑 ID → 交付**对照，原「约 4 天 sprint」已扩展为 **10 工作日 + 第 11 天总复盘**。
 
-| 天 | 焦点 | 目标坑 ID | 交付 |
-|----|------|-----------|------|
-| **消坑 D1** | KM 检索闭环 | D3-2～D3-5 | 向量 fallback；candidates 非空 → hits 必非空；Golden G4 稳定 |
-| **消坑 D2** | 召回质量 | D3-6～D3-7、D3-10 | path 去重；常量集中；G3 path 分布改善 |
-| **消坑 D3** | 多轮上下文 | D3-8～D3-9、P0-10 | Intake/Analyst 短历史；pipeline 检索摘要 |
-| **消坑 D4** | 回归 + 文档 | D3-11～D3-12、P0-6、A6 | G1～G5 全自动脚本；docs/流程图/sync；FactChecker 与 KM 联调 |
-| **消坑 D5-消坑** | 跨轮少重复 | D5-2、P0-11；可选 D5-4 | 检索 cache；Intake 同句重复问；Golden：连续两问 G4 第二次命中 cache 或简答 |
-| **消坑 R6**（复盘后） | 工作经历枚举 + 追问一致 | R6-1、R6-2 | 列举型召回 + path 聚合；Intake/Analyst 追问继承；Golden 4 家 + 表格追问；与 D3-6/D3-9/D3-10 联调 |
+| 天 | 焦点 | 目标坑 ID | 交付 | 质量冲刺日历 |
+|----|------|-----------|------|--------------|
+| **消坑 D1** | KM 检索闭环 | D3-2～D3-5 | 向量 fallback；candidates 非空 → hits 必非空；Golden G4 稳定 | **第 6～7 天** |
+| **消坑 D2** | 召回质量 | D3-6～D3-7、D3-10 | path 去重；常量集中；G3 path 分布改善 | **第 6～7 天** |
+| **消坑 D3** | 多轮上下文 | D3-8～D3-9、P0-10 | Intake/Analyst 短历史；pipeline 检索摘要 | 与 R6 联调 |
+| **消坑 D4** | 回归 + 文档 | D3-11～D3-12、P0-6、A6 | G1～G5 全自动脚本；docs/流程图/sync | **第 2～3 天** + **第 11 天** |
+| **消坑 D5-消坑** | 跨轮少重复 | D5-2、P0-11；可选 D5-4 | 检索 cache；Intake 同句重复问 | **第 4～5 天** |
+| **消坑 R6** | 工作经历枚举 + 追问一致 | R6-1、R6-2 | 列举型召回 + path 聚合；Golden 4 家 + 表格追问 | **第 6～7 天** |
+| **Eval / SLO** | 系统化 eval + 可观测 | #18、A6 扩展 | `run-eval` 报告；step 耗时 / token 日志 | **第 8～10 天** |
 
 **完成标准（核心 Agent + 消坑）：**
 
