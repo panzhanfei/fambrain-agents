@@ -80,6 +80,7 @@
 | P0-13 | Intake | Golden / Web「你好」→ `briefReply` 出现 **「大表哥」** 等未定义称呼；prompt 示例为「FamBrain 助手」 | `chitchat` 路径不经 Analyst；Intake 小模型在 `briefReply` 自由发挥 | prompt 禁止称呼用户昵称；`briefReply` 规则化或模板兜底；可选 Zod 后检 | ⬜ Golden Day 2（§2.5） |
 | P0-14 | Analyst + Mem0 | 「我的名字」→ 同句 **「知识库没有记录」+「长期记忆已知潘展飞」** 自相矛盾 | hits 弱时走 insufficientEvidence 话术，Mem0 又补姓名；**corpus 与 memory 优先级未定义** | 个人信息类：**hits 含 personal 优先**；Mem0 仅辅助指代、不得与 corpus 结论冲突；hits 空时不应用 Mem0 补履历事实 | ⬜ Golden Day 2（§2.5） |
 | P0-15 | Analyst | 同问「**我叫什么 年龄 职业 从业经历**」→ 一次答 **赵一 / 28 岁 / 秦汉新城智慧园林**（语料无此人），一次答 **潘展飞** + 简历引用（正确） | KM hits 波动 + Analyst 在 weak hits 下用训练数据填「完整简历模板」；复合问法未拆 subTasks | Intake 拆 subTasks；KM 强制命中 `personal/个人简历*`；Analyst 禁止输出 hits 外姓名/公司；**D5-3** 终稿校验 | ⬜ Golden Day 2（§2.5） |
+| P0-16 | Mem0 / Analyst | **对话 A** 用户说「记住我的 QQ 是 xxx」并确认；**新建对话 B** 问「我的 QQ 是多少？」→ 答不知道 / 语料无记录 | LangMem 仅本会话；Mem0 轮次后 `add` 可能未抽出 QQ、语义 search 未命中、或 Analyst 走 corpus 检索且 hits 空时未用 Mem0；`persistPipelineMemory` 失败被 `.catch` 吞掉 | Intake 识别 **remember_fact** → 显式 Mem0 写入；联系方式类 query **Mem0 优先**；持久化失败打日志/告警；Golden **G-跨会话记忆**（A 记 → B 问） | ⬜ Web 联调（§2.6） |
 | R6-1 | KM / Analyst | **「我在那几家公司上过班？」** 应枚举 **4 家**，首轮只答 **2 家**（西安奥卡云、苏州奖多多）；**同句再问** 仅确认 **1 家** 并称其余「知识库无记录」 | 见 §2.3 | 枚举型 query 专用召回 + Golden；复盘后消坑 sprint | ⬜ **复盘后统一解决** |
 | R6-2 | Analyst / 上下文 | **同会话追问**（如「用表格列出来 时间 职位 公司名称」）：上一轮已确认 **西安奥卡云**，本轮却称「没有明确列出具体公司」 | 见 §2.4 | 追问继承上轮 grounded 结论 + Intake 识别表格/格式化 follow-up；与 R6-1 一并消坑 | ⬜ **复盘后统一解决** |
 
@@ -175,6 +176,7 @@
 | Web | 我叫什么 年龄 职业 从业经历 | **赵一**，28 岁，秦汉新城智慧园林… | 完全编造另一人 | **P0-15** |
 | Web（同问再跑） | 同上 | **潘展飞**，职业/经历 + 简历 path 引用 | **正确** | （对照基线） |
 | Web（同问再跑） | 同上 | 年龄字段答成「10 年前端经验」而非出生日期 | 字段映射 / hits 不全 | **P0-15** 延伸 |
+| Web | 对话 A：记住 QQ → 对话 B：我的 QQ？ | 对话 B **不知道** / 未引用 Mem0 | 跨会话用户自述事实未召回 | **P0-16** |
 
 **语料事实（ground truth）：** 姓名 **潘展飞**；语料中**不存在**赵一、陈明、大表哥、《个人简介》独立文档。
 
@@ -186,7 +188,7 @@
 | **KM** | `personal/` 检索不稳定；复合问法一次 hit 简历、一次 hit 别的 chunk 或空（P0-15、D3-2） |
 | **FactChecker** | 弱 hits 仍放行 Analyst（P0-12） |
 | **Analyst** | hits 空/弱仍调 LLM；训练数据填「假简历」（赵一）；未强制 citations 来自 hits（P0-12、P0-15） |
-| **Mem0** | 与 corpus 结论可同句冲突（P0-14） |
+| **Mem0** | 与 corpus 结论可同句冲突（P0-14）；跨会话自述事实（QQ 等）未召回（P0-16） |
 
 #### 解决排期（记录用 · 非断言清单）
 
@@ -195,18 +197,65 @@
 | **P0** | Analyst：`hits=[]` / `coverage=none` **不调 LLM**，直出 fallback | 陈明、赵一类幻觉 | **Day 3 可提前** | `information-analyst/stream.ts` |
 | **P0** | Intake：`briefReply` 模板或后检（禁昵称；宜含 FamBrain/助手） | 大表哥 | Day 3 | `intake-coordinator` prompt / 规则 |
 | **P0** | Analyst：Mem0 **不得**与「知识库无记录」同句补履历；个人信息以 hits 为准 | P0-14 | Day 3 + D3-9 | `information-analyst` prompt、`build-prompt-block` |
+| **P0** | 跨会话 **remember_fact** 显式写入 Mem0；联系方式类 Mem0 优先于空 corpus | P0-16 | Day 3 + D8 | `intake-coordinator`、`mem0/store.ts`、`persist-turn.ts` |
 | **P0** | KM coalesce + `personal/` 加权；复合问拆 subTasks | 赵一 / 潘展飞波动 | **Day 6～7** | `retrieve.ts`、Intake |
 | **P1** | 生成后 citation / 姓名校验（answer 人名 ∈ hits excerpt） | P0-15 | Day 8～9 eval | D5-3 |
 | **P1** | Golden 加 **G-个人档案**（非仅 G2 单句）；`GOLDEN_RUNS=3` 稳定性 | 回归验收 | Day 2～3 记坑后 **消坑后再收紧断言** | `golden-regression.ts` |
+| **P1** | Golden **G-跨会话记忆**：对话 A 记 QQ → 对话 B 问 QQ 须命中 | P0-16 | Day 3 消坑后 | `golden-regression.ts` |
 
 #### 验收标准（消坑后）
 
 - [ ] 「你好」10 次无「大表哥」类称呼（P0-13）
 - [ ] 「我的名字」3 遍均含 **潘展飞**，无陈明/赵一，无「库里无 + 记忆有」同句（P0-12、P0-14）
 - [ ] 「我叫什么 年龄 职业 从业经历」3 遍姓名均为 **潘展飞**，且至少 1 条 citation 来自 `personal/个人简历`（P0-15）
-- [ ] `pnpm run golden:regression` 与 `GOLDEN_RUNS=3` 稳定性汇总 **≥4/5 且全轮无 P0-12～15 类现象**
+- [ ] `pnpm run golden:regression` 与 `GOLDEN_RUNS=3` 稳定性汇总 **≥4/5 且全轮无 P0-12～16 类现象**
+- [ ] 对话 A 记 QQ（或手机）→ 新建对话 B 问同项 → answer 含该值（P0-16）
 
-**Golden 脚本定位：** 当前 G1～G5 为 **冒烟 + 基线分数**；上表 P0-13～15 的**严格断言**在对应代码消坑后再并入 Golden，避免「测了但假绿」。
+**Golden 脚本定位：** 当前 G1～G5 为 **冒烟 + 基线分数**；上表 P0-13～16 的**严格断言**在对应代码消坑后再并入 Golden，避免「测了但假绿」。
+
+### 2.6 跨会话用户自述事实未召回（2026-06 · Web 联调）
+
+> **背景：** 用户在**对话 1** 让助手记录 QQ 号并确认；**新建对话 2** 问「我的 QQ 是多少？」时助手不知道。与 **P0-14**（corpus 与 Mem0 同句矛盾）不同：本节是 **Mem0 应跨会话、却完全没带上**。
+
+#### 现象摘要
+
+| 步骤 | 会话 | 用户 | 实际 | 与预期 |
+|------|------|------|------|--------|
+| 1 | 对话 A | 「记住我的 QQ 是 …」 | 助手确认已记录 | Mem0 / 语料应持久化 |
+| 2 | 对话 B（新） | 「我的 QQ 是多少？」 | 不知道 / 知识库无记录 | 应引用 Mem0 或已写入语料 |
+
+#### 与 P0-14 / #16 的区别
+
+| | P0-14 | P0-16（本节） | 通用 #16 |
+|--|-------|---------------|----------|
+| 场景 | 同轮：corpus 说无 + Mem0 说有 | **跨 conversationId**：上轮记、下轮忘 | 多轮内偏好遗忘 |
+| 体感 | 一句话自相矛盾 | 「你刚才不是记住了吗？」 | 第 5 轮忘了第 1 轮说的 |
+
+#### 根因分析（待 Day 3 验证）
+
+| 层级 | 根因 | 说明 |
+|------|------|------|
+| **LangMem** | 按 `conversationId` 隔离 | 对话 B **不会**读到对话 A 的会话摘要；跨会话只能靠 Mem0 |
+| **Mem0 写入** | 轮次结束 `addTurnToMem0(userQ, assistantA)` 依赖 LLM **抽取**事实 | 「记住 QQ」可能未抽成结构化记忆；失败时 `persistPipelineMemory(...).catch(() => undefined)` **静默丢弃** |
+| **Mem0 检索** | `searchUserMemories(actorUserId, userQuestion)` 为语义检索 | 「我的 QQ」与存储表述 embedding 不对齐 → `userMemories=[]` |
+| **Analyst / Intake** | 问 QQ 走 **needsRetrieval** → corpus 无 QQ → hits 空 | 空 hits 路径可能 **不用** Mem0（与 P0-14 对策「hits 空不用 Mem0 补履历」需区分：**用户自述联系方式应允许 Mem0**） |
+| **临时方案** | 写入 `corpus/personal/*.md` 并 re-index | RAG 可答，但不等于 Mem0 跨会话设计 |
+
+**链路（通俗）：** 对话 1 结束时系统「尝试」把整轮对话塞进长期记忆抽屉 → 抽屉里可能没有单独一张「QQ」标签 → 对话 2 问 QQ 时抽屉搜不到 → 又去书架上找（语料）也没有 → 只能说不知道。
+
+#### 对策（计划 · Day 3 + D8）
+
+| 优先级 | 对策 | 改动面 |
+|--------|------|--------|
+| P0 | Intake 识别 **remember_fact** / **update_profile**（「记住」「我的 QQ 是」）→ 结构化写入 Mem0（键值或单条 memory），不只靠轮次后抽取 | `intake-coordinator`、`mem0/store.ts` |
+| P0 | 联系方式 / 账号类 query：**Mem0 search 优先**；corpus hits 空时仍可用 Mem0 作答，与「履历类 hits 空禁用 Mem0」分流 | `information-analyst` prompt、`prepare-context.ts` |
+| P0 | `persistPipelineMemory` 失败 **打 agent-log / 不吞错**；可选 Mem0 add 后 verify search | `pipeline/graph/stream.ts` |
+| P1 | Golden **G-跨会话记忆**：固定 conversationId A/B，A 记 fact → B 问 | `golden-regression.ts` |
+| P2 | 用户确认「写入语料」时追加 `corpus/personal/` 并触发增量 index | 产品化；非 P0 |
+
+**验证：** 对话 A 记 QQ → 新建对话 B 问 QQ → answer 含正确号码；`agent-log` Mem0 search 在 B 轮 `extractedCount ≥ 1`。
+
+**临时 workaround：** 将 QQ 写入 `data/doc/users/<corpusUserId>/corpus/personal/` 对应 md → `pnpm run index:corpus`。
 
 ### 2.2 FactChecker 与跨轮重复检索（2026-06 · D5 联调）
 
@@ -332,6 +381,7 @@
 | P0-12 / D5-5 | #9 信息捏造（Analyst 无 hits 仍编造终稿） |
 | P0-13 | #1 意图误判（chitchat briefReply 风格漂移） |
 | P0-14 / P0-15 | #9 信息捏造；#16 关键信息遗忘（Mem0 vs corpus）；#15 信息不对称 |
+| P0-16 | #16 关键信息遗忘（跨 conversationId；用户自述 fact） |
 | R6-1 | #3 过早终止（枚举未穷尽）；#16 跨轮不一致；P0-11 / D5-2 |
 | R6-2 | #16 关键信息遗忘；#17 上下文污染（当轮空 hits 否定 history）；D3-9 Analyst 不读全量历史 |
 
@@ -347,7 +397,7 @@
 |----|------|-----------|------|--------------|
 | **消坑 D1** | KM 检索闭环 | D3-2～D3-5 | 向量 fallback；candidates 非空 → hits 必非空；Golden G4 稳定 | **第 6～7 天** |
 | **消坑 D2** | 召回质量 | D3-6～D3-7、D3-10 | path 去重；常量集中；G3 path 分布改善 | **第 6～7 天** |
-| **消坑 D3** | 多轮上下文 + Analyst 兜底 | D3-8～D3-9、P0-10、**P0-12** | Intake/Analyst 短历史；hits 空短路 LLM | 与 R6 联调；**可提前 Day 3** |
+| **消坑 D3** | 多轮上下文 + Analyst 兜底 + 跨会话记忆 | D3-8～D3-9、P0-10、**P0-12**、**P0-16** | Intake/Analyst 短历史；hits 空短路 LLM；Mem0 remember_fact | 与 R6 联调；**可提前 Day 3** |
 | **消坑 D4** | 回归 + 文档 | D3-11～D3-12、P0-6、A6 | G1～G5 全自动脚本；docs/流程图/sync | **第 2～3 天** + **第 11 天** |
 | **消坑 D5-消坑** | 跨轮少重复 | D5-2、P0-11；可选 D5-4 | 检索 cache；Intake 同句重复问 | **第 4～5 天** |
 | **消坑 R6** | 工作经历枚举 + 追问一致 | R6-1、R6-2 | 列举型召回 + path 聚合；Golden 4 家 + 表格追问 | **第 6～7 天** |
@@ -362,6 +412,7 @@
 - [ ] D5-2：同会话连续两问 G4 原文，第二次不再全量向量检索（cache 或 Intake 复用）← §2.2
 - [ ] **P0-12 / D5-5**：FC 二次放行且 `hits=[]` 时，Analyst 不得编造（须 fallback 或 `insufficientEvidence`）← §2.2.1
 - [ ] **P0-13～P0-15**（Golden Day 2 实录）：无乱称呼、无赵一/陈明、corpus/Mem0 不矛盾 ← §2.5
+- [ ] **P0-16**（Web 联调）：对话 A 记 QQ → 对话 B 问 QQ 可召回 ← §2.6
 - [ ] R6-1：「哪几家公司上过班」类问题 → hits/answer 枚举 **4 家**且同句再问结果一致 ← §2.3
 - [ ] R6-2：同会话表格/格式化追问 → **不得否定**上一轮已 grounded 的公司（如西安奥卡云）← §2.4
 
