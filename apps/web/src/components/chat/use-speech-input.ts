@@ -1,29 +1,16 @@
-"use client";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 
-type BrowserSpeechRecognition = {
-    lang: string;
-    continuous: boolean;
-    interimResults: boolean;
-    onresult: ((ev: SpeechRecognitionEvent) => void) | null;
-    onerror: ((ev: SpeechRecognitionErrorEvent) => void) | null;
-    onend: (() => void) | null;
-    start: () => void;
-    stop: () => void;
-    abort: () => void;
-};
-
-type SpeechRecognitionCtor = new () => BrowserSpeechRecognition;
+type SpeechRecognitionCtor = new () => SpeechRecognition;
 
 const getSpeechRecognitionCtor = (): SpeechRecognitionCtor | null => {
     if (typeof window === "undefined")
         return null;
-    const w = window as Window & {
-        SpeechRecognition?: SpeechRecognitionCtor;
-        webkitSpeechRecognition?: SpeechRecognitionCtor;
-    };
-    return w.SpeechRecognition ?? w.webkitSpeechRecognition ?? null;
+    return window.SpeechRecognition ?? window.webkitSpeechRecognition ?? null;
 };
+
+const subscribeSpeechSupport = (): (() => void) => () => undefined;
+
+const getSpeechSupportSnapshot = (): boolean => getSpeechRecognitionCtor() !== null;
 
 const speechErrorMessage = (code: string): string | null => {
     switch (code) {
@@ -52,13 +39,20 @@ export const useSpeechInput = (options: {
     const { lang = "zh-CN" } = options;
     const onTranscriptRef = useRef(options.onTranscript);
     const onInterimRef = useRef(options.onInterim);
-    onTranscriptRef.current = options.onTranscript;
-    onInterimRef.current = options.onInterim;
 
-    const [supported, setSupported] = useState(false);
+    useEffect(() => {
+        onTranscriptRef.current = options.onTranscript;
+        onInterimRef.current = options.onInterim;
+    }, [options.onInterim, options.onTranscript]);
+
+    const supported = useSyncExternalStore(
+        subscribeSpeechSupport,
+        getSpeechSupportSnapshot,
+        () => false,
+    );
     const [listening, setListening] = useState(false);
     const [error, setError] = useState<string | null>(null);
-    const recognitionRef = useRef<BrowserSpeechRecognition | null>(null);
+    const recognitionRef = useRef<SpeechRecognition | null>(null);
     const listeningRef = useRef(false);
     const userStoppedRef = useRef(false);
     const pendingInterimRef = useRef("");
@@ -75,10 +69,6 @@ export const useSpeechInput = (options: {
             return;
         onTranscriptRef.current(pending);
         onInterimRef.current?.("");
-    }, []);
-
-    useEffect(() => {
-        setSupported(getSpeechRecognitionCtor() !== null);
     }, []);
 
     useEffect(() => {
@@ -128,7 +118,7 @@ export const useSpeechInput = (options: {
         recognition.continuous = true;
         recognition.interimResults = true;
 
-        recognition.onresult = (event) => {
+        recognition.onresult = (event: SpeechRecognitionEvent) => {
             let newFinal = "";
             let interim = "";
             for (let i = 0; i < event.results.length; i++) {
@@ -150,7 +140,7 @@ export const useSpeechInput = (options: {
             onInterimRef.current?.(pendingInterimRef.current);
         };
 
-        recognition.onerror = (event) => {
+        recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
             const message = speechErrorMessage(event.error);
             if (event.error === "no-speech" && listeningRef.current && !userStoppedRef.current)
                 return;
