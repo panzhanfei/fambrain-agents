@@ -76,6 +76,7 @@
 | P0-9 | RAG | 口语命中率低 | 曾仅关键词；离线向量已入库 | Intake 补全指代；在线向量检索 | ✅ D3 已接 LangChain |
 | P0-10 | 上下文 | `corpusUserId` 与「我是谁」混淆 | 语料主人 ≠ 登录者 | session / direct_answer 与 corpus 分离 | ⬜ 待做 |
 | P0-11 | FactChecker / 编排 | 用户以为「核查过一次，同句再问不应再进 FactChecker」 | **两类现象混为一谈：**（A）同轮打回再检索 → FactChecker 跑 2 次是 Corrective RAG 设计；（B）**新一条用户消息** = 新 pipeline，`checkerPassed`/`retryCount` 重置，无跨轮 cache | 见 §2.2；消坑 sprint **D5-消坑** | ⬜ 待做 |
+| P0-12 | Analyst + FC | FC **二次放行**（`retryCount≥1`，`force_pass_after_retry`）后 `hits=[]` / `coverage=none`，或 hits 弱未覆盖问点，Analyst 仍输出语料不存在内容（如「我的名字」→《个人简介》**陈明** / Charlie，语料实际为 **潘展飞**） | `streamAnalyzeInformation` **hits 空仍调 LLM**；`parseAnalystResult` 不强制 `insufficientEvidence`；`buildFallbackAnswer` 仅在 JSON 解析失败时用；FactChecker `checkerNotes` 未在 Analyst 层 enforce | hits 空或 `evidenceScore` 极低时 **跳过 LLM** 直出 fallback；normalize 层强制 `insufficientEvidence`；Golden **G2** 断言含真实姓名、禁幻觉名；上游 **D3-2** 减少空 hits；**D5-3** 生成后 citation 校验 | ⬜ **Golden Day 2 实测**（§2.2.1） |
 | R6-1 | KM / Analyst | **「我在那几家公司上过班？」** 应枚举 **4 家**，首轮只答 **2 家**（西安奥卡云、苏州奖多多）；**同句再问** 仅确认 **1 家** 并称其余「知识库无记录」 | 见 §2.3 | 枚举型 query 专用召回 + Golden；复盘后消坑 sprint | ⬜ **复盘后统一解决** |
 | R6-2 | Analyst / 上下文 | **同会话追问**（如「用表格列出来 时间 职位 公司名称」）：上一轮已确认 **西安奥卡云**，本轮却称「没有明确列出具体公司」 | 见 §2.4 | 追问继承上轮 grounded 结论 + Intake 识别表格/格式化 follow-up；与 R6-1 一并消坑 | ⬜ **复盘后统一解决** |
 
@@ -199,8 +200,41 @@
 | D5-2 | 编排 / UX | 聊天记录里**同一句再问**，仍走检索+核查 | 每轮 `runPipelineStream` 状态重置；无 cache | 检索 cache + Intake 重复问（§2.2 表） | ⬜ **消坑 sprint D5-消坑** |
 | D5-3 | 职责 | 期望 FactChecker 校验**终稿** vs hits | P0 仅在生成前审证据包 | D6 后或 +3 增加生成后 groundedness | ⬜ 路线图 |
 | D5-4 | SSE | 重复问时 step 闪过快，用户只注意到「整理回答」 | `fact_checker` 与 `analyst` 连续 | 可选：重复问跳过 fact_checker step 展示 | ⬜ 低优 |
+| D5-5 | Analyst + FC | 同轮 **FactChecker 跑 2 次后放行**，KM 仍交空/弱 `hits`，Analyst LLM 编造终稿（与 **P0-12** 同现象） | FC `force_pass_after_retry` 只写 notes，不阻断 Analyst；Analyst 无代码硬兜底 | 见 §2.2.1；`information-analyst/stream.ts` 空 hits 短路；Golden G2 姓名断言 | ⬜ Golden Day 2 |
 
-**验证脚本：** `pnpm run verify:fact-checker`、`pnpm run verify:fact-checker:pipeline`（`apps/agents/package.json`）。
+**验证脚本：** `pnpm run verify:fact-checker`、`pnpm run golden:regression`（`apps/agents/package.json`）。
+
+#### 2.2.1 Analyst 空 hits 幻觉（Golden Day 2 · 2026-06）
+
+> **背景：** Golden / Web 联调「我的名字」时，偶发答「根据《个人简介》，你的名字全称为**陈明**…」；语料 `personal/个人简历-潘展飞.md` 仅有 **潘展飞**，**陈明 / Charlie / 《个人简介》均不在库中** — 属 Analyst **训练数据幻觉**，非检索命中。
+
+**链路（通俗）：**
+
+```text
+用户「我的名字」→ Intake 检索 → KM hits 空或弱
+  → FC 第 1 次：打回再检索（D5-1，预期行为）
+  → FC 第 2 次：retryCount≥1 → passed=true（force_pass_after_retry），notes 要求 Analyst 声明未覆盖
+  → ContentOrganizer → Analyst 仍调 LLM
+  → LLM 返回合法 JSON 但 answer 编造「陈明」→ parseAnalystResult 放行（未强制 insufficientEvidence）
+```
+
+**与相关坑的分工：**
+
+| 层级 | 坑 ID | 角色 |
+|------|-------|------|
+| 上游 | **D3-2** | KM 有 candidates 却 `hits:[]`，导致证据包空 |
+| 中游 | **D5-1** | 同轮两次 FactChecker 是设计，不是根因 |
+| 下游 | **P0-12 / D5-5** | Analyst 未在 hits 空时硬兜底，幻觉透出 |
+| 补强 | **D5-3 / #9** | 生成后 citation 校验，防 hits 非空仍编造 |
+
+**典型日志：**
+
+```text
+[FactChecker] 规则兜底 · 分支 force_pass_after_retry { noHits: true, checkerNotes: "已重试仍无命中，分析师须声明知识库未覆盖…" }
+[InformationAnalyst] 分析结果 { answer: "根据《个人简介》，你的名字全称为陈明…", insufficientEvidence: false }
+```
+
+**验证：** `pnpm run golden:regression`；Web 问「我的名字」连跑 3 次，answer 应含 **潘展飞**、不得含 **陈明/Charlie**；`agent-log` 中 FC 第二次 `passed=true` 且 `hitCount=0` 时 Analyst 应走 fallback 或 `insufficientEvidence=true`。
 
 ### 2.1 D3 / LangChain 联调踩坑（2026-05-22）
 
@@ -243,6 +277,7 @@
 | P0-10 | #15 信息不对称 |
 | P0-11 / D5-2 | #19 跨轮重复检索 |
 | D5-1 | #6 工具调用死循环（已限 1 次打回，非死循环） |
+| P0-12 / D5-5 | #9 信息捏造（Analyst 无 hits 仍编造终稿） |
 | R6-1 | #3 过早终止（枚举未穷尽）；#16 跨轮不一致；P0-11 / D5-2 |
 | R6-2 | #16 关键信息遗忘；#17 上下文污染（当轮空 hits 否定 history）；D3-9 Analyst 不读全量历史 |
 
@@ -258,7 +293,7 @@
 |----|------|-----------|------|--------------|
 | **消坑 D1** | KM 检索闭环 | D3-2～D3-5 | 向量 fallback；candidates 非空 → hits 必非空；Golden G4 稳定 | **第 6～7 天** |
 | **消坑 D2** | 召回质量 | D3-6～D3-7、D3-10 | path 去重；常量集中；G3 path 分布改善 | **第 6～7 天** |
-| **消坑 D3** | 多轮上下文 | D3-8～D3-9、P0-10 | Intake/Analyst 短历史；pipeline 检索摘要 | 与 R6 联调 |
+| **消坑 D3** | 多轮上下文 + Analyst 兜底 | D3-8～D3-9、P0-10、**P0-12** | Intake/Analyst 短历史；hits 空短路 LLM | 与 R6 联调；**可提前 Day 3** |
 | **消坑 D4** | 回归 + 文档 | D3-11～D3-12、P0-6、A6 | G1～G5 全自动脚本；docs/流程图/sync | **第 2～3 天** + **第 11 天** |
 | **消坑 D5-消坑** | 跨轮少重复 | D5-2、P0-11；可选 D5-4 | 检索 cache；Intake 同句重复问 | **第 4～5 天** |
 | **消坑 R6** | 工作经历枚举 + 追问一致 | R6-1、R6-2 | 列举型召回 + path 聚合；Golden 4 家 + 表格追问 | **第 6～7 天** |
@@ -271,6 +306,7 @@
 - [ ] D3-2 **不可复现**（12 candidates → hits 必 ≥1）
 - [ ] 踩坑表 D3-* 与 P0-4 / P0-6 状态更新为 ✅ 或 🔄 有明确遗留
 - [ ] D5-2：同会话连续两问 G4 原文，第二次不再全量向量检索（cache 或 Intake 复用）← §2.2
+- [ ] **P0-12 / D5-5**：FC 二次放行且 `hits=[]` 时，Analyst 不得编造（须 fallback 或 `insufficientEvidence`）← §2.2.1
 - [ ] R6-1：「哪几家公司上过班」类问题 → hits/answer 枚举 **4 家**且同句再问结果一致 ← §2.3
 - [ ] R6-2：同会话表格/格式化追问 → **不得否定**上一轮已 grounded 的公司（如西安奥卡云）← §2.4
 
@@ -290,5 +326,6 @@
 - [ ] 换模型复现：区分 prompt 问题 vs 模型能力（`OLLAMA_MODEL` / `OLLAMA_MODEL_INTAKE_COORDINATOR`）
 - [ ] agents 服务 `:3001` 是否唯一实例（无 EADDRINUSE）← D3-12
 - [ ] FactChecker 日志：`passed` / `refinedSearchQuery` / `retryCount` 是否符合 §2.2 判定表
+- [ ] **FC 二次放行 + hitCount=0**：Analyst 是否仍编造姓名/公司（**P0-12**）← §2.2.1；Golden G2
 - [ ] **列举型问题**（「哪几家公司」）：KM `hits` 是否覆盖 `experience/` 下全部经历文件；同句再问 hits 数量是否骤降 ← R6-1 §2.3
 - [ ] **格式化追问**（「用表格列出来」）：Intake 是否误开全量检索；Analyst 是否否定 history 中已确认公司 ← R6-2 §2.4

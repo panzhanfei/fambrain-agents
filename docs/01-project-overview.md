@@ -162,7 +162,8 @@ pnpm run dev
 | `completeFactCheck` | `agentflow/agents/online/fact-checker/` | 证据包核查；打回再检索 |
 | `organizeKnowledge` | `agentflow/agents/online/content-organizer/` | hits Zod 规范化 + path 去重 |
 | `streamAnalyzeInformation` | `agentflow/agents/online/information-analyst/` | 流式 thinking + assistant |
-| `verify:fact-checker` / `verify:fact-checker:pipeline` | `apps/agents/scripts/` | FactChecker 本地验证 |
+| `golden:regression` | `apps/agents/scripts/golden-regression.ts` | 在线 Agent **G1～G5 全链路标准回归**（最终验收） |
+| `verify:fact-checker` / `verify:fact-checker:pipeline` | `apps/agents/scripts/` | FactChecker 规则 + 轻量全链路冒烟 |
 | `verify:content-organizer` / `verify:agent-schemas` | `apps/agents/scripts/` | ContentOrganizer / 全 Agent Zod |
 | `verify:embed-batches` | `apps/agents/scripts/` | Indexer p-limit 分批逻辑 |
 | `verify:memory` / `verify:doc-parser` | `apps/agents/scripts/` | Mem0+LangMem / DocParser |

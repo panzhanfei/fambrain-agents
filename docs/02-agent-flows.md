@@ -196,7 +196,7 @@ flowchart TD
 | 4 | 兜底 | LLM 失败走规则；重试后强制 `passed=true` | `check-helpers.ts` | `buildRuleBasedFactCheck()` |
 | 5 | 编排 | `checkerPassed` → contentOrganizer 或 retrieval | `pipeline/graph/compile.ts` | `factCheckerNode()`, `routeAfterFactChecker()` |
 
-**验证：** `pnpm run verify:fact-checker`（规则）、`pnpm run verify:fact-checker:pipeline`（全链路）。跨轮重复问仍全量检索见 [坑点 §2.2](./04-pitfalls.md)。
+**验证：** `pnpm run verify:fact-checker`（规则）、`pnpm run verify:fact-checker:pipeline`（轻量冒烟）、`pnpm run golden:regression`（G1～G5 标准回归）。跨轮重复问仍全量检索见 [坑点 §2.2](./04-pitfalls.md)。
 
 ### 5. InformationAnalyst — 信息分析师 ✅
 

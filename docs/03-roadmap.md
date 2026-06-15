@@ -22,7 +22,7 @@
 1. 「你好」→ 短回复（闲聊 / `briefReply`）。
 2. 「城管平台用了什么技术」→ step「检索知识库…」→ **「核查证据…」** → **「整理证据…」** →「整理回答…」→ 最终回答；无语料时可能二次检索（见 [坑点 D5-1](./04-pitfalls.md)）。
 3. Ollama 未启动时应收到 `error` 事件，用户消息仍可能已保存。
-4. **（可选自动化）** `cd apps/agents && pnpm run verify:fact-checker && pnpm run verify:fact-checker:pipeline && pnpm run verify:content-organizer && pnpm run verify:agent-schemas && pnpm run verify:embed-batches && pnpm run verify:doc-parser && pnpm run verify:memory && pnpm run verify:content-summarizer && pnpm run verify:vault-list`
+4. **（可选自动化）** `cd apps/agents && pnpm run golden:regression && pnpm run verify:fact-checker && pnpm run verify:fact-checker:pipeline && pnpm run verify:content-organizer && pnpm run verify:agent-schemas && pnpm run verify:embed-batches && pnpm run verify:doc-parser && pnpm run verify:memory && pnpm run verify:content-summarizer && pnpm run verify:vault-list`
 
 ### Golden 问法（回归）
 
@@ -130,7 +130,7 @@
 
 | 交付 | 说明 |
 |------|------|
-| 脚本 | `scripts/golden-regression.ts`（或扩展现有 verify），自动跑 G1～G5 |
+| 脚本 | `scripts/golden-regression.ts`，自动跑 G1～G5 |
 | 扩展用例 | **G-工作经历**（4 家公司枚举）；**G4-重复问**（同句再问，为 cache 验收预留） |
 | 基线 | 记录首次通过率（目标：**≥4/5**；A6 为 ≥7/8 条时可并入 G-工作经历 + G4-重复问） |
 
@@ -140,7 +140,7 @@
 
 ```bash
 cd apps/agents
-pnpm run golden:regression   # 待实现；落地前可手动 P0 自测 + verify:* 组合
+pnpm run golden:regression   # G1～G5 全链路标准回归
 ```
 
 ### 第 4～5 天 — 检索 cache + 跨轮重复（消坑 D5-消坑）
@@ -233,7 +233,7 @@ pnpm run golden:regression   # 待实现；落地前可手动 P0 自测 + verify
 |----|------|--------|----------|------|
 | A1 | Agent | 知识入库师 | 入库后 Chroma 有记录；重复执行幂等 | **✅ 已通过** |
 | A2 | Agent | 知识管理员 | 口语问法 vector hits ≥1，`path` 在 `corpus/` 下 | **🔄** 向量已接；Golden 待回归 |
-| A3 | Agent | 事实核查员 | 无 hits 不编造；打回后最多再检索 1 次；`retryCount≥1` 强制放行 | **🔄** 脚本 `verify:fact-checker` / `verify:fact-checker:pipeline` 已通过；Golden 待回归 |
+| A3 | Agent | 事实核查员 | 无 hits 不编造；打回后最多再检索 1 次；`retryCount≥1` 强制放行 | **🔄** 脚本 `verify:fact-checker` / `verify:fact-checker:pipeline` 已通过；**Golden** `golden:regression` 基线建立中 |
 | A4 | Agent | 内容整理师 | hits path 去重；`dedupeCitations`；脚本 `verify:content-organizer` | **✅** 脚本已通过；Golden 待回归 |
 | A5 | 编排 | LangGraph | 节点 ≥6（含 factChecker、**contentOrganizer**）；checker→retrieval 条件边；SSE `fact_checker` / **`content_organizer`** | **✅** 图与 step 已接 |
 | A6 | 回归 | P0 能力 | [P0 自测 3 条](#p0-自测) + G1～G5 共 8 条，**≥7 条通过** | 进行中 |
