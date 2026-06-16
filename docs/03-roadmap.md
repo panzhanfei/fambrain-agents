@@ -110,7 +110,7 @@
 | 离线复盘 | **第 1 天** | KnowledgeIndexer + DocParser + `@fambrain/corpus` | 搞清语料如何进 Chroma |
 | Golden | **第 2～3 天** | G1～G5 自动化 + 基线分数 | D10、A6 |
 | Cache | **第 4～5 天** | 检索 cache + Intake 重复问 | D5-2、P0-11、#19 |
-| KM 质量 | **第 6～7 天** | coalesce、枚举 R6、可选 rerank | D3-2、R6-1、D3-10 |
+| **KM 完善** | **第 6～8 天（3 日）** | [KM v2 逐条实施](./km-retrieval-design.md) KM-01～18 | D3-4/6/7/10、P0-15、R6-1 |
 | Eval | **第 8～9 天** | 系统化 eval 脚本 + 报告 | A6 扩展 |
 | SLO / 日志 | **第 10 天** | 耗时、token、结构化记录 | #18 待做 |
 | **总复盘** | **第 11 天** | 离线 + 在线全链路、坑点表、L4 gap | 文档同步 |
@@ -153,18 +153,34 @@ pnpm run golden:regression   # G1～G5 全链路标准回归
 
 **坑点：** [§2.2 FactChecker 与跨轮重复检索](./04-pitfalls.md#22-factchecker-与跨轮重复检索2026-06--d5-联调)、P0-11、#19。
 
-### 第 6～7 天 — KM 检索质量（消坑 D1 / D2 / R6）
+### 第 6～7 天 — KM 检索质量（消坑 D1 / D2 / R6）→ **已调整为 KM v2 三日逐条计划**
 
-按优先级，**不必一次做完 rerank**：
+> **设计文档：** [km-retrieval-design.md](./km-retrieval-design.md)（KM-01～18 逐条加/改，一条一验收）  
+> **v1 已完成（2026-06）：** 规则精排、无在线 LLM、`ensureNonEmptyHits`（D3-2/3/5、P0-4）— 见 [坑点 §2.1.1](./04-pitfalls.md#211-km-移除在线-llm--规则精排p0-4--d3-2--d3-3--d3-5---已消坑-2026-06)
 
-| 优先级 | 项 | 目标 | 坑 ID |
-|--------|-----|------|-------|
-| P0 | **coalesce 硬兜底** | `candidateCount > 0` 时最终 `hits` 不得为空 | D3-2 |
-| P0 | **枚举型 query** | 「哪几家公司上过班」→ hits/answer 覆盖 experience 下 **4 家** | R6-1 |
-| P1 | path 加权 / topics | G3「项目+技术」优先 `experience/`、`personal/` | D3-10 |
-| P2 | 向量 **rerank** | 降低 FactChecker 打回率；时间不够则延后 | §2.2 +4 |
+#### KM 完善三日计划（2026-06）
 
-**Golden：** G-工作经历、G4 稳定；同句再问 hits 数量不骤降（R6-1）。
+| 日 | 焦点 | KM 条目 | 消坑 | 验收问法 |
+|----|------|---------|------|----------|
+| **D1** | 召回与打分 | KM-01～07：topics 分流、path 去重、path 加权、km-config、verify | D3-4、D3-6、D3-7、D3-10 | 「我的名字」；「城管平台技术」 |
+| **D2** | 问法分档 + 身份 | KM-08～12：queryProfile、分档参数、表格 excerpt、identity Top1、日志 | P0-6 上游、P0-15 | 「我叫什么 年龄 职业」×3 |
+| **D3** | 列举 + 文档 | KM-13～18：experience 穷举、chunk 合并、coverage、docs | R6-1、D3-11 | 「哪几家公司上过班」×2 |
+
+**不做：** Chat LLM rerank（已砍）；**Intake 改合同**（第一期不做）。
+
+**Golden：** D3 结束后跑 G-工作经历；D1/D2 可用 `pnpm run verify:km-retrieve`（规划命令，见设计文档 KM-07）。
+
+<details>
+<summary>原第 6～7 天条目（归档）</summary>
+
+| 优先级 | 项 | 状态 |
+|--------|-----|------|
+| P0 | coalesce 硬兜底 | ✅ v1 `ensureNonEmptyHits` |
+| P0 | 枚举型 query | ⬜ → KM-13～15 |
+| P1 | path 加权 / topics | ⬜ → KM-01、03、05 |
+| P2 | 向量 rerank | ⏭ 已砍 |
+
+</details>
 
 ### 第 8～9 天 — 系统化 eval
 

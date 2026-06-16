@@ -152,6 +152,8 @@ flowchart TD
 
 **技术：** **纯规则精排**（无 LLM）。向量语义召回（Chroma）→ 低置信时关键词扫盘补充 → `tokenize` + `pickExcerpt` 确定性输出。与业界「检索层不用 Chat LLM、生成留给 Analyst」一致；避免小模型在精排阶段改写 excerpt、编造 `notes`（见 [坑点 P0-4 / D3-3](./04-pitfalls.md)）。
 
+> **v2 完善计划（逐条实施）：** [km-retrieval-design.md](./km-retrieval-design.md)（KM-01～18：path 去重/加权、问法分档、表格 excerpt、experience 列举穷举）
+
 ```mermaid
 flowchart TD
   IN["searchQuery + corpusUserId"] --> VEC["searchCorpusVectors()"]

@@ -158,7 +158,7 @@ pnpm run dev
 | `getCompiledPipelineGraph` | `pipeline/graph/compile.ts` | Intake → KM → FactChecker → **ContentOrganizer** → Analyst |
 | `parseIntakeDecision` / `defaultIntakeDecision` | `pipeline/parse-intake.ts` | 解析 Intake 路由 JSON |
 | `completeIntakeCoordinator` | `agentflow/agents/online/intake-coordinator/` | 一次 `invoke` → 路由 JSON |
-| `retrieveKnowledge` | `agentflow/agents/online/knowledge-manager/` | 向量 + 关键词扫盘 + **规则精排**（无 LLM） |
+| `retrieveKnowledge` | `agentflow/agents/online/knowledge-manager/` | 向量 + 关键词扫盘 + **规则精排**（无 LLM）；v2 计划见 [km-retrieval-design.md](./km-retrieval-design.md) |
 | `completeFactCheck` | `agentflow/agents/online/fact-checker/` | 证据包核查；打回再检索 |
 | `organizeKnowledge` | `agentflow/agents/online/content-organizer/` | hits Zod 规范化 + path 去重 |
 | `streamAnalyzeInformation` | `agentflow/agents/online/information-analyst/` | 流式 thinking + assistant |
