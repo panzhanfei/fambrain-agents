@@ -25,7 +25,7 @@
 | ID | 类型 | 改什么（大白话） | 技术项 | 为什么 | 消坑 | 改哪些文件 | 计划日 | 状态 | 验收（一句话） |
 |----|------|------------------|--------|--------|------|------------|--------|------|----------------|
 | KM-01 | 修改 | 英文 **topics**（主题标签）只参与向量搜，不参与字面拆词 | topics 分流 | Intake 常带 `urban-governance` 等英文 tag，中文语料字面搜不到，相关度被算成 0 | D3-4 | `retrieve.ts` | D1 | ✅ | topics 含英文 tag 时，中文 query 仍能有 hits |
-| KM-02 | 新增 | 向量结果按**文件 path**（路径）去重，同一 md 最多留 1～2 段 chunk（切块） | dedupeByPath | 12 条候选里 3+ 条同一简历，挤掉其他公司/项目文件 | D3-6 | `retrieve-helpers.ts`、`retrieve.ts` | D1 | ⬜ | 12 candidates 时 unique path 明显增多 |
+| KM-02 | 新增 | 向量结果按**文件 path**（路径）去重，同一 md 最多留 1～2 段 chunk（切块） | dedupeByPath | 12 条候选里 3+ 条同一简历，挤掉其他公司/项目文件 | D3-6 | `retrieve-helpers.ts`、`retrieve.ts` | D1 | ✅ | 12 candidates 时 unique path 明显增多 |
 | KM-03 | 新增 | **pathBoost**（路径加权）打分表：personal / experience / projects 加减分 | path 加权 | 「我的名字」误命中 `projects/resume.md`；项目问法偏模板文件 | D3-10、P0-15 | `km-config.ts`、`retrieve.ts` | D1 | ⬜ | 姓名类 Top1 为 `personal/`，非 resume 项目 |
 | KM-04 | 新增 | 常量收到 **km-config**（集中配置）：topK、maxHits、L2 阈值、加权表 | 配置集中 | 魔法数字分散，难调、难对照坑点 | D3-7 | `km-config.ts` | D1 | ✅ | `getKmRetrievalConfig()` 可读全部参数 |
 | KM-05 | 修改 | 打分公式：`相关度 = token + 向量分 + pathBoost`，封顶 1.0 | rank 公式 | 与 KM-03 配套落地 | D3-10 | `retrieve.ts` | D1 | ⬜ | 日志可见加权后 relevance 变化 |
@@ -168,7 +168,7 @@ flowchart TD
 
 | 日期 | 说明 |
 |------|------|
-| 2026-06 | KM-04 ✅ km-config；KM-01 ✅ topics 分流 |
+| 2026-06 | KM-04 ✅ km-config；KM-01 ✅ topics 分流；KM-02 ✅ 向量 path 去重 |
 
 ---
 

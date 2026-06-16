@@ -19,6 +19,18 @@ export const LOG_BODY_PREVIEW = 160;
 export const SCAN_BODY_MAX = 4000;
 
 /**
+ * 向量召回后，同一 path 最多保留几个 chunk（L2 最优）。
+ * 用于：dedupeVectorByPath（KM-02）。
+ */
+export const MAX_CHUNKS_PER_PATH = 2;
+
+/**
+ * 同 path 多 chunk 合并 body 的上限字符数。
+ * 用于：dedupeVectorByPath（KM-02）；KM-16 与合并逻辑共用。
+ */
+export const MERGED_CHUNK_BODY_MAX = 6000;
+
+/**
  * Chroma L2 距离：越小越相似。
  * top1 距离 ≤ 此值视为「向量高置信」，可跳过扫盘。用于：isVectorConfident。
  */
@@ -37,6 +49,8 @@ export const getKmRetrievalConfig = () => ({
     excerptMax: EXCERPT_MAX,
     logBodyPreview: LOG_BODY_PREVIEW,
     scanBodyMax: SCAN_BODY_MAX,
+    maxChunksPerPath: MAX_CHUNKS_PER_PATH,
+    mergedChunkBodyMax: MERGED_CHUNK_BODY_MAX,
     vectorConfidentTop1Max: VECTOR_CONFIDENT_TOP1_MAX,
     vectorConfidentGapMin: VECTOR_CONFIDENT_GAP_MIN,
 });

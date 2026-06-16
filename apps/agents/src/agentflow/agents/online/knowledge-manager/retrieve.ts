@@ -29,6 +29,7 @@ import {
     VECTOR_CONFIDENT_GAP_MIN,
     VECTOR_CONFIDENT_TOP1_MAX,
 } from "./km-config";
+import { dedupeVectorByPath } from "./retrieve-helpers";
 import type {
     KnowledgeHit,
     KnowledgeManagerInput,
@@ -296,12 +297,17 @@ const loadCandidates = async (
     candidates: CandidateRow[];
     recallSource: RecallSource;
     vectorConfident: boolean;
+    vectorRawCount: number;
+    uniquePathCount: number;
 }> => {
     if (input.candidates.length > 0) {
+        const uniquePathCount = new Set(input.candidates.map((c) => c.path)).size;
         return {
             candidates: input.candidates,
             recallSource: "provided",
             vectorConfident: true,
+            vectorRawCount: input.candidates.length,
+            uniquePathCount,
         };
     }
 
@@ -312,21 +318,27 @@ const loadCandidates = async (
     ].join(" ");
 
     let vectorCandidates: CandidateRow[] = [];
+    let vectorRawCount = 0;
     try {
         const vectorHits = await searchCorpusVectors(
             input.corpusUserId,
             vectorQuery,
             MAX_CANDIDATES
         );
-        vectorCandidates = vectorHits.map((h) => ({
-            path: h.path,
-            title: h.title,
-            body: h.body,
-            score: h.score,
-        }));
+        vectorRawCount = vectorHits.length;
+        vectorCandidates = dedupeVectorByPath(
+            vectorHits.map((h) => ({
+                path: h.path,
+                title: h.title,
+                body: h.body,
+                score: h.score,
+            }))
+        );
     } catch {
         vectorCandidates = [];
     }
+
+    const uniquePathCount = new Set(vectorCandidates.map((c) => c.path)).size;
 
     if (vectorCandidates.length === 0) {
         const scanned = await scanDocCandidates(
@@ -338,6 +350,8 @@ const loadCandidates = async (
             candidates: scanned,
             recallSource: "keyword_scan",
             vectorConfident: false,
+            vectorRawCount: 0,
+            uniquePathCount: new Set(scanned.map((c) => c.path)).size,
         };
     }
 
@@ -346,6 +360,8 @@ const loadCandidates = async (
             candidates: vectorCandidates,
             recallSource: "vector",
             vectorConfident: true,
+            vectorRawCount,
+            uniquePathCount,
         };
     }
 
@@ -354,10 +370,13 @@ const loadCandidates = async (
         input.searchQuery,
         input.subTasks
     );
+    const merged = mergeCandidates(vectorCandidates, scanned);
     return {
-        candidates: mergeCandidates(vectorCandidates, scanned),
+        candidates: merged,
         recallSource: "vector+keyword_scan",
         vectorConfident: false,
+        vectorRawCount,
+        uniquePathCount: new Set(merged.map((c) => c.path)).size,
     };
 };
 
@@ -372,7 +391,7 @@ export const retrieveKnowledge = async (
         candidatesProvided: input.candidates.length,
     });
 
-    const { candidates, recallSource, vectorConfident } =
+    const { candidates, recallSource, vectorConfident, vectorRawCount, uniquePathCount } =
         await loadCandidates(input);
 
     if (candidates.length === 0) {
@@ -381,6 +400,8 @@ export const retrieveKnowledge = async (
             recallSource,
             resultSource: "empty",
             vectorConfident,
+            vectorRawCount,
+            uniquePathCount,
         }));
         return empty;
     }
@@ -395,6 +416,8 @@ export const retrieveKnowledge = async (
         recallSource,
         resultSource: "rule",
         vectorConfident,
+        vectorRawCount,
+        uniquePathCount,
         candidateCount: candidates.length,
         candidatesPreview: summarizeCandidate(candidates[0]!, 0),
     }));
