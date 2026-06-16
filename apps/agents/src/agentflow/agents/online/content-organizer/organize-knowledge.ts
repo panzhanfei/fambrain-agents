@@ -3,9 +3,10 @@ import { organizeHits } from "./organize-hits";
 import type { ContentOrganizerInput, ContentOrganizerResult, } from "./prompt";
 import { parseKnowledgeHits } from "./schema";
 export const organizeKnowledge = (input: ContentOrganizerInput): ContentOrganizerResult => {
-    logAgentIn("ContentOrganizer", "整理请求", {
+    logAgentIn("ContentOrganizer", "进入", {
         hitCount: input.hits.length,
         coverage: input.coverage,
+        paths: input.hits.map((h) => h.path),
     });
     const validated = parseKnowledgeHits(input.hits);
     const beforeCount = validated.length;
@@ -21,7 +22,7 @@ export const organizeKnowledge = (input: ContentOrganizerInput): ContentOrganize
         notes: input.notes,
         dedupedCount,
     };
-    logAgentOut("ContentOrganizer", "整理结果", {
+    logAgentOut("ContentOrganizer", "出去", {
         beforeCount,
         afterCount: hits.length,
         dedupedCount,

@@ -25,7 +25,7 @@ export const indexAllCorpora = async (): Promise<void> => {
         chromaUrl: getChromaServerUrl(),
         embedOptions,
         logLevel: process.env.LOG_LEVEL ?? "info",
-        hint: "步骤日志带 🔹；结构化 JSON 来自 pino（fambrain-indexer）",
+        hint: "每 Agent 仅 📥进入 / 📤出去；结构化 JSON 来自 pino（fambrain-indexer）",
     });
     const userIds = await listCorpusUserIds();
     if (userIds.length === 0) {

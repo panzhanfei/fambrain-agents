@@ -27,7 +27,7 @@ export const summarizeContent = async (input: ContentSummarizerInput): Promise<C
     const fallback = buildFallback(input);
     const body = input.text.slice(0, MAX_INPUT_CHARS);
     const maxBullets = input.maxBullets ?? 8;
-    logAgentIn("ContentSummarizer", "摘要请求", {
+    logAgentIn("ContentSummarizer", "进入", {
         sourceLabel: input.sourceLabel ?? null,
         charCount: body.length,
         language: input.language ?? "zh",
@@ -47,10 +47,11 @@ export const summarizeContent = async (input: ContentSummarizerInput): Promise<C
     const rawText = textFromResponse(response.content);
     const parsed = parseJsonObject<unknown>(rawText);
     const result = parseContentSummaryResult(parsed, fallback);
-    logAgentOut("ContentSummarizer", "摘要完成", {
+    logAgentOut("ContentSummarizer", "出去", {
         title: result.title,
         bulletCount: result.bullets.length,
         keywordCount: result.keywords.length,
+        summaryPreview: result.summary.length > 200 ? `${result.summary.slice(0, 200)}…` : result.summary,
     });
     return result;
 };

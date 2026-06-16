@@ -11,8 +11,6 @@
  *   → coverage_mismatch_* → hits_irrelevant → pass_with_hits
  */
 
-import { logAgentStep } from "@fambrain/agent-shared/agent-log";
-
 import type { FactCheckerInput, FactCheckerIssue, FactCheckerResult } from "./prompt";
 import { parseFactCheckerResult } from "./schema";
 
@@ -127,15 +125,6 @@ export const buildRuleBasedFactCheck = (
     input.userQuestion,
     ...input.subTasks
   );
-  logAgentStep("FactChecker", "规则兜底 · 开始", {
-    needsRetrieval: input.needsRetrieval,
-    retryCount: input.retryCount,
-    hitCount: input.hits.length,
-    coverage: input.coverage,
-    searchQuery: input.searchQuery,
-    tokens,
-    relevanceThreshold: RELEVANCE_THRESHOLD,
-  });
 
   // ── 分支 A：Intake 判定无需查库（闲聊/direct_answer 等）──
   if (!input.needsRetrieval) {
@@ -146,10 +135,6 @@ export const buildRuleBasedFactCheck = (
       checkerNotes: null,
       issues: [],
     };
-    logAgentStep("FactChecker", "规则兜底 · 分支 skip_no_retrieval", {
-      reason: "needsRetrieval=false，无需查库，直接放行",
-      result,
-    });
     return result;
   }
 
@@ -172,11 +157,6 @@ export const buildRuleBasedFactCheck = (
           ]
         : [],
     };
-    logAgentStep("FactChecker", "规则兜底 · 分支 force_pass_after_retry", {
-      reason: "retryCount≥1，不再打回检索",
-      noHits,
-      result,
-    });
     return result;
   }
 
@@ -198,11 +178,6 @@ export const buildRuleBasedFactCheck = (
         },
       ],
     };
-    logAgentStep("FactChecker", "规则兜底 · 分支 no_hits_first_attempt", {
-      reason: "hits=0 且 coverage=none，首次检索打回",
-      refinedSearchQuery: refined,
-      result,
-    });
     return result;
   }
 
@@ -220,12 +195,6 @@ export const buildRuleBasedFactCheck = (
       checkerNotes: null,
       issues,
     };
-    logAgentStep("FactChecker", "规则兜底 · 分支 coverage_mismatch_hits_none", {
-      reason: "有 hits 但 coverage=none",
-      hitScores: scoreHits(input),
-      refinedSearchQuery: refined,
-      result,
-    });
     return result;
   }
 
@@ -243,15 +212,6 @@ export const buildRuleBasedFactCheck = (
       checkerNotes: null,
       issues,
     };
-    logAgentStep(
-      "FactChecker",
-      "规则兜底 · 分支 coverage_mismatch_empty_hits_sufficient",
-      {
-        reason: "coverage=sufficient 但 hits=0",
-        refinedSearchQuery: refined,
-        result,
-      }
-    );
     return result;
   }
 
@@ -276,12 +236,6 @@ export const buildRuleBasedFactCheck = (
         },
       ],
     };
-    logAgentStep("FactChecker", "规则兜底 · 分支 hits_irrelevant", {
-      reason: `maxMatchScore=${maxMatchScore.toFixed(3)} < ${RELEVANCE_THRESHOLD}`,
-      hitScores,
-      refinedSearchQuery: refined,
-      result,
-    });
     return result;
   }
 
@@ -306,12 +260,5 @@ export const buildRuleBasedFactCheck = (
     checkerNotes,
     issues,
   };
-  logAgentStep("FactChecker", "规则兜底 · 分支 pass_with_hits", {
-    reason: "hits 相关且 coverage 可接受",
-    maxMatchScore,
-    topRelevance,
-    hitScores,
-    result,
-  });
   return result;
 }

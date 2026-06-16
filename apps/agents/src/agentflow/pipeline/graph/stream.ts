@@ -57,6 +57,19 @@ const isAnalystStreamChunk = (value: unknown): value is AnalystStreamChunk => {
 const shouldRetryRetrieval = (state: PipelineGraphState): boolean => {
     return !state.checkerPassed && state.retryCount < 1;
 };
+
+const summarizePipelineOut = (state: PipelineGraphState, answer: string) => ({
+    answerPreview: answer.length > 400 ? `${answer.slice(0, 400)}…` : answer,
+    exitEarly: state.exitEarly,
+    intent: state.decision?.intent ?? null,
+    needsRetrieval: state.decision?.needsRetrieval ?? null,
+    hitCount: state.hits.length,
+    coverage: state.coverage,
+    checkerPassed: state.checkerPassed,
+    retryCount: state.retryCount,
+    error: state.error,
+    hitPaths: state.hits.map((h) => h.path),
+});
 /**
  * LangGraph 流式编排：全链路在 graph 内（含 Analyst）；
  * custom 流转发 thinking / assistant，由 pipeline 映射为 AgentStreamEvent。
@@ -64,7 +77,7 @@ const shouldRetryRetrieval = (state: PipelineGraphState): boolean => {
 export async function* runPipelineStream(history: DbChatTurn[], context: AgentPipelineContext): AsyncGenerator<AgentStreamEvent, AgentPipelineResult> {
     ensureAgentsRuntime();
     const userQuestion = lastUserQuestion(history);
-    logAgentIn("Pipeline", "本轮开始", {
+    logAgentIn("Pipeline", "进入", {
         userQuestion,
         historyTurns: history.length,
         actorUserId: context.actorUserId,
@@ -77,12 +90,6 @@ export async function* runPipelineStream(history: DbChatTurn[], context: AgentPi
         history,
         userQuestion,
     });
-    if (memory.promptBlock) {
-        logAgentOut("Pipeline", "记忆上下文", {
-            sessionSummary: memory.sessionSummary,
-            userMemories: memory.userMemories,
-        });
-    }
     const graph = getCompiledPipelineGraph();
     const input = buildInitialState(history, context, userQuestion, memory.promptBlock, memory.intakeHistory);
     let finalState: PipelineGraphState = input;
@@ -138,6 +145,7 @@ export async function* runPipelineStream(history: DbChatTurn[], context: AgentPi
                 yield { type: "error", message: finalState.error };
                 const answer = finalState.answer ??
                     "（模型调用失败：请确认本地 Ollama 已启动且模型已拉取）";
+                logAgentOut("Pipeline", "出去", summarizePipelineOut(finalState, answer));
                 yield* emitAssistant(answer);
                 return { answer };
             }
@@ -204,9 +212,7 @@ export async function* runPipelineStream(history: DbChatTurn[], context: AgentPi
         yield { type: "step", name: activeStep, status: "done" };
     }
     if (finalState.exitEarly && finalState.answer) {
-        logAgentOut("Pipeline", "本轮结束（图提前退出）", {
-            answer: finalState.answer,
-        });
+        logAgentOut("Pipeline", "出去", summarizePipelineOut(finalState, finalState.answer));
         yield* emitAssistant(finalState.answer);
         await persistPipelineMemory({
             context,
@@ -227,5 +233,6 @@ export async function* runPipelineStream(history: DbChatTurn[], context: AgentPi
         userQuestion,
         answer,
     }).catch(() => undefined);
+    logAgentOut("Pipeline", "出去", summarizePipelineOut(finalState, answer));
     return { answer };
 }

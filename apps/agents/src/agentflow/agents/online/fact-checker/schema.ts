@@ -1,7 +1,7 @@
 import { z } from "zod";
-import { logAgentStep } from "@fambrain/agent-shared/agent-log";
 import { nullableTrimmedString, unitInterval } from "@/agentflow/utils";
 import type { FactCheckerResult } from "./prompt";
+
 export const factCheckerIssueCodeSchema = z.enum([
     "no_hits_when_needed",
     "hits_irrelevant",
@@ -10,10 +10,12 @@ export const factCheckerIssueCodeSchema = z.enum([
     "subtask_uncovered",
     "entity_missing",
 ]);
+
 export const factCheckerIssueSchema = z.object({
     code: factCheckerIssueCodeSchema,
     message: z.string().trim().min(1),
 });
+
 export const factCheckerResultSchema = z.object({
     passed: z.coerce.boolean(),
     evidenceScore: unitInterval,
@@ -21,12 +23,9 @@ export const factCheckerResultSchema = z.object({
     checkerNotes: nullableTrimmedString,
     issues: z.array(factCheckerIssueSchema).catch([]),
 });
+
 const enforceRetryCap = (result: FactCheckerResult, retryCount: number): FactCheckerResult => {
     if (retryCount < 1 || result.passed) {
-        logAgentStep("FactChecker", "Zod · retryCap 未触发", {
-            retryCount,
-            passed: result.passed,
-        });
         return result;
     }
     const capped: FactCheckerResult = {
@@ -44,28 +43,14 @@ const enforceRetryCap = (result: FactCheckerResult, retryCount: number): FactChe
                 },
             ],
     };
-    logAgentStep("FactChecker", "Zod · retryCap 强制放行", {
-        retryCount,
-        before: result,
-        after: capped,
-    });
     return capped;
 };
+
 export const parseFactCheckerResult = (raw: unknown, fallback: FactCheckerResult, retryCount: number): FactCheckerResult => {
-    logAgentStep("FactChecker", "Zod · 开始校验", {
-        retryCount,
-        rawType: raw === null ? "null" : typeof raw,
-        raw,
-    });
     const parsed = factCheckerResultSchema.safeParse(raw);
     if (!parsed.success) {
-        logAgentStep("FactChecker", "Zod · 校验失败，回退规则结果", {
-            zodError: parsed.error.flatten(),
-            fallback,
-        });
         return enforceRetryCap(fallback, retryCount);
     }
-    logAgentStep("FactChecker", "Zod · 校验通过", parsed.data);
     let result: FactCheckerResult = {
         passed: parsed.data.passed,
         evidenceScore: parsed.data.evidenceScore,
@@ -74,10 +59,6 @@ export const parseFactCheckerResult = (raw: unknown, fallback: FactCheckerResult
         issues: parsed.data.issues,
     };
     if (result.passed && result.refinedSearchQuery) {
-        logAgentStep("FactChecker", "Zod · 清理 refinedSearchQuery", {
-            reason: "passed=true 时不应保留改写检索词",
-            dropped: result.refinedSearchQuery,
-        });
         result = { ...result, refinedSearchQuery: null };
     }
     return enforceRetryCap(result, retryCount);

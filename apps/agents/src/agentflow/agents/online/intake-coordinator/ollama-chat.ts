@@ -23,10 +23,11 @@ export const completeIntakeCoordinator = async (history: DbChatTurn[], options?:
 }): Promise<string> => {
     const recent = options?.intakeHistory ?? history;
     const trimmed = recent.length > 40 ? recent.slice(-40) : recent;
-    logAgentIn("IntakeCoordinator", "对话历史（最近轮次）", {
+    const lastUser = [...trimmed].reverse().find((t) => t.role === "user")?.content ?? "";
+    logAgentIn("IntakeCoordinator", "进入", {
+        userQuestion: lastUser,
         turnCount: trimmed.length,
         hasMemoryBlock: Boolean(options?.memoryBlock),
-        turns: trimmed.map((t) => ({ role: t.role, content: t.content })),
     });
     const messages: BaseMessage[] = [new SystemMessage(prompt)];
     if (options?.memoryBlock) {
@@ -36,6 +37,8 @@ export const completeIntakeCoordinator = async (history: DbChatTurn[], options?:
     const ai = await llm.invoke(messages);
     const raw = textFromResponse(ai.content) ||
         "（模型未返回助手文本：请确认 Ollama 已启动且模型已拉取）";
-    logAgentOut("IntakeCoordinator", "路由 JSON（原始）", raw);
+    logAgentOut("IntakeCoordinator", "出去", {
+        routeJsonPreview: raw.length > 800 ? `${raw.slice(0, 800)}…` : raw,
+    });
     return raw;
 };

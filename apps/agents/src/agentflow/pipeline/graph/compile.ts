@@ -1,6 +1,5 @@
 import { END, START, StateGraph, getWriter } from "@langchain/langgraph";
 import type { LangGraphRunnableConfig } from "@langchain/langgraph";
-import { logAgentOut } from "@fambrain/agent-shared/agent-log";
 import { organizeKnowledge } from "@/agentflow/agents/online/content-organizer";
 import { buildSummarizeSourceText, formatSummaryAsAnswer, summarizeContent, } from "@/agentflow/agents/online/content-summarizer";
 import { completeFactCheck } from "@/agentflow/agents/online/fact-checker";
@@ -54,7 +53,6 @@ const intakeNode = async (state: PipelineGraphState): Promise<Partial<PipelineGr
         });
         const decision = parseIntakeDecision(intakeRaw) ??
             defaultIntakeDecision(state.userQuestion);
-        logAgentOut("Pipeline", "解析后的路由决策", decision);
         return { decision };
     }
     catch (e) {
@@ -128,17 +126,10 @@ const factCheckerNode = async (state: PipelineGraphState): Promise<Partial<Pipel
                 searchQuery: result.refinedSearchQuery,
             };
         }
-        logAgentOut("Pipeline", "事实核查", {
-            passed: result.passed,
-            evidenceScore: result.evidenceScore,
-            retryCount: state.retryCount,
-            issueCount: result.issues.length,
-        });
         return patch;
     }
     catch (e) {
         const msg = e instanceof Error ? e.message : "事实核查员调用失败";
-        logAgentOut("Pipeline", "事实核查（异常，放行）", { error: msg });
         return { checkerPassed: true, error: msg };
     }
 };
@@ -168,7 +159,6 @@ const contentSummarizerNode = async (state: PipelineGraphState): Promise<Partial
             language: decision.language,
         });
         const answer = formatSummaryAsAnswer(summary);
-        logAgentOut("Pipeline", "本轮结束（内容摘要师）", { title: summary.title });
         return { answer, exitEarly: true };
     }
     catch (e) {
@@ -213,9 +203,6 @@ const analystNode = async (state: PipelineGraphState, config: LangGraphRunnableC
             write?.(result.value);
             result = await gen.next();
         }
-        logAgentOut("Pipeline", "本轮结束（分析师终稿）", {
-            answer: result.value.answer,
-        });
         return { answer: result.value.answer };
     }
     catch (e) {
@@ -237,15 +224,9 @@ const respondEarlyNode = (state: PipelineGraphState): Partial<PipelineGraphState
         };
     }
     if (decision.intent === "clarify" && decision.clarifyingQuestion) {
-        logAgentOut("Pipeline", "本轮结束（澄清，未调下游）", {
-            answer: decision.clarifyingQuestion,
-        });
         return { answer: decision.clarifyingQuestion, exitEarly: true };
     }
     if (decision.briefReply) {
-        logAgentOut("Pipeline", "本轮结束（短回复）", {
-            answer: decision.briefReply,
-        });
         return { answer: decision.briefReply, exitEarly: true };
     }
     return {

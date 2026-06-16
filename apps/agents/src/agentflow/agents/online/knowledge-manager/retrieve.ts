@@ -12,7 +12,7 @@ import path from "node:path";
 import { HumanMessage, SystemMessage, } from "@langchain/core/messages";
 import { ChatOllama } from "@langchain/ollama";
 import { getAgentsConfig } from "@fambrain/agent-config";
-import { logAgentIn, logAgentOut, logAgentStep, } from "@fambrain/agent-shared/agent-log";
+import { logAgentIn, logAgentOut } from "@fambrain/agent-shared/agent-log";
 import { listCorpusScanRoots, listMarkdownFiles, SCAN_FOLDERS, searchCorpusVectors, toRepoPath, } from "@fambrain/corpus";
 import { prompt, type KnowledgeHit, type KnowledgeManagerInput, type KnowledgeRetrievalResult, } from "./prompt";
 import { parseJsonObject, textFromResponse } from "@/agentflow/utils";
@@ -31,8 +31,6 @@ const MAX_HITS = 5;
 const EXCERPT_MAX = 320;
 /** 日志中预览 candidate.body 的最大字符数 */
 const LOG_BODY_PREVIEW = 160;
-/** 日志中预览 LLM 原始回复的最大字符数（超出截断） */
-const LOG_LLM_RAW_MAX = 2000;
 /** 从 agent 配置读取 Ollama 地址、模型名等 */
 const { ollama } = getAgentsConfig();
 /**
@@ -72,6 +70,20 @@ const summarizeCandidate = (c: CandidateRow, index: number) => {
 const summarizeCandidates = (candidates: CandidateRow[]) => {
     return candidates.map(summarizeCandidate);
 };
+const summarizeRetrievalOut = (result: KnowledgeRetrievalResult, extra: Record<string, unknown> = {}) => ({
+    hitCount: result.hits.length,
+    coverage: result.coverage,
+    notes: result.notes,
+    paths: result.hits.map((h) => h.path),
+    hits: result.hits.map((h, i) => ({
+        rank: i + 1,
+        path: h.path,
+        title: h.title,
+        relevance: h.relevance,
+        excerptPreview: h.excerpt.slice(0, LOG_BODY_PREVIEW),
+    })),
+    ...extra,
+});
 const tokenize = (...parts: string[]): string[] => {
     const raw = parts.join(" ").toLowerCase(); // 多段文本拼成一句并小写
     const segments = raw
@@ -120,38 +132,20 @@ const scanDocCandidates =
  */
 async (corpusUserId: string, searchQuery: string, topics: string[] = [], subTasks: string[] = []): Promise<KnowledgeManagerInput["candidates"]> => {
     const tokens = tokenize(searchQuery, ...topics, ...subTasks);
-    logAgentStep("KnowledgeManager", "L1b 关键词扫盘 · 开始", {
-        where: "磁盘 data/doc/users/<corpusUserId>/corpus/{experience,projects,personal}",
-        corpusUserId,
-        searchQuery,
-        topics,
-        subTasks,
-        tokens,
-        tokenCount: tokens.length,
-    });
     if (tokens.length === 0) {
-        logAgentStep("KnowledgeManager", "L1b 关键词扫盘 · 跳过", {
-            reason: "分词结果为空，无法匹配",
-        });
         return [];
     }
     type Scored = KnowledgeManagerInput["candidates"][number] & {
         score: number;
     };
     const scored: Scored[] = [];
-    let filesScanned = 0;
     const scanRoots = await listCorpusScanRoots(corpusUserId, listMarkdownFiles);
-    logAgentStep("KnowledgeManager", "L1b 关键词扫盘 · 扫描根路径", {
-        scanRoots: scanRoots.map((r) => ({ root: r.root, layout: r.layout })),
-        folders: [...SCAN_FOLDERS],
-    });
     // 遍历每个语料根目录（兼容不同磁盘布局）
     for (const { root: corpusRoot } of scanRoots) {
         // experience / projects / personal 三类语料目录
         for (const folder of SCAN_FOLDERS) {
             const dir = path.join(corpusRoot, folder);
             for (const abs of await listMarkdownFiles(dir)) {
-                filesScanned += 1;
                 const body = await readFile(abs, "utf8").catch(() => ""); // 读失败当空文件
                 if (!body)
                     continue;
@@ -175,19 +169,6 @@ async (corpusUserId: string, searchQuery: string, topics: string[] = [], subTask
     }
     scored.sort((a, b) => b.score - a.score); // 按关键词命中数降序
     const top = scored.slice(0, MAX_CANDIDATES); // 只保留前 12 条候选
-    logAgentStep("KnowledgeManager", "L1b 关键词扫盘 · 完成", {
-        filesScanned,
-        matchedCount: scored.length,
-        keptCount: top.length,
-        maxCandidates: MAX_CANDIDATES,
-        topScored: top.map((c, i) => ({
-            rank: i + 1,
-            path: c.path,
-            title: c.title,
-            keywordScore: c.score,
-            bodyChars: c.body.length,
-        })),
-    });
     // 对外只返回 path/title/body，去掉内部 score
     return top.map(({ path, title, body }) => ({
         path,
@@ -197,18 +178,8 @@ async (corpusUserId: string, searchQuery: string, topics: string[] = [], subTask
 };
 const retrieveByKeywords = (input: Pick<KnowledgeManagerInput, "searchQuery" | "topics" | "subTasks">, candidates: KnowledgeManagerInput["candidates"]): KnowledgeRetrievalResult => {
     const tokens = tokenize(input.searchQuery, ...input.topics, ...input.subTasks);
-    logAgentStep("KnowledgeManager", "L2 关键词打分 · 开始", {
-        where: "内存（对已有 candidates 计 relevance，不访问 Chroma/磁盘）",
-        tokenCount: tokens.length,
-        tokens,
-        candidateCount: candidates.length,
-    });
     if (candidates.length === 0 || tokens.length === 0) {
         const empty = { hits: [], coverage: "none" as const, notes: null };
-        logAgentStep("KnowledgeManager", "L2 关键词打分 · 空结果", {
-            reason: candidates.length === 0 ? "无 candidates" : "无 tokens",
-            result: empty,
-        });
         return empty;
     }
     const scored = candidates
@@ -250,54 +221,19 @@ const retrieveByKeywords = (input: Pick<KnowledgeManagerInput, "searchQuery" | "
             ? "仅关键词匹配；若需更准可检查 Ollama 是否可用。"
             : null,
     };
-    logAgentStep("KnowledgeManager", "L2 关键词打分 · 完成", {
-        maxHits: MAX_HITS,
-        coverageRule: "top≥0.6→sufficient; >0→partial; else→none",
-        topRelevance: top,
-        scoredPreview: scored.slice(0, MAX_CANDIDATES).map((h, i) => ({
-            rank: i + 1,
-            path: h.path,
-            relevance: h.relevance,
-            matchedTokens: h.matchedTokens,
-            excerptPreview: h.excerpt.slice(0, LOG_BODY_PREVIEW),
-        })),
-        result,
-    });
     return result;
 };
-const coalesceRetrieval = (primary: KnowledgeRetrievalResult, fallback: KnowledgeRetrievalResult, meta: {
-    llmParsed: boolean;
-}): {
+const coalesceRetrieval = (primary: KnowledgeRetrievalResult, fallback: KnowledgeRetrievalResult): {
     result: KnowledgeRetrievalResult;
     chosenSource: string;
 } => {
-    let result: KnowledgeRetrievalResult;
-    let chosenSource: string;
-    let reason: string;
     if (primary.hits.length > 0) {
-        result = primary;
-        chosenSource = "llm";
-        reason = "采用 LLM 精排结果（primary.hits 非空）";
+        return { result: primary, chosenSource: "llm" };
     }
-    else if (fallback.hits.length > 0) {
-        result = fallback;
-        chosenSource = "keyword_fallback";
-        reason = "LLM 无有效 hits，回退 keywordFallback";
+    if (fallback.hits.length > 0) {
+        return { result: fallback, chosenSource: "keyword_fallback" };
     }
-    else {
-        result = primary;
-        chosenSource = "empty";
-        reason = "LLM 与 keywordFallback 均无 hits";
-    }
-    logAgentStep("KnowledgeManager", "⑤ 合并结果 coalesceRetrieval", {
-        reason,
-        llmParsed: meta.llmParsed,
-        primaryHitCount: primary.hits.length,
-        fallbackHitCount: fallback.hits.length,
-        chosenSource,
-        chosenCoverage: result.coverage,
-    });
-    return { result, chosenSource };
+    return { result: primary, chosenSource: "empty" };
 };
 const loadCandidates = 
 /**
@@ -309,11 +245,6 @@ async (input: KnowledgeManagerInput): Promise<{
 }> => {
     // 优先用外部 candidates  线上正常使用是不会进这个判断。
     if (input.candidates.length > 0) {
-        logAgentStep("KnowledgeManager", "L1 召回 · 使用外部 candidates", {
-            recallSource: "provided",
-            count: input.candidates.length,
-            items: summarizeCandidates(input.candidates),
-        });
         return { candidates: input.candidates, recallSource: "provided" };
     }
     // 向量检索用更长的 query：主检索句 + 主题 + 子任务，增强语义召回
@@ -322,93 +253,38 @@ async (input: KnowledgeManagerInput): Promise<{
         ...input.topics,
         ...input.subTasks,
     ].join(" ");
-    logAgentStep("KnowledgeManager", "L1a 向量召回 · 开始", {
-        where: "Chroma collection fambrain_corpus_<corpusUserId>",
-        corpusUserId: input.corpusUserId,
-        vectorQuery,
-        topK: MAX_CANDIDATES,
-    });
     try {
         const vectorHits = await searchCorpusVectors(input.corpusUserId, vectorQuery, MAX_CANDIDATES);
         if (vectorHits.length > 0) {
-            logAgentStep("KnowledgeManager", "L1a 向量召回 · 命中", {
-                recallSource: "vector",
-                hitCount: vectorHits.length,
-                items: vectorHits.map((h, i) => ({
-                    rank: i + 1,
-                    path: h.path,
-                    title: h.title,
-                    vectorScore: h.score,
-                    bodyChars: h.body.length,
-                    bodyPreview: h.body
-                        .replace(/\s+/g, " ")
-                        .trim()
-                        .slice(0, LOG_BODY_PREVIEW),
-                })),
-            });
             return { candidates: vectorHits, recallSource: "vector" };
         }
-        logAgentStep("KnowledgeManager", "L1a 向量召回 · 无结果", {
-            reason: "similaritySearchWithScore 返回空数组，降级 L1b 关键词扫盘",
-        });
     }
     catch (e) {
-        logAgentStep("KnowledgeManager", "L1a 向量召回 · 异常（静默降级）", {
-            error: e instanceof Error ? e.message : String(e),
-            next: "L1b 关键词扫盘",
-        });
     }
     const scanned = await scanDocCandidates(input.corpusUserId, input.searchQuery, input.topics, input.subTasks);
     return { candidates: scanned, recallSource: "keyword_scan" };
 };
 export const retrieveKnowledge = async (input: KnowledgeManagerInput): Promise<KnowledgeRetrievalResult> => {
-    logAgentIn("KnowledgeManager", "① 检索请求（入口）", {
+    logAgentIn("KnowledgeManager", "进入", {
         corpusUserId: input.corpusUserId,
         searchQuery: input.searchQuery,
         topics: input.topics,
         subTasks: input.subTasks,
         candidatesProvided: input.candidates.length,
-        limits: { maxCandidates: MAX_CANDIDATES, maxHits: MAX_HITS },
-        pipeline: [
-            "L1a 向量召回(Chroma)",
-            "L1b 关键词扫盘(磁盘, 向量失败/空时)",
-            "L2 关键词打分(内存, 作 LLM 兜底)",
-            "L3 LLM 精排(仅读 candidates JSON)",
-        ],
     });
-    // L1：补全 candidates（向量或扫盘或外部传入）
     const { candidates, recallSource } = await loadCandidates(input);
-    logAgentStep("KnowledgeManager", "② 召回汇总", {
-        recallSource,
-        candidateCount: candidates.length,
-        candidates: summarizeCandidates(candidates),
-    });
-    // L2：提前算好关键词兜底结果，LLM 成败都有一份退路
     const keywordFallback = retrieveByKeywords(input, candidates);
     if (candidates.length === 0) {
         const empty = { hits: [], coverage: "none" as const, notes: null };
-        logAgentOut("KnowledgeManager", "⑥ 检索结果（无候选，提前结束）", {
+        logAgentOut("KnowledgeManager", "出去", summarizeRetrievalOut(empty, {
             recallSource,
-            result: empty,
-        });
+            resultSource: "empty",
+        }));
         return empty;
     }
     // 把完整输入（含 candidates）序列化，作为 HumanMessage 发给精排模型
     const payload: KnowledgeManagerInput = { ...input, candidates };
     const payloadJson = JSON.stringify(payload, null, 2);
-    logAgentStep("KnowledgeManager", "③ LLM 精排 · 请求", {
-        where: "Ollama ChatOllama.invoke（不检索，只读 candidates）",
-        model: ollama.models.intakeCoordinator,
-        candidateCount: candidates.length,
-        payloadChars: payloadJson.length,
-        payloadPreview: {
-            corpusUserId: payload.corpusUserId,
-            searchQuery: payload.searchQuery,
-            topics: payload.topics,
-            subTasks: payload.subTasks,
-            candidatePaths: candidates.map((c) => c.path),
-        },
-    });
     try {
         // L3：SystemMessage=职责与 JSON 格式；HumanMessage=待精排的 candidates JSON
         const ai = await llm.invoke([
@@ -416,51 +292,29 @@ export const retrieveKnowledge = async (input: KnowledgeManagerInput): Promise<K
             new HumanMessage(payloadJson),
         ]);
         const text = textFromResponse(ai.content); // 模型回复 → 纯文本
-        logAgentStep("KnowledgeManager", "③ LLM 精排 · 原始回复", {
-            rawChars: text.length,
-            rawPreview: text.length > LOG_LLM_RAW_MAX
-                ? `${text.slice(0, LOG_LLM_RAW_MAX)}…（已截断）`
-                : text,
-        });
         const parsed = parseJsonObject<KnowledgeRetrievalResult>(text); // 从回复中抠 JSON
-        logAgentStep("KnowledgeManager", "④ JSON 解析 parseJsonObject", {
-            success: parsed !== null,
-            parsedPreview: parsed,
-        });
         // JSON 解析失败 → 整包用 keywordFallback；成功 → Zod 校验，不合格字段回退
         const llmResult: KnowledgeRetrievalResult = !parsed
             ? keywordFallback
             : parseKnowledgeRetrievalResult(parsed, keywordFallback);
-        logAgentStep("KnowledgeManager", "④ Zod 校验后 LLM 结果", {
-            jsonParseOk: parsed !== null,
-            hitCount: llmResult.hits.length,
-            coverage: llmResult.coverage,
-            notes: llmResult.notes,
-            hits: llmResult.hits.map((h, i) => ({
-                rank: i + 1,
-                path: h.path,
-                relevance: h.relevance,
-                excerptPreview: h.excerpt.slice(0, LOG_BODY_PREVIEW),
-            })),
-        });
         // LLM 有 hits 优先；否则用 L2 关键词结果
-        const { result, chosenSource } = coalesceRetrieval(llmResult, keywordFallback, {
-            llmParsed: parsed !== null,
-        });
-        logAgentOut("KnowledgeManager", "⑥ 检索结果（最终输出）", {
+        const { result, chosenSource } = coalesceRetrieval(llmResult, keywordFallback);
+        logAgentOut("KnowledgeManager", "出去", summarizeRetrievalOut(result, {
             recallSource,
             resultSource: chosenSource,
-            result,
-        });
+            llmJsonParsed: parsed !== null,
+            candidateCount: candidates.length,
+        }));
         return result;
     }
     catch (e) {
         const msg = e instanceof Error ? e.message : String(e);
-        logAgentOut("KnowledgeManager", "⑥ 检索结果（LLM 异常，关键词兜底）", {
+        logAgentOut("KnowledgeManager", "出去", summarizeRetrievalOut(keywordFallback, {
             recallSource,
-            error: msg,
-            result: keywordFallback,
-        });
+            resultSource: "keyword_fallback",
+            llmError: msg,
+            candidateCount: candidates.length,
+        }));
         return keywordFallback;
     }
 };
