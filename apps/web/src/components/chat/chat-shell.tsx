@@ -180,6 +180,32 @@ const IconEditTitle = ({ className }: { className?: string }) => {
     </svg>
   );
 };
+const IconTrash = ({ className }: { className?: string }) => {
+  return (
+    <svg
+      className={className}
+      width={17}
+      height={17}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      aria-hidden
+    >
+      <path strokeLinecap="round" d="M4 7h16" />
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"
+      />
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M10 11v6M14 11v6M6 7l1 12a1 1 0 0 0 1 .9h8a1 1 0 0 0 1-.9L18 7"
+      />
+    </svg>
+  );
+};
 const fetchJson = async <T,>(
   url: string
 ): Promise<
@@ -253,8 +279,8 @@ const consumeSse = async (
 };
 const mutateJson = async <B, R>(
   url: string,
-  method: "POST" | "PATCH",
-  body: B
+  method: "POST" | "PATCH" | "DELETE",
+  body?: B
 ): Promise<
   | {
       ok: true;
@@ -272,7 +298,7 @@ const mutateJson = async <B, R>(
       headers: { "Content-Type": "application/json" },
       credentials: "same-origin",
       cache: "no-store",
-      body: JSON.stringify(body),
+      ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
     });
     let parsed: unknown = null;
     try {
@@ -452,6 +478,62 @@ export const ChatShell = ({ initialConversations, viewer }: ChatShellProps) => {
       )
     );
   }, []);
+  const deleteConversationOptimistic = useCallback(
+    async (id: string, title: string) => {
+      if (sendBusy && activeConversationId === id) {
+        setListError("正在生成回复，请稍后再删除");
+        return;
+      }
+      const confirmed = window.confirm(
+        `确定删除「${title || "新对话"}」？\n删除后无法恢复。`
+      );
+      if (!confirmed) return;
+
+      let snapshot: ConversationListItem[] = [];
+      let wasActive = false;
+      let nextActiveId: string | null = null;
+      setListError(null);
+      flushSync(() => {
+        setConversations((prev) => {
+          snapshot = prev.map((c) => ({ ...c }));
+          wasActive = activeConversationId === id;
+          const remaining = prev.filter((c) => c.id !== id);
+          if (wasActive) {
+            nextActiveId = remaining[0]?.id ?? null;
+            setActiveConversationId(nextActiveId);
+            setPreferEmptySession(nextActiveId === null);
+            setMessages([]);
+            setMessagesError(null);
+            setSendError(null);
+            setStreamThinking("");
+            setStreamAnswerPreview("");
+            setThinkingPanelVisible(false);
+            pendingUserTempIdRef.current = null;
+            setEditingSidebarId(null);
+          }
+          return sortConversationsForSidebar(remaining);
+        });
+      });
+
+      const result = await mutateJson<undefined, { ok: boolean }>(
+        `/api/conversations/${id}`,
+        "DELETE"
+      );
+      if (!result.ok) {
+        flushSync(() => {
+          setConversations(snapshot);
+          if (wasActive) {
+            setActiveConversationId(id);
+            setPreferEmptySession(false);
+            setMessagesRetryTick((n) => n + 1);
+          }
+        });
+        setListError(result.error);
+        return;
+      }
+    },
+    [activeConversationId, sendBusy]
+  );
   /** 首轮有数据且无「新会话」偏好时，默认打开最近一条会话 */
   useEffect(() => {
     let cancelled = false;
@@ -880,6 +962,19 @@ export const ChatShell = ({ initialConversations, viewer }: ChatShellProps) => {
                           className="flex h-7 w-7 items-center justify-center rounded-md text-[#9ca3af] hover:bg-black/[0.06] hover:text-[#4f46e5] pt-3"
                         >
                           <IconEditTitle />
+                        </button>
+                        <button
+                          type="button"
+                          aria-label="删除对话"
+                          title="删除对话"
+                          onClick={(ev) => {
+                            ev.preventDefault();
+                            ev.stopPropagation();
+                            void deleteConversationOptimistic(c.id, c.title);
+                          }}
+                          className="flex h-7 w-7 items-center justify-center rounded-md text-[#9ca3af] hover:bg-red-50 hover:text-red-600"
+                        >
+                          <IconTrash />
                         </button>
                       </div>
                     </div>

@@ -7,7 +7,8 @@
  *
  * --llm  额外调用 Ollama 跑 completeFactCheck（需本地 Ollama 已启动）
  */
-import { buildRuleBasedFactCheck, completeFactCheck, type FactCheckerInput, type FactCheckerResult, } from "../src/agentflow/agents/online/fact-checker/index.ts";
+import { applyFactCheckGuards, buildRuleBasedFactCheck, completeFactCheck, type FactCheckerInput, type FactCheckerResult, } from "../src/agentflow/agents/online/fact-checker/index.ts";
+import { mergeRetrySearchQuery } from "../src/agentflow/agents/online/fact-checker/refined-search-query.ts";
 const runLlm = process.argv.includes("--llm");
 type Case = {
     name: string;
@@ -111,6 +112,35 @@ const cases: Case[] = [
         },
     },
     {
+        name: "personal 命中 → 直接放行（即使字面匹配度低）",
+        input: {
+            userQuestion: "我的名字",
+            intent: "retrieve_and_answer",
+            needsRetrieval: true,
+            searchQuery: "姓名",
+            subTasks: [],
+            topics: ["personal"],
+            language: "zh",
+            hits: [
+                {
+                    path: "src/doc/users/demo/corpus/personal/个人简历-潘展飞.md",
+                    title: "个人简历",
+                    excerpt: "姓名：潘展飞。10 年前端开发经验。",
+                    relevance: 0.72,
+                },
+            ],
+            coverage: "partial",
+            notes: null,
+            retryCount: 0,
+        },
+        expect: (r) => {
+            if (!r.passed)
+                throw new Error("personal/ 有 hits 应 passed=true");
+            if (r.refinedSearchQuery)
+                throw new Error("不应打回 refinedSearchQuery");
+        },
+    },
+    {
         name: "命中跑偏 → 打回",
         input: {
             userQuestion: "E-HR 用的什么数据库？",
@@ -169,6 +199,77 @@ const main = async () => {
         }
         console.log();
     }
+    console.log("=== mergeRetrySearchQuery / applyFactCheckGuards ===\n");
+    const merge = mergeRetrySearchQuery(
+        { searchQuery: "姓名", userQuestion: "姓名", subTasks: [], topics: [] },
+        "姓名 全名 完整称呼"
+    );
+    if (merge.shouldRetry) {
+        failed += 1;
+        console.error("• meta refined 合并应 skip retry … FAIL");
+    }
+    else {
+        console.log("• meta refined 合并无增量 … OK");
+    }
+    const mergeWithUserQuestion = mergeRetrySearchQuery(
+        { searchQuery: "姓名", userQuestion: "我的名字", subTasks: [], topics: [] },
+        "姓名 全名 完整称呼"
+    );
+    if (mergeWithUserQuestion.shouldRetry) {
+        failed += 1;
+        console.error("• meta refined 不应因 userQuestion 误触发 retry … FAIL");
+    }
+    else {
+        console.log("• meta refined 无 userQuestion 增量 … OK");
+    }
+    const mergeWithCorpusTerms = mergeRetrySearchQuery(
+        { searchQuery: "姓名", userQuestion: "我的名字", subTasks: [], topics: [] },
+        "个人简介 简历 全名"
+    );
+    if (!mergeWithCorpusTerms.shouldRetry || !mergeWithCorpusTerms.query.includes("个人简介")) {
+        failed += 1;
+        console.error("• 含语料词的 refined 合并应 retry … FAIL");
+    }
+    else {
+        console.log(`• 含语料词 refined 合并 … OK → ${mergeWithCorpusTerms.query}`);
+    }
+    const guarded = applyFactCheckGuards(
+        {
+            userQuestion: "姓名",
+            intent: "retrieve_and_answer",
+            needsRetrieval: true,
+            searchQuery: "姓名",
+            subTasks: [],
+            topics: [],
+            language: "zh",
+            hits: [
+                {
+                    path: "src/doc/users/demo/corpus/projects/x.md",
+                    title: "x",
+                    excerpt: " unrelated ",
+                    relevance: 0.2,
+                },
+            ],
+            coverage: "partial",
+            notes: null,
+            retryCount: 0,
+        },
+        {
+            passed: false,
+            evidenceScore: 0.2,
+            refinedSearchQuery: "姓名 全名 完整称呼",
+            checkerNotes: null,
+            issues: [{ code: "hits_irrelevant", message: "test" }],
+        }
+    );
+    if (!guarded.passed || guarded.refinedSearchQuery !== null) {
+        failed += 1;
+        console.error("• applyFactCheckGuards meta 无增量应 pass … FAIL");
+    }
+    else {
+        console.log("• applyFactCheckGuards meta 无增量放行 … OK");
+    }
+    console.log();
     if (runLlm) {
         console.log("=== FactChecker LLM（completeFactCheck，需 Ollama）===\n");
         const sample = cases[3].input;

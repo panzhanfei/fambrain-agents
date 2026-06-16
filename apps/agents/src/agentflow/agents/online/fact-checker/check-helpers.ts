@@ -7,11 +7,12 @@
  * - 用轻量 token 匹配估算 hit 与问题的相关度（不依赖 embedding）
  *
  * 分支优先级（自上而下，命中即返回）：
- *   skip_no_retrieval → force_pass_after_retry → no_hits_first_attempt
- *   → coverage_mismatch_* → hits_irrelevant → pass_with_hits
+ *   skip_no_retrieval → force_pass_after_retry → pass_personal_corpus
+ *   → no_hits_first_attempt → coverage_mismatch_* → hits_irrelevant → pass_with_hits
  */
 
 import type { FactCheckerInput, FactCheckerIssue, FactCheckerResult } from "./prompt";
+import { hasPersonalCorpusHits, mergeRetrySearchQuery } from "./refined-search-query";
 import { parseFactCheckerResult } from "./schema";
 
 /** 对外统一命名：LLM 输出经 Zod 校验 + retryCap 后的规范化入口 */
@@ -163,7 +164,30 @@ export const buildRuleBasedFactCheck = (
   const issues: FactCheckerIssue[] = [];
   const { hits, coverage } = input;
 
-  // ── 分支 C：首次检索完全无命中 → 打回，附带更完整的 refinedSearchQuery ──
+  // ── 分支 C：personal/ 语料已有命中 → 直接放行（避免 meta refined 打回毁掉 KM₁）──
+  if (hits.length > 0 && hasPersonalCorpusHits(hits)) {
+    const topRelevance = Math.max(...hits.map((h) => h.relevance), 0);
+    const evidenceScore =
+      coverage === "sufficient"
+        ? Math.max(0.75, topRelevance)
+        : coverage === "partial"
+          ? Math.max(0.55, topRelevance * 0.9)
+          : Math.max(0.5, topRelevance * 0.85);
+
+    const result: FactCheckerResult = {
+      passed: true,
+      evidenceScore: Math.min(1, evidenceScore),
+      refinedSearchQuery: null,
+      checkerNotes:
+        coverage === "partial"
+          ? "personal 语料已命中，证据部分覆盖，分析师勿推断未覆盖细节。"
+          : null,
+      issues: [],
+    };
+    return result;
+  }
+
+  // ── 分支 D：首次检索完全无命中 → 打回，附带更完整的 refinedSearchQuery ──
   if (hits.length === 0 && coverage === "none") {
     const refined = buildRefinedSearchQuery(input);
     const result: FactCheckerResult = {
@@ -181,7 +205,7 @@ export const buildRuleBasedFactCheck = (
     return result;
   }
 
-  // ── 分支 D：KM 内部状态不一致 — 有 hits 但 coverage 标 none ──
+  // ── 分支 E：KM 内部状态不一致 — 有 hits 但 coverage 标 none ──
   if (hits.length > 0 && coverage === "none") {
     issues.push({
       code: "coverage_mismatch",
@@ -198,7 +222,7 @@ export const buildRuleBasedFactCheck = (
     return result;
   }
 
-  // ── 分支 E：KM 内部状态不一致 — coverage sufficient 却无 hits ──
+  // ── 分支 F：KM 内部状态不一致 — coverage sufficient 却无 hits ──
   if (hits.length === 0 && coverage === "sufficient") {
     issues.push({
       code: "coverage_mismatch",
@@ -215,7 +239,7 @@ export const buildRuleBasedFactCheck = (
     return result;
   }
 
-  // ── 分支 F：有 hits 但与 query 字面匹配度过低（如问 E-HR 命中 Sentinel）──
+  // ── 分支 G：有 hits 但与 query 字面匹配度过低（如问 E-HR 命中 Sentinel）──
   const hitScores = scoreHits(input);
   const maxMatchScore = hitScores.length
     ? Math.max(...hitScores.map((h) => h.matchScore))
@@ -239,7 +263,7 @@ export const buildRuleBasedFactCheck = (
     return result;
   }
 
-  // ── 分支 G：证据可接受，放行给 ContentOrganizer → Analyst ──
+  // ── 分支 H：证据可接受，放行给 ContentOrganizer → Analyst ──
   const topRelevance = Math.max(...hits.map((h) => h.relevance), 0);
   const evidenceScore =
     coverage === "sufficient"
@@ -262,3 +286,55 @@ export const buildRuleBasedFactCheck = (
   };
   return result;
 }
+
+/**
+ * LLM 结果后处理：personal/ 放行；meta refined 合并后无增量则 pass、不重检 KM。
+ */
+export const applyFactCheckGuards = (
+  input: FactCheckerInput,
+  result: FactCheckerResult
+): FactCheckerResult => {
+  if (input.retryCount >= 1) {
+    return result;
+  }
+
+  if (input.hits.length > 0 && hasPersonalCorpusHits(input.hits)) {
+    if (result.passed) {
+      return result;
+    }
+    const ruled = buildRuleBasedFactCheck(input);
+    return {
+      ...ruled,
+      checkerNotes:
+        result.checkerNotes ??
+        ruled.checkerNotes ??
+        "personal 语料已命中，保留首轮检索结果。",
+    };
+  }
+
+  if (!result.passed && result.refinedSearchQuery?.trim()) {
+    const { query, shouldRetry } = mergeRetrySearchQuery(
+      input,
+      result.refinedSearchQuery
+    );
+
+    if (!shouldRetry) {
+      return {
+        ...result,
+        passed: true,
+        refinedSearchQuery: null,
+        checkerNotes:
+          result.checkerNotes ??
+          "改写检索词无有效增量，保留首轮检索结果。",
+        issues: result.issues,
+      };
+    }
+
+    return {
+      ...result,
+      refinedSearchQuery: query,
+    };
+  }
+
+  return result;
+};

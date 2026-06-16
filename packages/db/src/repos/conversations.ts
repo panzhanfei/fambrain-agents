@@ -61,3 +61,11 @@ export const maybeUpdateConversationTitle = async (conversationId: string, curre
         data: { title },
     });
 };
+
+export const deleteOwnedConversation = async (conversationId: string, userId: string): Promise<boolean> => {
+    const owned = await findOwnedConversation(conversationId, userId);
+    if (!owned)
+        return false;
+    await prisma.conversation.delete({ where: { id: conversationId } });
+    return true;
+};

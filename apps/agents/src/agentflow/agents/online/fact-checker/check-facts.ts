@@ -17,9 +17,11 @@ import {
 import { parseJsonObject, textFromResponse } from "@/agentflow/utils";
 
 import {
+  applyFactCheckGuards,
   buildRuleBasedFactCheck,
   normalizeFactCheckerResult,
 } from "./check-helpers";
+import { hasPersonalCorpusHits } from "./refined-search-query";
 import {
   prompt,
   type FactCheckerInput,
@@ -72,6 +74,20 @@ export const completeFactCheck = async (
 
   const fallback = buildRuleBasedFactCheck(input);
 
+  if (
+    input.retryCount === 0 &&
+    input.hits.length > 0 &&
+    hasPersonalCorpusHits(input.hits)
+  ) {
+    const result = buildRuleBasedFactCheck(input);
+    logAgentOut("FactChecker", "出去", summarizeFactCheckOut(result, {
+      source: "rules_personal_pass",
+      guardApplied: "personal_skip_llm",
+      willRetryRetrieval: false,
+    }));
+    return result;
+  }
+
   try {
     const humanPayload = JSON.stringify(input, null, 2);
     const ai = await llm.invoke([
@@ -82,38 +98,28 @@ export const completeFactCheck = async (
     const text = textFromResponse(ai.content);
     const parsed = parseJsonObject<FactCheckerResult>(text);
     const beforeNormalize = parsed;
-    const result = normalizeFactCheckerResult(
-      parsed,
-      fallback,
-      input.retryCount
-    );
+    const normalized = normalizeFactCheckerResult(parsed, fallback, input.retryCount);
+    const guarded = applyFactCheckGuards(input, normalized);
+    const guardApplied =
+      guarded.passed && !normalized.passed ? "post_llm_guard" : null;
 
-    if (
-      !result.passed &&
-      result.refinedSearchQuery &&
-      result.refinedSearchQuery.trim() === input.searchQuery.trim()
-    ) {
-      const refined = buildRuleBasedFactCheck(input);
-      if (refined.refinedSearchQuery) {
-        result.refinedSearchQuery = refined.refinedSearchQuery;
-      }
-    }
-
-    logAgentOut("FactChecker", "出去", summarizeFactCheckOut(result, {
+    logAgentOut("FactChecker", "出去", summarizeFactCheckOut(guarded, {
       source: beforeNormalize === null ? "rules_fallback" : "llm",
+      guardApplied,
       willRetryRetrieval:
-        !result.passed &&
-        result.refinedSearchQuery !== null &&
+        !guarded.passed &&
+        guarded.refinedSearchQuery !== null &&
         input.retryCount < 1,
     }));
-    return result;
+    return guarded;
   }
   catch (e) {
     const errorMessage = e instanceof Error ? e.message : String(e);
-    logAgentOut("FactChecker", "出去", summarizeFactCheckOut(fallback, {
+    const fallbackGuarded = applyFactCheckGuards(input, fallback);
+    logAgentOut("FactChecker", "出去", summarizeFactCheckOut(fallbackGuarded, {
       source: "rules_fallback",
       llmError: errorMessage,
     }));
-    return fallback;
+    return fallbackGuarded;
   }
 };

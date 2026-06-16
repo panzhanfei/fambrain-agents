@@ -150,26 +150,27 @@ flowchart TD
 
 **职责：** 产出 `hits[]`（path / excerpt / relevance），不对用户说话。
 
-**技术：** LangChain `ChatOllama`（精排）；**向量检索** + 关键词扫描 fallback。
+**技术：** **纯规则精排**（无 LLM）。向量语义召回（Chroma）→ 低置信时关键词扫盘补充 → `tokenize` + `pickExcerpt` 确定性输出。与业界「检索层不用 Chat LLM、生成留给 Analyst」一致；避免小模型在精排阶段改写 excerpt、编造 `notes`（见 [坑点 P0-4 / D3-3](./04-pitfalls.md)）。
 
 ```mermaid
 flowchart TD
-  IN["searchQuery + corpusUserId"] --> VEC["vectorRetrieve()"]
+  IN["searchQuery + corpusUserId"] --> VEC["searchCorpusVectors()"]
   VEC -->|无结果| SCAN["scanDocCandidates()"]
-  VEC --> CAND[candidates]
-  SCAN --> CAND
-  CAND --> LLM["ChatOllama 精排"]
-  LLM --> COAL["coalesceRetrieval()"]
-  COAL --> OUT["hits / coverage / notes"]
+  VEC -->|低置信| SCAN
+  VEC -->|高置信| CAND[candidates]
+  SCAN --> MERGE["mergeCandidates()"]
+  MERGE --> CAND
+  CAND --> RULE["retrieveByKeywords() + ensureNonEmptyHits()"]
+  RULE --> OUT["hits / coverage / notes<br/>resultSource: rule"]
 ```
 
 | 步骤 | 做什么 | 规则 | 文件 | 方法 |
 |------|--------|------|------|------|
-| 1 | 向量预扫 | Chroma collection per user | `vector-retrieve.ts`, `knowledge/chroma-rag.ts` | `vectorRetrieve()` |
-| 2 | 关键词 fallback | `experience/projects/personal`；中文二元切分 | `retrieve.ts` | `scanDocCandidates()`, `tokenize()` |
-| 3 | LLM 精排 | 只从 candidates 选 | `retrieve.ts`, `prompt.ts` | `retrieveKnowledge()` |
-| 4 | 回退 | LLM 空 hits → 关键词合并 | `retrieve.ts` | `coalesceRetrieval()` |
-| 5 | 输出 | 最多 5 条；coverage 三档 | `prompt.ts` | `KnowledgeRetrievalResult` |
+| 1 | 向量预扫 | Chroma collection per user；L2 距离 + top1/top2 gap 判高置信 | `@fambrain/corpus` | `searchCorpusVectors()` |
+| 2 | 关键词扫盘 | 向量空或低置信时扫 `experience/projects/personal`；中文二元切分 | `retrieve.ts` | `scanDocCandidates()`, `tokenize()` |
+| 3 | 规则精排 | 关键词 relevance ∪ 向量 score；`pickExcerpt` 截原文 | `retrieve.ts` | `retrieveByKeywords()` |
+| 4 | 兜底 | candidates 非空禁止 `hits:[]`（D3-2） | `retrieve.ts` | `ensureNonEmptyHits()` |
+| 5 | 输出 | 最多 5 条；coverage 三档；日志 `resultSource: "rule"` | `prompt.ts`（类型） | `KnowledgeRetrievalResult` |
 
 ### 4. FactChecker — 事实核查员（D5）🔄
 
@@ -349,7 +350,7 @@ flowchart TD
 | 实验 | 命令 | 作用 |
 |------|------|------|
 | MCP 列 vault | `pnpm run experiment:mcp-vault` | stdio MCP 工具 `list_vault_files` |
-| Recall 对比 | `pnpm run experiment:recall-compare -- <userId> "query"` | `recallKeywordRetrieve` vs `vectorRetrieve` |
+| Recall 对比 | `pnpm run experiment:recall-compare -- <userId> "query"` | `recallKeywordRetrieve` vs `searchCorpusVectors` |
 | Vercel AI SDK | `pnpm run experiment:vercel-ai -- "prompt"` | `streamText` + Ollama（主链仍自研 SSE） |
 
 **验证：** `pnpm run verify:vault-list`（vault 列举单测）。

@@ -365,6 +365,6 @@ pnpm run golden:regression   # G1～G5 全链路标准回归
 | 多 Agent 协作 | LangGraph 条件回退、ContentOrganizer 去重 | 重复输出、协商死循环 |
 | 记忆管理 | SummaryBuffer、共享状态 | 关键信息遗忘、上下文污染 |
 | 可观测性 | streamEvents、调试面板 | 推理黑盒（#18 部分 ✅） |
-| **P0 已落地** | `runPipelineStream`、关键词 RAG、`coalesceRetrieval` | P0-1～10 |
+| **P0 已落地** | `runPipelineStream`、关键词 RAG、KM **规则精排**（无在线 LLM） | P0-1～10 |
 
 **口述建议：** 先讲 17 项里已 ✅/触达的 **14 项** + P0 踩坑 **5～6 条**，再带「LangSmith / Agno 见 P2」。
