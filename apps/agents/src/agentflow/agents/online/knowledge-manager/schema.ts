@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { nullableTrimmedString, unitInterval } from "@/agentflow/utils";
-import type { KnowledgeHit, KnowledgeRetrievalResult } from "./prompt";
+import type { KnowledgeHit, KnowledgeRetrievalResult } from "./types";
 export const knowledgeHitSchema = z.object({
     path: z.string().trim().min(1),
     title: z.coerce.string().transform((s) => String(s).trim()),

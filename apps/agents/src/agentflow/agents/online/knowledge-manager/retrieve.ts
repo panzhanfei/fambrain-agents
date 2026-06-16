@@ -18,21 +18,20 @@ import {
     searchCorpusVectors,
     toRepoPath,
 } from "@fambrain/corpus";
+import {
+    EXCERPT_MAX,
+    LOG_BODY_PREVIEW,
+    MAX_CANDIDATES,
+    MAX_HITS,
+    SCAN_BODY_MAX,
+    VECTOR_CONFIDENT_GAP_MIN,
+    VECTOR_CONFIDENT_TOP1_MAX,
+} from "./km-config";
 import type {
     KnowledgeHit,
     KnowledgeManagerInput,
     KnowledgeRetrievalResult,
-} from "./prompt";
-
-export const MAX_CANDIDATES = 12;
-const MAX_HITS = 5;
-const EXCERPT_MAX = 320;
-const LOG_BODY_PREVIEW = 160;
-
-/** Chroma L2 距离：越小越相似；top1 低于此视为向量高置信 */
-const VECTOR_CONFIDENT_TOP1_MAX = 1.25;
-/** top1 与 top2 距离差至少此值视为无歧义（L2） */
-const VECTOR_CONFIDENT_GAP_MIN = 0.12;
+} from "./types";
 
 type CandidateRow = KnowledgeManagerInput["candidates"][number] & {
     score?: number;
@@ -179,7 +178,7 @@ const scanDocCandidates = async (
                 scored.push({
                     path: repoPath,
                     title: titleFromMarkdown(path.basename(abs), body),
-                    body: body.slice(0, 4000),
+                    body: body.slice(0, SCAN_BODY_MAX),
                     score,
                 });
             }
@@ -396,11 +395,3 @@ export const retrieveKnowledge = async (
     }));
     return ruleResult;
 };
-
-/** 供测试 / 配置读取 */
-export const getKmRetrievalConfig = () => ({
-    maxCandidates: MAX_CANDIDATES,
-    maxHits: MAX_HITS,
-    vectorConfidentTop1Max: VECTOR_CONFIDENT_TOP1_MAX,
-    vectorConfidentGapMin: VECTOR_CONFIDENT_GAP_MIN,
-});

@@ -1,6 +1,6 @@
 /**
- * KnowledgeManager 类型与合同（P0）。
- * 职责：从 candidates 产出结构化 hits / coverage / notes；**在线检索不调 LLM**（见 retrieve.ts）。
+ * KnowledgeManager 输入/输出类型（检索合同）。
+ * 在线检索不调 LLM，见 retrieve.ts。
  */
 export type KnowledgeHit = {
     /** 相对仓库的路径，如 data/doc/users/<userId>/corpus/personal/个人简历.md */
