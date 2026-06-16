@@ -7,6 +7,8 @@
  * L1a：Chroma 向量语义召回（优先）
  * L1b：磁盘关键词扫盘（向量空/低置信时补充）
  * L2：内存关键词打分 + pickExcerpt（唯一输出路径）
+ *
+ * KM-01 topics 分流：topics 仅拼入向量 query；字面 token 只用 searchQuery + subTasks。
  */
 import { readFile } from "node:fs/promises";
 import path from "node:path";
@@ -85,6 +87,12 @@ const tokenize = (...parts: string[]): string[] => {
     return [...new Set(expanded)];
 };
 
+/** 字面匹配用 token（KM-01：不含 topics，topics 只参与向量 semantic query） */
+const tokenizeForRecall = (
+    searchQuery: string,
+    subTasks: string[] = []
+): string[] => tokenize(searchQuery, ...subTasks);
+
 const titleFromMarkdown = (fileName: string, body: string): string => {
     const line = body.match(/^#\s+(.+)$/m)?.[1]?.trim();
     return line || fileName.replace(/\.md$/i, "");
@@ -153,10 +161,9 @@ const mergeCandidates = (
 const scanDocCandidates = async (
     corpusUserId: string,
     searchQuery: string,
-    topics: string[] = [],
     subTasks: string[] = []
 ): Promise<CandidateRow[]> => {
-    const tokens = tokenize(searchQuery, ...topics, ...subTasks);
+    const tokens = tokenizeForRecall(searchQuery, subTasks);
     if (tokens.length === 0) return [];
 
     type Scored = CandidateRow & { score: number };
@@ -198,10 +205,10 @@ const vectorScoreToRelevance = (score: number | undefined): number => {
 };
 
 const retrieveByKeywords = (
-    input: Pick<KnowledgeManagerInput, "searchQuery" | "topics" | "subTasks">,
+    input: Pick<KnowledgeManagerInput, "searchQuery" | "subTasks">,
     candidates: CandidateRow[]
 ): KnowledgeRetrievalResult => {
-    const tokens = tokenize(input.searchQuery, ...input.topics, ...input.subTasks);
+    const tokens = tokenizeForRecall(input.searchQuery, input.subTasks);
     if (candidates.length === 0 || tokens.length === 0) {
         return { hits: [], coverage: "none", notes: null };
     }
@@ -253,13 +260,13 @@ const retrieveByKeywords = (
 
 /** candidates 非空时禁止最终 hits 为空（D3-2） */
 const ensureNonEmptyHits = (
-    input: Pick<KnowledgeManagerInput, "searchQuery" | "topics" | "subTasks">,
+    input: Pick<KnowledgeManagerInput, "searchQuery" | "subTasks">,
     candidates: CandidateRow[],
     result: KnowledgeRetrievalResult
 ): KnowledgeRetrievalResult => {
     if (result.hits.length > 0 || candidates.length === 0) return result;
 
-    const tokens = tokenize(input.searchQuery, ...input.topics, ...input.subTasks);
+    const tokens = tokenizeForRecall(input.searchQuery, input.subTasks);
     const sorted = [...candidates].sort((a, b) => {
         const sa = a.score ?? Number.POSITIVE_INFINITY;
         const sb = b.score ?? Number.POSITIVE_INFINITY;
@@ -325,7 +332,6 @@ const loadCandidates = async (
         const scanned = await scanDocCandidates(
             input.corpusUserId,
             input.searchQuery,
-            input.topics,
             input.subTasks
         );
         return {
@@ -346,7 +352,6 @@ const loadCandidates = async (
     const scanned = await scanDocCandidates(
         input.corpusUserId,
         input.searchQuery,
-        input.topics,
         input.subTasks
     );
     return {
