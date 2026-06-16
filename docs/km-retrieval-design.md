@@ -1,186 +1,256 @@
-# KnowledgeManager 检索完善设计（KM v2）
+# KnowledgeManager 检索设计（KM v3 · 业界对标）
 
-> **状态：** 设计确认中 · **实现策略：** 一条一条加/改，每步可单独验收  
+> **状态：** 计划已定稿 · **实现策略：** 按 Wave 逐条落地，每步可单独验收  
 > **基线：** [§2.1.1 KM 规则精排已消坑](./04-pitfalls.md#211-km-移除在线-llm--规则精排p0-4--d3-2--d3-3--d3-5---已消坑-2026-06)（v1，无在线 LLM）  
-> **原则：** 检索层不调 Chat LLM；快、稳、可回归；不动 Pipeline 对外合同（`hits / coverage / notes`）
+> **原则：** 检索层不调 Chat LLM；快、稳、可回归；**Wave A～C 不动** Pipeline 对外合同（`hits / coverage / notes`）；Wave D 起可选扩展字段  
+> **范围：** **KM 为主** + 必须/建议配合的模块；FC / Organizer / Analyst **默认不动**
 
 ---
 
-## 一、v1 已有（本次不推翻）
+## 一、业界五层 vs 现状
 
-| 能力 | 说明 |
-|------|------|
-| 向量召回 | `searchCorpusVectors`（Chroma 向量库） |
-| 低置信/空 → 关键词扫盘 | `scanDocCandidates` |
-| 规则精排 | token 打分 + `pickExcerpt` |
-| 硬兜底 | `ensureNonEmptyHits`（候选非空 → hits 非空） |
-| 无 LLM 精排 | `resultSource: "rule"` |
+| 业界层 | 标准能力 | 现状 | v3 目标 |
+|--------|----------|------|---------|
+| **L1 查询理解** | 意图分类、指代补全、query 改写 | Intake 出 `searchQuery/topics/subTasks` | Intake 增 `queryType`；KM 内规则 profile 作 fallback |
+| **L2 混合召回** | 向量 ∥ BM25/sparse → RRF | 串行：向量 → 低置信才扫盘 | **并行 Hybrid + RRF** |
+| **L3 置信评估** | 融合分 + 分档路由 | L2 阈值 + `coverage` 规则 | 多维置信 + 可选 `confidenceTier` |
+| **L4 加工** | dedupe、excerpt、Cross-Encoder | 规则 rank + pickExcerpt | pathBoost、guard、表格 excerpt、可选 rerank |
+| **L5 多级兜底** | 改写重查 → FAQ → 无知识标识 | scan + ensureNonEmptyHits | 分级兜底；FC retry 保留 |
 
----
+**Pipeline 分工（不改大架构）：**
 
-## 二、改动清单（逐条实施）
-
-**图例：** 类型 = **新增** / **修改** · 状态 = ⬜ 待做 / 🔄 进行中 / ✅ 已完成
-
-| ID | 类型 | 改什么（大白话） | 技术项 | 为什么 | 消坑 | 改哪些文件 | 计划日 | 状态 | 验收（一句话） |
-|----|------|------------------|--------|--------|------|------------|--------|------|----------------|
-| KM-01 | 修改 | 英文 **topics**（主题标签）只参与向量搜，不参与字面拆词 | topics 分流 | Intake 常带 `urban-governance` 等英文 tag，中文语料字面搜不到，相关度被算成 0 | D3-4 | `retrieve.ts` | D1 | ✅ | topics 含英文 tag 时，中文 query 仍能有 hits |
-| KM-02 | 新增 | 向量结果按**文件 path**（路径）去重，同一 md 最多留 1～2 段 chunk（切块） | dedupeByPath | 12 条候选里 3+ 条同一简历，挤掉其他公司/项目文件 | D3-6 | `retrieve-helpers.ts`、`retrieve.ts` | D1 | ✅ | 12 candidates 时 unique path 明显增多 |
-| KM-03 | 新增 | **pathBoost**（路径加权）打分表：personal / experience / projects 加减分 | path 加权 | 「我的名字」误命中 `projects/resume.md`；项目问法偏模板文件 | D3-10、P0-15 | `km-config.ts`、`retrieve.ts` | D1 | ⬜ | 姓名类 Top1 为 `personal/`，非 resume 项目 |
-| KM-04 | 新增 | 常量收到 **km-config**（集中配置）：topK、maxHits、L2 阈值、加权表 | 配置集中 | 魔法数字分散，难调、难对照坑点 | D3-7 | `km-config.ts` | D1 | ✅ | `getKmRetrievalConfig()` 可读全部参数 |
-| KM-05 | 修改 | 打分公式：`相关度 = token + 向量分 + pathBoost`，封顶 1.0 | rank 公式 | 与 KM-03 配套落地 | D3-10 | `retrieve.ts` | D1 | ⬜ | 日志可见加权后 relevance 变化 |
-| KM-06 | 修改 | `ensureNonEmptyHits` 兜底时按**加权后**最优候选补选，不只向量 Top1 | 兜底增强 | token 全未命中时仍应优先 personal/experience | D3-2 | `retrieve.ts` | D1 | ⬜ | candidates>0 且 token 弱时 hits 仍合理 |
-| KM-07 | 新增 | **verify-km-retrieve** 脚本：不测全链路，只测 KM 规则 | 单测 | 改 KM 参数后可快速回归 | — | `scripts/verify-km-retrieve.ts` | D1 | ⬜ | `pnpm run verify:km-retrieve` 通过 |
-| KM-08 | 新增 | **queryProfile**（问法类型）：identity / enumeration / tech / default | 问法识别 | 姓名、列举、技术栈不应共用 maxHits=5 | P0-15、R6-1 | `query-profile.ts`、`retrieve.ts` | D2 | ⬜ | 三类固定问法 profile 推断正确 |
-| KM-09 | 修改 | 按 profile 分档 **vectorTopK / maxHits**（如列举 24/8，身份 12/4） | 分档参数 | 列举型需要更多 experience 文件进 hits | R6-1 | `km-config.ts`、`retrieve.ts` | D2 | ⬜ | 列举问法 maxHits=8 |
-| KM-10 | 新增 | **表格 excerpt**：优先摘 markdown 表格行（如 `\| 姓名 \| xxx \|`） | 表格摘抄 | chunk 切在标题处时，线性截断缺姓名字段 | P0-6 上游 | `retrieve-helpers.ts` | D2 | ⬜ | 「我的名字」excerpt 含姓名表格行 |
-| KM-11 | 新增 | **identityGuard**：有 `personal/个人简历*` 则强制 Top1 | 身份保底 | 复合问「我叫什么 年龄 职业」hits 波动 | P0-15 | `retrieve.ts` | D2 | ⬜ | 连问 3 遍 Top1 path 均为 personal 简历 |
-| KM-12 | 修改 | 日志增加 `queryProfile`、`uniquePathCount`、`guardApplied` | 可观测 | 联调时一眼看出 KM 走了哪条策略 | — | `retrieve.ts` | D2 | ⬜ | agent-log 📤 含上述字段 |
-| KM-13 | 修改 | 列举 profile 时**主动扫 experience/** 全目录（不只低置信才扫） | 列举召回 | 向量 topK 按相似度排序，易漏公司文件 | R6-1 | `retrieve.ts` | D3 | ⬜ | 「哪几家公司」candidates 覆盖 experience 多文件 |
-| KM-14 | 新增 | **enumerationFill**：每个 experience/*.md（除 README）至少 1 hit | 列举保底 | 分析师只能念 hits 里的公司，KM 必须交全 | R6-1 | `retrieve.ts` | D3 | ⬜ | hits 含语料全部经历文件（如 4 家） |
-| KM-15 | 修改 | 列举型 **coverage / notes** 文案（已补全 / 部分补全） | coverage 规则 | Analyst 需知列举是否穷尽 | R6-1 | `retrieve.ts` | D3 | ⬜ | notes 标明列举型补全状态 |
-| KM-16 | 修改 | 同 path 多 chunk **合并 body** 再摘抄（上限 ~6000 字） | chunk 合并 | 单 chunk 信息不全，合并后 excerpt 更完整 | D3-6 | `retrieve-helpers.ts` | D3 | ⬜ | 同文件多 chunk 合并后 excerpt 更全 |
-| KM-17 | 修改 | 同步 [02-agent-flows](./02-agent-flows.md) KM 流程图与步骤表 | 文档 | 与 v2 实现对齐 | D3-11 | `docs/` | D3 | ⬜ | 流程图含 profile / dedupe / guard |
-| KM-18 | 修改 | 消坑表更新 D3-6、D3-10、R6-1 等状态 | 文档 | 逐条 KM-xx 完成后勾选 | — | `docs/04-pitfalls.md` | D3 | ⬜ | 对应坑标 ✅ 或 🔄 |
-
-**刻意不做（本阶段）：**
-
-| 项 | 原因 |
-|----|------|
-| KM 内 Chat LLM / rerank 模型 | v1 已证伪；以后可选 cross-encoder |
-| Intake 输出 `queryType` 字段 | 第一期 KM 内规则推断，少动 Pipeline |
-| 检索 cache（跨轮） | D5-2，属编排层 |
-| Mem0 优先级 | P0-14，属 Analyst |
-| 改 Chroma 切块策略 | 离线 Indexer 范围 |
-
----
-
-## 三、2～3 日实施计划（KM 完善专项）
-
-> 替换原质量冲刺 **第 6～7 天「KM 检索质量」** 的交付方式：由「一次大改」改为 **KM-01～18 逐条落地**。  
-> 详见 [路线图 · KM 完善三日计划](./03-roadmap.md#km-完善三日计划2026-06)。
-
-### D1 — 召回与打分基础（KM-01～07）
-
-**目标：** 不大改结构，先让「找谁」更准。
-
-| 顺序 | 做哪条 | 交付 |
-|------|--------|------|
-| 1 | KM-04 | `km-config.ts` 骨架 |
-| 2 | KM-01 | topics 分流 |
-| 3 | KM-02 | path 去重 |
-| 4 | KM-03 + KM-05 | path 加权 + 打分公式 |
-| 5 | KM-06 | 兜底增强 |
-| 6 | KM-07 | verify 脚本 + 跑通 |
-
-**当日验收问法：**
-
-1. 我的名字是什么？  
-2. 城管平台用了什么技术？（看 path 是否更贴项目）
-
-**通过标准：** verify 绿；Web 问（1）仍 `resultSource: rule` 且快；Top1 非 `projects/resume.md`。
-
----
-
-### D2 — 问法分档与身份类（KM-08～12）
-
-**目标：** 稳「个人档案」类，excerpt 含表格字段。
-
-| 顺序 | 做哪条 | 交付 |
-|------|--------|------|
-| 1 | KM-08 + KM-09 | queryProfile + 分档参数 |
-| 2 | KM-10 | 表格 excerpt |
-| 3 | KM-11 | identity 简历 Top1 |
-| 4 | KM-12 | 日志字段 |
-
-**当日验收问法：**
-
-1. 我的名字是什么？  
-2. 我叫什么 年龄 职业 从业经历？（连问 3 遍）
-
-**通过标准：** excerpt 含 `\| 姓名 \|`；3 遍 Top1 均为 `personal/个人简历*`；日志有 `queryProfile: identity`。
-
----
-
-### D3 — 列举型与文档（KM-13～18）
-
-**目标：** 消 R6-1「哪几家公司只答 2 家」。
-
-| 顺序 | 做哪条 | 交付 |
-|------|--------|------|
-| 1 | KM-16 | chunk 合并（可与 KM-02 联调） |
-| 2 | KM-13 + KM-14 | experience 扫盘 + 一文件一 hit |
-| 3 | KM-15 | coverage / notes |
-| 4 | KM-17 + KM-18 | 文档 + 坑点表 |
-| 5 | — | 可选跑 `golden:regression` G-工作经历 |
-
-**当日验收问法：**
-
-1. 我在那几家公司上过班？（连问 2 遍）  
-2. 同句再问，hits path 集合一致且覆盖全部 experience 文件
-
-**通过标准：** hits ≥ 语料 experience 文件数（如 4）；两次 path 集合相同。
-
----
-
-## 四、架构示意（v2 完成后）
-
-```mermaid
-flowchart TD
-  IN["searchQuery + topics + subTasks"] --> PROFILE["queryProfile 问法类型"]
-  PROFILE --> RECALL["Recall 召回"]
-  RECALL --> VEC["向量 topK 按 profile"]
-  RECALL --> SCAN["扫盘 按需 / 列举扫 experience"]
-  VEC --> DEDUP["dedupeByPath 按文件去重"]
-  DEDUP --> MERGE["mergeCandidates"]
-  SCAN --> MERGE
-  MERGE --> RANK["Rank: token + vector + pathBoost"]
-  RANK --> EXC["Excerpt: 表格行优先"]
-  EXC --> GUARD["identity / enumeration / ensureNonEmpty"]
-  GUARD --> OUT["hits / coverage / notes"]
+```text
+Intake（L1）→ KM（L2～L5）→ FactChecker → ContentOrganizer → Analyst
+                  ↑ 主战场
 ```
 
 ---
 
-## 五、profile 参数表（设计定稿）
+## 二、模块改动量总览
 
-| queryProfile（问法） | 典型问法 | vectorTopK | maxHits | 扫盘 | 专项 guard |
-|---------------------|----------|------------|---------|------|------------|
-| identity（身份） | 我叫什么、姓名、简历 | 12 | 4 | 低置信时三目录 | personal 简历 Top1 |
-| enumeration（列举） | 哪几家公司、全部公司 | 24 | 8 | **experience 全量** | 每经历文件 ≥1 hit |
-| tech（技术） | 技术栈、用什么框架 | 16 | 6 | 低置信时三目录 | — |
-| default（默认） | 其余 | 12 | 5 | 低置信时三目录 | — |
+| 模块 | 改动级别 | 与 KM 关系 |
+|------|----------|------------|
+| **knowledge-manager** | 最大（架构重写） | 主战场 |
+| **packages/corpus** | 大 | Hybrid 稀疏路 / 向量 raw topK |
+| **intake-coordinator** | 中 | L1 查询理解上移（Wave C） |
+| **pipeline**（compile / parse-intake / state） | 小 | 传 `queryType`、retry 语义 |
+| **agent-shared**（agent-log） | 小 | 可观测字段 |
+| **scripts** | 小 | verify / compare-recall |
+| **fact-checker** | 可选中小 | 高置信规则快检（Wave D） |
+| **content-organizer** | 可选小 | structuredFields（Wave E） |
+| **information-analyst** | 暂不动 | 吃 hits；Wave F 防编造 prompt |
+| **docs** | 小 | 架构文档同步 |
 
 ---
 
-## 六、不在 KM 内但相关的后续项
+## 三、主计划表（按优先级）
 
-| 坑 | 负责 Agent | 建议时机 |
-|----|------------|----------|
-| P0-14 Mem0 vs 语料 | Analyst | KM v2 后 |
-| P0-12 hits 空仍编造 | Analyst | KM v2 后 |
-| D5-2 同句再问全量检索 | 编排 + cache | KM v2 后 |
+**图例：** 类型 = **增** / **改** / **删** · 配合 = **必配** / **建议** / **—** · 状态 = ⬜ / 🔄 / ✅
+
+| 优先级 | ID | 业界层 | 模块 | 类型 | 做什么 | 主要文件 | 配合 | 依赖 | 状态 | 验收（一句话） |
+|:------:|:---:|--------|------|:----:|--------|----------|:----:|------|:----:|----------------|
+| **P0-1** | KM-03 | L4 | KM | 增 | **pathBoost** 路径权威表（personal↑、projects/resume↓） | `km-config.ts` | — | KM-04 | ⬜ | 姓名类 Top1 为 `personal/` |
+| **P0-2** | KM-05 | L4 | KM | 改 | **rank 公式**：token + vector + pathBoost，封顶 1.0 | `retrieve.ts` | — | KM-03 | ⬜ | 日志可见加权 relevance |
+| **P0-3** | KM-06 | L5 | KM | 改 | **ensureNonEmptyHits** 按加权排序补选，非裸 Top1 | `retrieve.ts` | — | KM-05 | ⬜ | token 弱时仍优先 personal |
+| **P0-4** | KM-07 | — | scripts | 增 | **verify-km-retrieve** 单测（不测全链路） | `scripts/verify-km-retrieve.ts` | — | KM-03～06 | ⬜ | `pnpm run verify:km-retrieve` 绿 |
+| **P0-5** | KM-10 | L4 | KM | 增 | **表格 excerpt**（`\| 姓名 \| xxx \|` 优先） | `retrieve-helpers.ts` | — | — | ⬜ | 姓名 excerpt 含表格行 |
+| **P0-6** | KM-08 | L1 | KM | 增 | **queryProfile** 规则推断（identity/enumeration/tech/default） | `query-profile.ts`、`retrieve.ts` | — | — | ⬜ | 固定问法 profile 正确 |
+| **P0-7** | KM-09 | L2 | KM | 改 | 按 profile 分档 **vectorTopK / maxHits** | `km-config.ts`、`retrieve.ts` | — | KM-08 | ⬜ | 列举 maxHits=8 |
+| **P0-8** | KM-11 | L4 | KM | 增 | **identityGuard**：有 personal 简历则强制 Top1 | `retrieve.ts` | — | KM-08 | ⬜ | 复合档案问 3 遍 Top1 稳定 |
+| **P0-9** | KM-13 | L2 | KM | 改 | 列举 profile **主动扫 experience/** 全目录 | `retrieve.ts` | — | KM-08 | ⬜ | 「哪几家公司」覆盖多文件 |
+| **P0-10** | KM-14 | L5 | KM | 增 | **enumerationFill**：每 experience/*.md ≥1 hit | `retrieve.ts` | — | KM-13 | ⬜ | hits 覆盖全部经历文件 |
+| **P0-11** | KM-15 | L3 | KM | 改 | 列举型 **coverage / notes** 文案 | `retrieve.ts` | — | KM-14 | ⬜ | notes 标明是否补全 |
+| **P0-12** | KM-12 | L3 | KM | 改 | 日志：`queryProfile`、`guardApplied`、`uniquePathCount` | `retrieve.ts` | 建议 agent-log | KM-08 | ⬜ | agent-log 📤 含上述字段 |
+| **P0-13** | KM-16 | L4 | KM | 改 | 同 path 多 chunk **merge body** 再摘抄 | `retrieve-helpers.ts` | — | KM-02 | ⬜ | 同文件 excerpt 更完整 |
+| **P1-1** | HY-01 | L2 | corpus | 改 | 升级 **sparse 检索**（keyword → BM25 或等价打分） | `recall-keyword-retrieve.ts` | 必配 KM | — | ⬜ | 稀疏路与向量路可独立出 candidates |
+| **P1-2** | HY-02 | L2 | KM | 增 | **hybrid-recall**：向量 ∥ sparse **并行**召回 | `recall/hybrid-recall.ts` | 必配 corpus | HY-01 | ⬜ | 两路同时返回，不再串行 fallback |
+| **P1-3** | HY-03 | L2 | KM | 增 | **RRF 融合**（倒数排名融合） | `recall/fusion-rrf.ts` | — | HY-02 | ⬜ | 融合分排序 ≠ 单路 Top1 |
+| **P1-4** | HY-04 | L2 | KM | 改 | **删/弱** 主路径「向量低置信 → 才 scanDocCandidates」 | `retrieve.ts` | — | HY-02 | ⬜ | recallSource 不再只有串行组合 |
+| **P1-5** | HY-05 | L2 | KM | 改 | 统一 **Candidate**：`recallChannel`、`rawScore` | `types.ts` | — | HY-02 | ⬜ | vector/sparse/rule 可区分 |
+| **P1-6** | HY-06 | L2 | corpus | 改 | 向量 **raw topK 加大**（融合前多取，dedupe 后截） | `corpus-vector.ts`、`km-config.ts` | 建议 KM | HY-03 | ⬜ | 融合后 unique path 仍充足 |
+| **P1-7** | HY-07 | — | scripts | 改 | compare-recall 或并入 verify：对比 vector/sparse/RRF | `scripts/compare-recall.ts` | — | HY-03 | ⬜ | 三问法 RRF 优于单路 |
+| **P2-1** | QU-01 | L1 | Intake | 增 | 输出 **queryType**（与 KM profile 对齐） | `schema.ts`、`prompt.ts` | 必配 pipeline | P0-6 或并行 | ⬜ | Intake JSON 含 queryType |
+| **P2-2** | QU-02 | L1 | Intake | 改 | **多轮指代补全** searchQuery | `prompt.ts` | — | — | ⬜ | 「那个项目呢」能补全实体 |
+| **P2-3** | QU-03 | L1 | pipeline | 改 | `compile.ts` 传 **queryType** 给 `retrieveKnowledge` | `compile.ts` | 必配 QU-01 | QU-01 | ⬜ | retrievalNode 入参含 queryType |
+| **P2-4** | QU-04 | L1 | pipeline | 改 | `parse-intake.ts` / `state.ts` 扩展 decision | `parse-intake.ts`、`state.ts` | 必配 QU-01 | QU-01 | ⬜ | schema 校验通过 |
+| **P2-5** | QU-05 | L1 | KM | 改 | KM **优先 Intake queryType**，无则规则 fallback | `retrieve.ts`、`query-profile.ts` | 建议 | QU-03 | ⬜ | 双源一致时不重复推断 |
+| **P2-6** | QU-06 | L1 | KM | 删/弱 | KM 内纯规则 queryProfile（Intake 稳定后） | `query-profile.ts` | — | QU-05 | ⬜ | 单一意图来源 |
+| **P3-1** | EV-01 | L3 | KM | 改 | **多维置信度**：融合分 + top1-top2 gap + path 权威 | `rank/score-candidate.ts` | — | HY-03、KM-05 | ⬜ | high/mid/low 分档稳定 |
+| **P3-2** | EV-02 | L3 | KM | 改 | **coverage** 基于分档，非单一 token 比 | `retrieve.ts` | — | EV-01 | ⬜ | sufficient 与 hits 一致 |
+| **P3-3** | EV-03 | L3 | KM | 改 | **删/弱** 无差别 ensureNonEmptyHits；低置信才补 | `retrieve.ts` | — | EV-01 | ⬜ | 高冲突 query 不硬塞 Top1 |
+| **P3-4** | EV-04 | L3 | KM | 增 | 输出可选 **`confidenceTier`**（向后兼容） | `types.ts` | 建议 FC | EV-01 | ⬜ | 旧 FC 仍工作 |
+| **P3-5** | EV-05 | L3 | FC | 改 | 高置信 **规则快检**跳过 LLM | `check-helpers.ts`、`check-facts.ts` | 建议 | EV-04 | ⬜ | 姓名类 FC 不调 LLM |
+| **P3-6** | EV-06 | L3 | pipeline | 改 | FC retry 可选传 tier / refinedSearchQuery | `compile.ts` | 建议 | EV-04 | ⬜ | retry 与 KM 分档一致 |
+| **P3-7** | EV-07 | L3 | agent-log | 改 | 日志：`recallChannel`、`fusionScore`、`confidenceTier` | `agent-log.ts`、`retrieve.ts` | 建议 | EV-01 | ⬜ | 联调一眼看出走了哪路 |
+| **P4-1** | RC-01 | L2 | KM | 增 | **FAQ / 规则前置**（高频问直接 hit） | `faq/faq-matcher.ts` | — | HY-02 | ⬜ | 「我叫什么」可走 FAQ 短路 |
+| **P4-2** | PR-01 | L4 | KM | 增 | **Cross-Encoder rerank** TopN（非 Chat LLM） | `rank/rerank-cross-encoder.ts` | — | EV-01 | ⬜ | mid 档精排后 Top1 更准 |
+| **P4-3** | PR-02 | L4 | KM | 增 | 按 queryType **structuredFields** | `structured-extract.ts` | 建议 Organizer | EV-01 | ⬜ | 输出含 `{ name: "..." }` 等 |
+| **P4-4** | PR-03 | L4 | Organizer | 改 | 接 optional **structuredFields** | `organize-hits.ts`、`schema.ts` | 建议 | PR-02 | ⬜ | 无字段时行为不变 |
+| **P5-1** | FB-01 | L5 | KM | 增 | **一级兜底**：query 放宽后重跑 Hybrid（KM 内 1 次） | `retrieve.ts` | 建议 pipeline | HY-03 | ⬜ | 低置信自动放宽再查 |
+| **P5-2** | FB-02 | L5 | pipeline | 改 | **二级兜底**：FC retry + refinedSearchQuery | `compile.ts` | — | 已有 | ✅ | retryCount≤1 |
+| **P5-3** | FB-03 | L5 | KM | 增 | **三级兜底**：外部搜索 / MCP（可选） | experiments → KM | — | FB-01 | ⬜ | 语料无命中时有外源 |
+| **P5-4** | FB-04 | L5 | KM | 改 | **四级**：明确 coverage:none + notes | `retrieve.ts` | — | EV-03 | ⬜ | 无命中 notes 清晰 |
+| **P5-5** | FB-05 | L5 | Analyst | 改 | coverage:none 时 **禁止编造**（P0-12） | `information-analyst/prompt.ts` | 建议 | FB-04 | ⬜ | 无 hits 不虚构履历 |
+| **—** | DOC-01 | — | docs | 改 | 本文 + 架构图 v3（Hybrid/RRF） | 本文 | — | 各 Wave | 🔄 | 与代码一致 |
+| **—** | DOC-02 | — | docs | 改 | 同步 `02-agent-flows` KM 步骤 | `02-agent-flows.md` | — | DOC-01 | ⬜ | 流程图与代码一致 |
+| **—** | DOC-03 | — | docs | 改 | 坑点表 D3/R6 状态 | `04-pitfalls.md` | — | Wave A | ⬜ | 对应坑 ✅ |
+
+### 已完成（v2 基线，不推翻）
+
+| ID | 说明 | 状态 |
+|----|------|:----:|
+| KM-01 | topics 仅参与向量 query，不参与字面 tokenize | ✅ |
+| KM-02 | 向量结果按 path 去重（max 2 chunk/path） | ✅ |
+| KM-04 | 常量集中到 `km-config.ts` | ✅ |
+
+### v1 已有（长期保留）
+
+| 能力 | 说明 |
+|------|------|
+| 向量召回 | `searchCorpusVectors`（Chroma） |
+| 规则精排 | token 打分 + pickExcerpt（无 Chat LLM） |
+| 硬兜底 | `ensureNonEmptyHits`（Wave A 增强 → Wave D 分级） |
+| FC retry | `refinedSearchQuery` 二次检索（FB-02 ✅） |
+
+---
+
+## 四、实施波次（Wave A～F）
+
+| Wave | 优先级 ID | 日历（参考） | 动哪些模块 | KM 单独能做？ | 必须配合 |
+|------|-----------|--------------|------------|:-------------:|----------|
+| **A** 规则层收尾 | P0-1～P0-13（KM-03～16，缺 KM-17/18 文档） | 1～2 天 | KM、scripts | ✅ | 无 |
+| **B** Hybrid 核心 | P1-1～P1-7 | 1～2 周 | KM、corpus、scripts | 大部分 | **corpus 必配** |
+| **C** 查询理解上移 | P2-1～P2-6 | 3～5 天 | Intake、pipeline、KM | 可 fallback 规则 | **Intake + compile 必配** |
+| **D** 置信分档 + FC 降本 | P3-1～P3-7 | 3～5 天 | KM 必做；FC/pipeline 建议 | ✅ tier 可选输出 | FC 建议 |
+| **E** FAQ + 精排 + 结构化 | P4-1～P4-4 | 1～2 周 | KM；Organizer 建议 | FAQ/structured 在 KM | Organizer 建议 |
+| **F** 多级兜底 + 防编造 | P5-1～P5-5 | 按需 | KM、pipeline、Analyst 建议 | 一二级在 KM | Analyst 建议 |
+
+**推荐顺序：** A → B → C → D；E/F 稳定后补。
+
+**Wave A 当日顺序（与旧 D1～D3 对齐）：**
+
+| 顺序 | ID | 交付 |
+|------|-----|------|
+| 1 | KM-03 + KM-05 | pathBoost + rank |
+| 2 | KM-06 | 兜底增强 |
+| 3 | KM-07 | verify 脚本 |
+| 4 | KM-08 + KM-09 | queryProfile + 分档 |
+| 5 | KM-10 + KM-11 | 表格 excerpt + identity guard |
+| 6 | KM-12 | 日志 |
+| 7 | KM-16 | chunk merge |
+| 8 | KM-13 + KM-14 + KM-15 | 列举召回 + fill + coverage |
+| 9 | DOC-02 + DOC-03 | 文档同步 |
+
+**Wave A 验收问法：**
+
+1. 我的名字是什么？  
+2. 我叫什么 年龄 职业 从业经历？（×3）  
+3. 我在哪几家公司上过班？（×2）  
+4. 城管平台用了什么技术？
+
+**通过标准：** verify 绿；Top1 非 `projects/resume.md`；列举 hits 覆盖全部 experience 文件；`resultSource: rule` 且快。
+
+---
+
+## 五、必须配合 vs 可后置
+
+| 阶段 | 说明 |
+|------|------|
+| **Wave A～B** | 只动 KM + corpus + scripts；FC / Organizer / Analyst **零改动** |
+| **Wave C** | Intake + pipeline 必配；KM 读 `queryType` |
+| **Wave D** | `confidenceTier` 可选；FC 不改也能跑，改了降本 |
+| **Wave E** | `structuredFields` 可选；Organizer 不改也能跑 |
+| **Wave F** | Analyst prompt 防编造；独立 P0-12 |
+
+---
+
+## 六、对外合同
+
+| 字段 | Wave A～C | Wave D+ |
+|------|-----------|---------|
+| `hits[]` | 不变 | 不变（质量更好） |
+| `coverage` | 不变 | 规则更准 |
+| `notes` | 不变 | 列举文案更细 |
+| **新增可选** | — | `confidenceTier`、`structuredFields`（向后兼容） |
+
+`KnowledgeManagerInput` Wave C 起可选增：`queryType?: "identity" | "enumeration" | "tech" | "default"`。
+
+---
+
+## 七、架构示意（v3 目标 · Wave B 完成后）
+
+```mermaid
+flowchart TD
+  IN["Intake: searchQuery + topics + subTasks + queryType"] --> PROFILE["queryProfile（Intake 优先 / KM fallback）"]
+  PROFILE --> HY["Hybrid Recall 并行"]
+  HY --> VEC["向量 Chroma"]
+  HY --> SPARSE["sparse / BM25"]
+  VEC --> RRF["RRF 融合"]
+  SPARSE --> RRF
+  RRF --> DEDUP["dedupeByPath + merge chunk"]
+  DEDUP --> RANK["Rank: token + fusion + pathBoost"]
+  RANK --> TIER["confidenceTier 分档"]
+  TIER --> EXC["Excerpt: 表格行优先"]
+  EXC --> GUARD["identity / enumeration / 分级兜底"]
+  GUARD --> OUT["hits / coverage / notes (+ tier?)"]
+  OUT --> FC["FactChecker（高置信规则快检）"]
+```
+
+**Wave A 完成时（Hybrid 前）：** 上图中 HY/RRF/SPARSE 仍为串行向量 + 按需扫盘，其余 block 已就位。
+
+---
+
+## 八、queryProfile 参数表
+
+| queryProfile | 典型问法 | vectorTopK | maxHits | 召回 | 专项 guard |
+|--------------|----------|------------|---------|------|------------|
+| identity | 我叫什么、姓名 | 12 | 4 | 低置信三目录 / Wave B 后 sparse 并行 | personal 简历 Top1 |
+| enumeration | 哪几家公司 | 24 | 8 | **experience 全量** | 每经历文件 ≥1 hit |
+| tech | 技术栈、框架 | 16 | 6 | 低置信三目录 | — |
+| default | 其余 | 12 | 5 | 低置信三目录 | — |
+
+Intake `queryType` 与上表 **同名枚举**（Wave C）。
+
+---
+
+## 九、刻意不做
+
+| 项 | 原因 |
+|----|------|
+| KM 内 **Chat LLM** 精排 | v1 已证伪；精排用 RRF + Cross-Encoder |
+| 改 Chroma **Indexer 切块** | 离线范围；Hybrid 稳定后再评估 |
+| Mem0 优先级 | Analyst 域（P0-14） |
+| 跨轮检索 **cache** | 编排层（D5-2）；KM v3 后 |
+| ES 集群 | MVP 用 corpus 内 BM25；规模上来再换 |
+
+---
+
+## 十、不在 KM 内但相关的后续项
+
+| 坑 | 负责 | 建议时机 |
+|----|------|----------|
+| P0-14 Mem0 vs 语料 | Analyst | Wave F 后 |
+| P0-12 hits 空仍编造 | Analyst | Wave F（FB-05） |
+| D5-2 同句再问全量检索 | 编排 + cache | KM v3 后 |
 | R6-2 表格追问否定上轮 | Intake + Analyst | R6 专项 |
 
 ---
 
-## 七、变更记录
+## 十一、复盘清单（每 Wave 结束）
+
+| 步骤 | 内容 |
+|------|------|
+| 1 | 对照本文 §三 主计划表，更新状态列 |
+| 2 | `pnpm run verify:km-retrieve` + `verify:agent-schemas` |
+| 3 | Web 四问：姓名 / 复合档案 / 哪几家公司 / 项目技术（各 1～3 遍） |
+| 4 | agent-log：`queryProfile`、`recallChannel`、`fusionScore`（Wave B+）、`resultSource: rule` |
+| 5 | Wave A 末：跑 `golden:regression` G-工作经历（可选） |
+
+---
+
+## 十二、变更记录
 
 | 日期 | 说明 |
 |------|------|
 | 2026-06 | KM-04 ✅ km-config；KM-01 ✅ topics 分流；KM-02 ✅ 向量 path 去重 |
-
----
-
-## 八、v2 全部完成后 — KM 复盘清单
-
-> KM-01～18 落地后，建议单独花半日过一遍（不必等 Analyst/cache）。
-
-| 步骤 | 内容 |
-|------|------|
-| 1 | 读 `retrieve.ts` 主流程 + `km-config.ts`，对照本文 §四 架构图 |
-| 2 | `pnpm run verify:km-retrieve`（KM-07 落地后）+ `verify:agent-schemas` |
-| 3 | Web 三问：姓名 / 复合档案 / 哪几家公司 / 项目技术（各 1～3 遍） |
-| 4 | 查 agent-log：`queryProfile`、`recallSource`、`resultSource: rule`、hits path |
-| 5 | 更新本文 KM-xx 状态列；必要时补 `02-agent-flows` KM 步骤表 |
-
+| 2026-06 | **v3 计划定稿**：业界五层对标；主计划表 P0～P5；Wave A～F；Intake/pipeline 配合项列入 QU-xx |

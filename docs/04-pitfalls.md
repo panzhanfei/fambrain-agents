@@ -491,7 +491,7 @@ pnpm run verify:fact-checker
 # Web 问「我的名字是什么？」→ KM resultSource=rule，FC personal_skip_llm，无二次 KM
 ```
 
-**仍待完善（KM v2）：** 见 [km-retrieval-design.md](./km-retrieval-design.md) KM-01～18；Analyst corpus/Mem0（P0-14）不在 KM 范围。
+**仍待完善（KM v3）：** 见 [km-retrieval-design.md](./km-retrieval-design.md) [§三 主计划表](./km-retrieval-design.md#三主计划表按优先级)；Analyst corpus/Mem0（P0-14）不在 KM 范围。
 
 ### 与通用坑 #1～#19 的对应
 
@@ -524,8 +524,8 @@ pnpm run verify:fact-checker
 
 | 天 | 焦点 | 目标坑 ID | 交付 | 质量冲刺日历 |
 |----|------|-----------|------|--------------|
-| **消坑 D1** | KM 检索闭环 | D3-2～D3-5 | v1 ✅；v2 见 [km-retrieval-design.md](./km-retrieval-design.md) | **第 6～8 天**（KM 三日） |
-| **消坑 D2** | 召回质量 | D3-6～D3-7、D3-10 | KM-01～07（D1）、KM-08～12（D2） | **第 6～8 天** |
+| **消坑 D1** | KM 检索闭环 | D3-2～D3-5 | v1 ✅；v3 Wave A～B 见 [km-retrieval-design.md](./km-retrieval-design.md) | **第 6～11 天**（Wave A～B） |
+| **消坑 D2** | 召回质量 | D3-6～D3-7、D3-10 | P0-1～P0-13（Wave A）、HY-01～07（Wave B） | **第 6～11 天** |
 | **消坑 D3** | 多轮上下文 + Analyst 兜底 + 跨会话记忆 | D3-8～D3-9、P0-10、**P0-12**、**P0-16** | Intake/Analyst 短历史；hits 空短路 LLM；Mem0 remember_fact | 与 R6 联调；**可提前 Day 3** |
 | **消坑 D4** | 回归 + 文档 | D3-11～D3-12、P0-6、A6 | G1～G5 全自动脚本；docs/流程图/sync | **第 2～3 天** + **第 11 天** |
 | **消坑 D5-消坑** | 跨轮少重复 | D5-2、P0-11；可选 D5-4 | 检索 cache；Intake 同句重复问 | **第 4～5 天** |

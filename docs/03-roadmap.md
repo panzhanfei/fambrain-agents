@@ -110,7 +110,7 @@
 | 离线复盘 | **第 1 天** | KnowledgeIndexer + DocParser + `@fambrain/corpus` | 搞清语料如何进 Chroma |
 | Golden | **第 2～3 天** | G1～G5 自动化 + 基线分数 | D10、A6 |
 | Cache | **第 4～5 天** | 检索 cache + Intake 重复问 | D5-2、P0-11、#19 |
-| **KM 完善** | **第 6～8 天（3 日）** | [KM v2 逐条实施](./km-retrieval-design.md) KM-01～18 | D3-4/6/7/10、P0-15、R6-1 |
+| **KM 完善（业界对标 v3）** | **第 6～14 天（Wave A～D）** | [KM v3 主计划表](./km-retrieval-design.md#三主计划表按优先级) Wave A→B→C→D | D3-4/6/7/10、P0-15、R6-1 |
 | Eval | **第 8～9 天** | 系统化 eval 脚本 + 报告 | A6 扩展 |
 | SLO / 日志 | **第 10 天** | 耗时、token、结构化记录 | #18 待做 |
 | **总复盘** | **第 11 天** | 离线 + 在线全链路、坑点表、L4 gap | 文档同步 |
@@ -153,32 +153,36 @@ pnpm run golden:regression   # G1～G5 全链路标准回归
 
 **坑点：** [§2.2 FactChecker 与跨轮重复检索](./04-pitfalls.md#22-factchecker-与跨轮重复检索2026-06--d5-联调)、P0-11、#19。
 
-### 第 6～7 天 — KM 检索质量（消坑 D1 / D2 / R6）→ **已调整为 KM v2 三日逐条计划**
+### 第 6～14 天 — KM 检索（业界对标 v3 · Wave A～D）
 
-> **设计文档：** [km-retrieval-design.md](./km-retrieval-design.md)（KM-01～18 逐条加/改，一条一验收）  
-> **v1 已完成（2026-06）：** 规则精排、无在线 LLM、`ensureNonEmptyHits`（D3-2/3/5、P0-4）— 见 [坑点 §2.1.1](./04-pitfalls.md#211-km-移除在线-llm--规则精排p0-4--d3-2--d3-3--d3-5---已消坑-2026-06)
+> **设计文档：** [km-retrieval-design.md](./km-retrieval-design.md)（**KM v3 · 业界五层对标**；[§三 主计划表](./km-retrieval-design.md#三主计划表按优先级) 为唯一任务源）  
+> **v1 已完成（2026-06）：** 规则精排、无在线 LLM、`ensureNonEmptyHits`（D3-2/3/5、P0-4）— 见 [坑点 §2.1.1](./04-pitfalls.md#211-km-移除在线-llm--规则精排p0-4--d3-2--d3-3--d3-5---已消坑-2026-06)  
+> **v2 基线（2026-06）：** KM-01 ✅ topics 分流 · KM-02 ✅ path 去重 · KM-04 ✅ km-config
 
-#### KM 完善三日计划（2026-06）
+#### Wave 实施顺序
 
-| 日 | 焦点 | KM 条目 | 消坑 | 验收问法 |
-|----|------|---------|------|----------|
-| **D1** | 召回与打分 | KM-01～07：topics 分流、path 去重、path 加权、km-config、verify | D3-4、D3-6、D3-7、D3-10 | 「我的名字」；「城管平台技术」 |
-| **D2** | 问法分档 + 身份 | KM-08～12：queryProfile、分档参数、表格 excerpt、identity Top1、日志 | P0-6 上游、P0-15 | 「我叫什么 年龄 职业」×3 |
-| **D3** | 列举 + 文档 | KM-13～18：experience 穷举、chunk 合并、coverage、docs | R6-1、D3-11 | 「哪几家公司上过班」×2 |
+| Wave | 日历（参考） | 优先级 ID | 动哪些模块 | 验收 |
+|------|--------------|-----------|------------|------|
+| **A** 规则层收尾 | 第 6～7 天 | P0-1～P0-13（KM-03～16） | KM、scripts | verify 绿；姓名/列举/技术四问 |
+| **B** Hybrid 核心 | 第 8～11 天 | P1-1～P1-7（HY-xx） | KM、**corpus**、scripts | 并行召回 + RRF 优于单路 |
+| **C** 查询理解上移 | 第 12 天 | P2-1～P2-6（QU-xx） | **Intake**、pipeline、KM | Intake 出 queryType |
+| **D** 置信分档 | 第 13～14 天 | P3-1～P3-7（EV-xx） | KM 必做；FC 建议 | confidenceTier；FC 高置信快检 |
+| **E/F** | 质量冲刺后 | P4、P5 | KM；Organizer/Analyst 可选 | FAQ、rerank、防编造 |
 
-**不做：** Chat LLM rerank（已砍）；**Intake 改合同**（第一期不做）。
+**原则：** Wave A～C **不动** FC / Organizer / Analyst；Wave D 起 FC 可选配合降本。
 
-**Golden：** D3 结束后跑 G-工作经历；D1/D2 可用 `pnpm run verify:km-retrieve`（规划命令，见设计文档 KM-07）。
+**不做：** Chat LLM rerank（已砍；精排用 RRF + Cross-Encoder，Wave E）。
+
+**Golden：** Wave A 末跑 G-工作经历；全程 `pnpm run verify:km-retrieve`（KM-07）。
 
 <details>
-<summary>原第 6～7 天条目（归档）</summary>
+<summary>原 v2 三日计划（归档，已并入 Wave A）</summary>
 
-| 优先级 | 项 | 状态 |
-|--------|-----|------|
-| P0 | coalesce 硬兜底 | ✅ v1 `ensureNonEmptyHits` |
-| P0 | 枚举型 query | ⬜ → KM-13～15 |
-| P1 | path 加权 / topics | ⬜ → KM-01、03、05 |
-| P2 | 向量 rerank | ⏭ 已砍 |
+| 日 | 焦点 | 现对应 |
+|----|------|--------|
+| D1 | KM-01～07 | KM-01/02/04 ✅；KM-03/05/06/07 → Wave A |
+| D2 | KM-08～12 | Wave A |
+| D3 | KM-13～18 | Wave A + DOC |
 
 </details>
 
