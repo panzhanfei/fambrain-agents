@@ -9,6 +9,8 @@
  * L2：内存关键词打分 + pickExcerpt（唯一输出路径）
  *
  * KM-01 topics 分流：topics 仅拼入向量 query；字面 token 只用 searchQuery + subTasks。
+ * KM-05 rank：relevance = token + vector + pathBoost（封顶 1.0）。
+ * KM-06 兜底：ensureNonEmptyHits 与 rank 共用 rankCandidates。
  */
 import { readFile } from "node:fs/promises";
 import path from "node:path";
@@ -29,7 +31,7 @@ import {
     VECTOR_CONFIDENT_GAP_MIN,
     VECTOR_CONFIDENT_TOP1_MAX,
 } from "./km-config";
-import { dedupeVectorByPath } from "./retrieve-helpers";
+import { dedupeVectorByPath, rankCandidates } from "./retrieve-helpers";
 import type {
     KnowledgeHit,
     KnowledgeManagerInput,
@@ -200,41 +202,18 @@ const scanDocCandidates = async (
     }));
 };
 
-const vectorScoreToRelevance = (score: number | undefined): number => {
-    if (typeof score !== "number") return 0;
-    return Math.max(0, Math.min(1, 1 - score / 2));
-};
-
 const retrieveByKeywords = (
     input: Pick<KnowledgeManagerInput, "searchQuery" | "subTasks">,
     candidates: CandidateRow[]
 ): KnowledgeRetrievalResult => {
     const tokens = tokenizeForRecall(input.searchQuery, input.subTasks);
-    if (candidates.length === 0 || tokens.length === 0) {
+    if (candidates.length === 0) {
         return { hits: [], coverage: "none", notes: null };
     }
 
-    const scored = candidates
-        .map((c) => {
-            const haystack = `${c.path} ${c.title} ${c.body}`.toLowerCase();
-            let matched = 0;
-            for (const t of tokens) {
-                if (haystack.includes(t)) matched += 1;
-            }
-            const keywordRelevance =
-                tokens.length > 0 ? Math.min(1, matched / tokens.length) : 0;
-            const vectorRelevance = vectorScoreToRelevance(c.score);
-            const relevance = Math.max(keywordRelevance, vectorRelevance);
-            return {
-                path: c.path,
-                title: c.title,
-                excerpt: pickExcerpt(c.body, tokens),
-                relevance,
-                vectorScore: c.score,
-            };
-        })
-        .filter((h) => h.relevance > 0)
-        .sort((a, b) => b.relevance - a.relevance);
+    const scored = rankCandidates(candidates, tokens, pickExcerpt).filter(
+        (h) => h.relevance > 0
+    );
 
     const hits: KnowledgeHit[] = scored.slice(0, MAX_HITS).map(
         ({ path: p, title, excerpt, relevance }) => ({
@@ -259,7 +238,7 @@ const retrieveByKeywords = (
     };
 };
 
-/** candidates 非空时禁止最终 hits 为空（D3-2） */
+/** candidates 非空时禁止最终 hits 为空（D3-2）；KM-06 与 rank 共用 rankCandidates */
 const ensureNonEmptyHits = (
     input: Pick<KnowledgeManagerInput, "searchQuery" | "subTasks">,
     candidates: CandidateRow[],
@@ -268,26 +247,21 @@ const ensureNonEmptyHits = (
     if (result.hits.length > 0 || candidates.length === 0) return result;
 
     const tokens = tokenizeForRecall(input.searchQuery, input.subTasks);
-    const sorted = [...candidates].sort((a, b) => {
-        const sa = a.score ?? Number.POSITIVE_INFINITY;
-        const sb = b.score ?? Number.POSITIVE_INFINITY;
-        return sa - sb;
-    });
-    const top = sorted[0]!;
-    const excerpt =
-        pickExcerpt(top.body, tokens) || top.body.slice(0, EXCERPT_MAX).trim();
+    const ranked = rankCandidates(candidates, tokens, pickExcerpt);
+    const top = ranked[0];
+    if (!top) return result;
 
     return {
         hits: [
             {
                 path: top.path,
                 title: top.title,
-                excerpt,
-                relevance: Math.max(0.35, vectorScoreToRelevance(top.score)),
+                excerpt: top.excerpt,
+                relevance: Math.max(0.35, top.relevance),
             },
         ],
         coverage: "partial",
-        notes: "候选非空但 token 未命中，按向量/扫盘 Top1 规则补选。",
+        notes: "候选非空但 token 未命中，按 token+vector+pathBoost 加权补选。",
     };
 };
 
@@ -412,6 +386,9 @@ export const retrieveKnowledge = async (
         retrieveByKeywords(input, candidates)
     );
 
+    const tokens = tokenizeForRecall(input.searchQuery, input.subTasks);
+    const topRanked = rankCandidates(candidates, tokens, pickExcerpt)[0];
+
     logAgentOut("KnowledgeManager", "出去", summarizeRetrievalOut(ruleResult, {
         recallSource,
         resultSource: "rule",
@@ -420,6 +397,15 @@ export const retrieveKnowledge = async (
         uniquePathCount,
         candidateCount: candidates.length,
         candidatesPreview: summarizeCandidate(candidates[0]!, 0),
+        topRank: topRanked
+            ? {
+                  path: topRanked.path,
+                  relevance: topRanked.relevance,
+                  keywordRelevance: topRanked.keywordRelevance,
+                  vectorRelevance: topRanked.vectorRelevance,
+                  pathBoost: topRanked.pathBoost,
+              }
+            : null,
     }));
     return ruleResult;
 };

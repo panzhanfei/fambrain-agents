@@ -42,6 +42,21 @@ export const VECTOR_CONFIDENT_TOP1_MAX = 1.25;
  */
 export const VECTOR_CONFIDENT_GAP_MIN = 0.12;
 
+/** path 位于 corpus/personal/ 时的信誉加分（KM-03）。用于：getPathBoost、computeRelevance。 */
+export const PATH_BOOST_PERSONAL = 0.25;
+
+/** path 位于 corpus/experience/ 时的加分。用于：getPathBoost。 */
+export const PATH_BOOST_EXPERIENCE = 0.1;
+
+/** path 位于 corpus/projects/ 时的基准分（不加不减）。用于：getPathBoost。 */
+export const PATH_BOOST_PROJECTS = 0;
+
+/**
+ * 项目目录下的 resume 模板 md 减分，避免与 personal 个人简历抢 Top1。
+ * 用于：getPathBoost。
+ */
+export const PATH_BOOST_PROJECTS_RESUME = -0.2;
+
 /** 供测试 / 脚本读取当前 KM 参数快照。 */
 export const getKmRetrievalConfig = () => ({
     maxCandidates: MAX_CANDIDATES,
@@ -53,4 +68,8 @@ export const getKmRetrievalConfig = () => ({
     mergedChunkBodyMax: MERGED_CHUNK_BODY_MAX,
     vectorConfidentTop1Max: VECTOR_CONFIDENT_TOP1_MAX,
     vectorConfidentGapMin: VECTOR_CONFIDENT_GAP_MIN,
+    pathBoostPersonal: PATH_BOOST_PERSONAL,
+    pathBoostExperience: PATH_BOOST_EXPERIENCE,
+    pathBoostProjects: PATH_BOOST_PROJECTS,
+    pathBoostProjectsResume: PATH_BOOST_PROJECTS_RESUME,
 });
