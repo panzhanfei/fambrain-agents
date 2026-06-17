@@ -49,8 +49,17 @@ export const MERGED_CHUNK_BODY_MAX = 6000;
 /** HY-06：融合前向量 raw topK 倍数（dedupe 后再截断）。 */
 export const VECTOR_FETCH_MULTIPLIER = 2;
 
-/** HY-03：RRF 平滑常数 k。 */
+/** EV-03：RRF 平滑常数 k。 */
 export const RRF_K = 60;
+
+/** EV-01：综合分 ≥ 此值为 high。 */
+export const CONFIDENCE_HIGH_MIN = 0.72;
+
+/** EV-01：综合分 ≥ 此值为 mid（否则 low）。 */
+export const CONFIDENCE_MID_MIN = 0.42;
+
+/** EV-03：low 档 coalesce 最低 top relevance。 */
+export const CONFIDENCE_COALESCE_LOW_MIN = 0.32;
 
 /** HY-03：RRF 通道权重（sparse 字面匹配略加权）。 */
 export const RRF_VECTOR_WEIGHT = 0.85;
@@ -106,6 +115,9 @@ export const getKmRetrievalConfig = () => ({
     rrfK: RRF_K,
     rrfVectorWeight: RRF_VECTOR_WEIGHT,
     rrfSparseWeight: RRF_SPARSE_WEIGHT,
+    confidenceHighMin: CONFIDENCE_HIGH_MIN,
+    confidenceMidMin: CONFIDENCE_MID_MIN,
+    confidenceCoalesceLowMin: CONFIDENCE_COALESCE_LOW_MIN,
     pathBoostPersonal: PATH_BOOST_PERSONAL,
     pathBoostExperience: PATH_BOOST_EXPERIENCE,
     pathBoostProjects: PATH_BOOST_PROJECTS,

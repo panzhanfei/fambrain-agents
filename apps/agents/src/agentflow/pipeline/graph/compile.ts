@@ -83,6 +83,7 @@ const retrievalNode = async (state: PipelineGraphState): Promise<Partial<Pipelin
             hits: retrieval.hits,
             coverage: retrieval.coverage,
             notes: retrieval.notes,
+            confidenceTier: retrieval.confidenceTier ?? null,
             retryCount: fromRetry ? state.retryCount + 1 : state.retryCount,
         };
     }
@@ -116,6 +117,7 @@ const factCheckerNode = async (state: PipelineGraphState): Promise<Partial<Pipel
             coverage: state.coverage,
             notes: state.notes,
             retryCount: state.retryCount,
+            confidenceTier: state.confidenceTier,
         });
         const patch: Partial<PipelineGraphState> = {
             checkerPassed: result.passed,

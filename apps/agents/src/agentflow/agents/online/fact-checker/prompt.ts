@@ -1,5 +1,5 @@
 import type { IntakeRoutingDecision } from "@/agentflow/agents/online/intake-coordinator";
-import type { KnowledgeHit, KnowledgeRetrievalResult, } from "@/agentflow/agents/online/knowledge-manager";
+import type { KnowledgeHit, KnowledgeRetrievalResult, ConfidenceTier } from "@/agentflow/agents/online/knowledge-manager";
 /**
  * FactChecker 系统指令（D5 / P0）。
  * 职责：在信息分析师动笔前，审查知识管理员产出的 hits / coverage 是否足以回答用户问题；
@@ -47,11 +47,12 @@ export type FactCheckerInput = {
     hits: KnowledgeHit[];
     coverage: KnowledgeRetrievalResult["coverage"];
     notes: string | null;
-    /**
-     * 已为第几次检索后的核查：0 表示首次（打回后编排器会 +1 再检索），
+    /** 已为第几次检索后的核查：0 表示首次（打回后编排器会 +1 再检索），
      * 1 表示已重试过一次，此时不得再因「无命中」打回。
      */
     retryCount: number;
+    /** EV-04/06：KM 置信分档（可选） */
+    confidenceTier?: ConfidenceTier | null;
 };
 export const prompt = `你是 FamBrain 系统中的「事实核查员」（FactChecker）。
 

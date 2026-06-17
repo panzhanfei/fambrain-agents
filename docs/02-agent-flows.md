@@ -153,7 +153,8 @@ flowchart TD
 **技术：** **纯规则精排**（无 LLM）。**Hybrid 并行召回**（Chroma 向量 ∥ corpus BM25）→ RRF 融合 → `tokenize` + `pickExcerpt` 确定性输出。与业界「检索层不用 Chat LLM、生成留给 Analyst」一致；避免小模型在精排阶段改写 excerpt、编造 `notes`（见 [坑点 P0-4 / D3-3](./04-pitfalls.md)）。
 
 > **v3 进度（Wave A）：** … Wave A 规则层收尾完成。  
-> **Wave B：** HY-01～07 ✅ 并行 Hybrid + RRF 已接入 KM 主链
+> **Wave B：** HY-01～07 ✅ 并行 Hybrid + RRF 已接入 KM 主链  
+> **Wave D：** EV-01～07 ✅ `confidenceTier` 分档 + FC 高置信规则快检（`tier_skip_llm`）
 
 ```mermaid
 flowchart TD
@@ -166,7 +167,9 @@ flowchart TD
   ENUMINJ --> CAND[candidates 就绪]
   CAND --> RULE["rankCandidates: token+vector/sparse+pathBoost"]
   RULE --> GUARD["identityGuard / enumerationFill"]
-  GUARD --> OUT["hits(maxHits 按 profile) / coverage / notes"]
+  GUARD --> TIER["assessConfidence → confidenceTier"]
+  TIER --> COV["deriveCoverageFromTier + tierNotes"]
+  COV --> OUT["hits / coverage / notes (+ confidenceTier?)"]
 ```
 
 | 步骤 | 做什么 | 规则 | 文件 | 方法 |
@@ -175,14 +178,15 @@ flowchart TD
 | 2 | 关键词扫盘 | ~~向量空或低置信时扫三目录~~ **已移除**（由 BM25 sparse 替代） | — | — |
 | 3 | 规则精排 | **token + vector + pathBoost**；`pickExcerpt`（表格行优先） | `retrieve-helpers.ts` | `rankCandidates()`、`pickTableExcerpt()` |
 | 4 | identity / 列举保底 | identity 补注入 personal + Top1；enumeration 注入 experience + fill | `retrieve.ts`、`retrieve-helpers.ts` | `ensureIdentityPersonalCandidate()`、`applyIdentityGuard()`、`ensureEnumerationExperienceCandidates()`、`applyEnumerationFill()` |
-| 5 | 兜底 | candidates 非空禁止 `hits:[]`；与 rank 同一公式 | `retrieve.ts` | `ensureNonEmptyHits()` |
-| 6 | 输出 | **maxHits 按 profile**；列举型 notes 标明覆盖段数 | `types.ts` | `KnowledgeRetrievalResult` |
+| 5 | 兜底 | **低置信**才 `ensureNonEmptyHits`；高/中置信不硬塞 Top1 | `retrieve.ts`、`score-candidate.ts` | `shouldCoalesceEmptyHits()`、`ensureNonEmptyHits()` |
+| 6 | 置信分档 | 融合分 + gap + path 权威 → `high` / `mid` / `low` | `score-candidate.ts` | `assessConfidence()`、`deriveCoverageFromTier()` |
+| 7 | 输出 | **maxHits 按 profile**；列举型 notes 标明覆盖段数；可选 `confidenceTier` | `types.ts` | `KnowledgeRetrievalResult` |
 
-### 4. FactChecker — 事实核查员（D5）🔄
+### 4. FactChecker — 事实核查员（D5）✅
 
 **职责：** 审查当轮 `hits` / `coverage` 是否足以回答 `userQuestion`；**不写终稿**。`passed=false` 时产出 `refinedSearchQuery`，编排器最多再打回 KM **1 次**。
 
-**技术：** LangChain `ChatOllama`；规则兜底 `buildRuleBasedFactCheck()`；输出 **Zod**（`factCheckerResultSchema`）；`retryCount≥1` 时代码强制放行。
+**技术：** LangChain `ChatOllama`；**Wave D**：`confidenceTier=high` 时规则快检跳过 LLM（`tier_skip_llm`）；规则兜底 `buildRuleBasedFactCheck()`；输出 **Zod**（`factCheckerResultSchema`）；`retryCount≥1` 时代码强制放行。
 
 ```mermaid
 flowchart TD

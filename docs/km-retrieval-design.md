@@ -75,13 +75,13 @@ Intake（L1）→ KM（L2～L5）→ FactChecker → ContentOrganizer → Analys
 | **P2-4** | QU-04 | L1 | pipeline | 改 | `parse-intake.ts` / `state.ts` 扩展 decision | `parse-intake.ts`、`state.ts` | 必配 QU-01 | QU-01 | ✅ | schema 校验通过 |
 | **P2-5** | QU-05 | L1 | KM | 改 | KM **优先 Intake queryType**，无则规则 fallback | `retrieve.ts`、`query-profile.ts` | 建议 | QU-03 | ✅ | 双源一致时不重复推断 |
 | **P2-6** | QU-06 | L1 | KM | 删/弱 | KM 内纯规则 queryProfile（Intake 稳定后） | `query-profile.ts` | — | QU-05 | ⬜ | 单一意图来源 |
-| **P3-1** | EV-01 | L3 | KM | 改 | **多维置信度**：融合分 + top1-top2 gap + path 权威 | `rank/score-candidate.ts` | — | HY-03、KM-05 | ⬜ | high/mid/low 分档稳定 |
-| **P3-2** | EV-02 | L3 | KM | 改 | **coverage** 基于分档，非单一 token 比 | `retrieve.ts` | — | EV-01 | ⬜ | sufficient 与 hits 一致 |
-| **P3-3** | EV-03 | L3 | KM | 改 | **删/弱** 无差别 ensureNonEmptyHits；低置信才补 | `retrieve.ts` | — | EV-01 | ⬜ | 高冲突 query 不硬塞 Top1 |
-| **P3-4** | EV-04 | L3 | KM | 增 | 输出可选 **`confidenceTier`**（向后兼容） | `types.ts` | 建议 FC | EV-01 | ⬜ | 旧 FC 仍工作 |
-| **P3-5** | EV-05 | L3 | FC | 改 | 高置信 **规则快检**跳过 LLM | `check-helpers.ts`、`check-facts.ts` | 建议 | EV-04 | ⬜ | 姓名类 FC 不调 LLM |
-| **P3-6** | EV-06 | L3 | pipeline | 改 | FC retry 可选传 tier / refinedSearchQuery | `compile.ts` | 建议 | EV-04 | ⬜ | retry 与 KM 分档一致 |
-| **P3-7** | EV-07 | L3 | agent-log | 改 | 日志：`recallChannel`、`fusionScore`、`confidenceTier` | `agent-log.ts`、`retrieve.ts` | 建议 | EV-01 | ⬜ | 联调一眼看出走了哪路 |
+| **P3-1** | EV-01 | L3 | KM | 改 | **多维置信度**：融合分 + top1-top2 gap + path 权威 | `score-candidate.ts` | — | HY-03、KM-05 | ✅ | high/mid/low 分档稳定 |
+| **P3-2** | EV-02 | L3 | KM | 改 | **coverage** 基于分档，非单一 token 比 | `retrieve.ts` | — | EV-01 | ✅ | sufficient 与 hits 一致 |
+| **P3-3** | EV-03 | L3 | KM | 改 | **删/弱** 无差别 ensureNonEmptyHits；低置信才补 | `retrieve.ts` | — | EV-01 | ✅ | 高冲突 query 不硬塞 Top1 |
+| **P3-4** | EV-04 | L3 | KM | 增 | 输出可选 **`confidenceTier`**（向后兼容） | `types.ts` | 建议 FC | EV-01 | ✅ | 旧 FC 仍工作 |
+| **P3-5** | EV-05 | L3 | FC | 改 | 高置信 **规则快检**跳过 LLM | `check-facts.ts` | 建议 | EV-04 | ✅ | 姓名类 FC 不调 LLM（tier_skip_llm） |
+| **P3-6** | EV-06 | L3 | pipeline | 改 | FC retry 可选传 tier / refinedSearchQuery | `compile.ts` | 建议 | EV-04 | ✅ | retry 与 KM 分档一致 |
+| **P3-7** | EV-07 | L3 | agent-log | 改 | 日志：`recallChannel`、`fusionScore`、`confidenceTier` | `agent-log.ts`、`retrieve.ts` | 建议 | EV-01 | ✅ | 联调一眼看出走了哪路 |
 | **P4-1** | RC-01 | L2 | KM | 增 | **FAQ / 规则前置**（高频问直接 hit） | `faq/faq-matcher.ts` | — | HY-02 | ⬜ | 「我叫什么」可走 FAQ 短路 |
 | **P4-2** | PR-01 | L4 | KM | 增 | **Cross-Encoder rerank** TopN（非 Chat LLM） | `rank/rerank-cross-encoder.ts` | — | EV-01 | ⬜ | mid 档精排后 Top1 更准 |
 | **P4-3** | PR-02 | L4 | KM | 增 | 按 queryType **structuredFields** | `structured-extract.ts` | 建议 Organizer | EV-01 | ⬜ | 输出含 `{ name: "..." }` 等 |

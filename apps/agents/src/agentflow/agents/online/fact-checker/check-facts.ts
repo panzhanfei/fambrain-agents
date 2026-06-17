@@ -68,11 +68,26 @@ export const completeFactCheck = async (
     coverage: input.coverage,
     notes: input.notes,
     retryCount: input.retryCount,
+    confidenceTier: input.confidenceTier ?? null,
     hitCount: input.hits.length,
     hits: summarizeHits(input),
   });
 
   const fallback = buildRuleBasedFactCheck(input);
+
+  if (
+    input.retryCount === 0 &&
+    input.hits.length > 0 &&
+    input.confidenceTier === "high"
+  ) {
+    const result = buildRuleBasedFactCheck(input);
+    logAgentOut("FactChecker", "出去", summarizeFactCheckOut(result, {
+      source: "rules_high_confidence_pass",
+      guardApplied: "tier_skip_llm",
+      willRetryRetrieval: false,
+    }));
+    return result;
+  }
 
   if (
     input.retryCount === 0 &&

@@ -2,6 +2,7 @@ import { Annotation } from "@langchain/langgraph";
 import type { AgentPipelineContext, DbChatTurn, } from "@fambrain/agent-types";
 import type { IntakeRoutingDecision } from "@/agentflow/agents/online/intake-coordinator";
 import type { InformationAnalystInput } from "@/agentflow/agents/online/information-analyst";
+import type { ConfidenceTier } from "@/agentflow/agents/online/knowledge-manager/types";
 /**
  * LangGraph 编排共享状态（Intake → KM → FactChecker → ContentOrganizer → Analyst；摘要分支 Intake → KM → ContentSummarizer）。
  * 初始值由 `stream.ts` 的 `buildInitialState()` 注入；节点只返回需要更新的字段。
@@ -21,6 +22,8 @@ export const PipelineGraphAnnotation = Annotation.Root({
     coverage: Annotation<InformationAnalystInput["coverage"]>,
     /** 知识管理员给分析师的备注；无则为 null */
     notes: Annotation<InformationAnalystInput["notes"]>,
+    /** EV-04：KM 置信分档 */
+    confidenceTier: Annotation<ConfidenceTier | null>,
     /** 澄清 / 闲聊 / briefReply 等提前结束时的终稿（不经 Analyst） */
     answer: Annotation<string | null>,
     /** 某节点失败时的错误信息，SSE 层会推 error 事件 */

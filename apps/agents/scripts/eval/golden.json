@@ -71,6 +71,7 @@
       },
       "assert": {
         "expectProfile": "identity",
+        "expectConfidenceTier": "high",
         "minHits": 1,
         "topPathRe": "personal",
         "notTopPathRe": "projects/resume|_TEMPLATE"
@@ -88,6 +89,7 @@
       },
       "assert": {
         "expectProfile": "identity",
+        "expectConfidenceTier": "high",
         "minHits": 1,
         "topPathRe": "personal",
         "notTopPathRe": "projects/resume|_TEMPLATE",
@@ -106,6 +108,7 @@
       },
       "assert": {
         "expectProfile": "enumeration",
+        "expectConfidenceTier": "high",
         "minHits": 1,
         "minExperienceHits": 4,
         "noProjectsInHits": true,

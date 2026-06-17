@@ -18,4 +18,10 @@ export {
     type KnowledgeManagerInput,
     type KnowledgeRetrievalResult,
     type QueryProfile,
+    type ConfidenceTier,
 } from "./types";
+export {
+    assessConfidence,
+    deriveCoverageFromTier,
+    shouldCoalesceEmptyHits,
+} from "./score-candidate";

@@ -12,6 +12,7 @@ export type JsonAssert = {
     minExperienceHits?: number;
     noProjectsInHits?: boolean;
     expectProfile?: string;
+    expectConfidenceTier?: string;
     mustIncludeSteps?: string[];
     mustNotIncludeSteps?: string[];
     minAnswerLength?: number;
@@ -26,6 +27,8 @@ export type KmEvalSnapshot = {
     queryProfile: string;
     candidateCount: number;
     recallSource: string;
+    confidenceTier?: string;
+    confidenceScore?: number;
     latencyMs: number;
 };
 
@@ -89,6 +92,14 @@ export const assertKm = (
     }
     if (snap.candidateCount > 0 && snap.hits.length === 0) {
         issues.push("D3-2：candidates>0 但 hits=0");
+    }
+    if (
+        assert.expectConfidenceTier &&
+        snap.confidenceTier !== assert.expectConfidenceTier
+    ) {
+        issues.push(
+            `confidenceTier 期望 ${assert.expectConfidenceTier} 实际 ${snap.confidenceTier ?? "null"}`
+        );
     }
     return issues;
 };

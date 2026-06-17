@@ -13,6 +13,9 @@ export type RecallSource =
     | "sparse"
     | "empty";
 
+/** EV-04：检索置信分档 */
+export type ConfidenceTier = "high" | "mid" | "low";
+
 /** HY-05：统一候选（向量 L2 / BM25 rawScore + 可选 fusionScore） */
 export type KnowledgeCandidate = {
     path: string;
@@ -42,6 +45,10 @@ export type KnowledgeRetrievalResult = {
     hits: KnowledgeHit[];
     coverage: "sufficient" | "partial" | "none";
     notes: string | null;
+    /** EV-04：可选置信分档（向后兼容） */
+    confidenceTier?: ConfidenceTier;
+    /** EV-01：0–1 综合置信分（日志 / eval 用） */
+    confidenceScore?: number;
 };
 export type KnowledgeManagerInput = {
     corpusUserId: string;

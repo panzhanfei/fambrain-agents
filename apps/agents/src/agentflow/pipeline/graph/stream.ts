@@ -42,6 +42,7 @@ const buildInitialState = (history: DbChatTurn[], context: AgentPipelineContext,
         retryCount: 0,
         memoryBlock,
         intakeHistory,
+        confidenceTier: null,
     };
 };
 const isAnalystStreamChunk = (value: unknown): value is AnalystStreamChunk => {
@@ -67,6 +68,7 @@ const summarizePipelineOut = (state: PipelineGraphState, answer: string) => ({
     coverage: state.coverage,
     checkerPassed: state.checkerPassed,
     retryCount: state.retryCount,
+    confidenceTier: state.confidenceTier,
     error: state.error,
     hitPaths: state.hits.map((h) => h.path),
 });

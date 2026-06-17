@@ -210,6 +210,8 @@ const runKmCase = async (
         queryProfile,
         candidateCount: hybrid.candidates.length,
         recallSource: hybrid.recallSource,
+        confidenceTier: result.confidenceTier,
+        confidenceScore: result.confidenceScore,
         latencyMs: Date.now() - started,
     };
 };

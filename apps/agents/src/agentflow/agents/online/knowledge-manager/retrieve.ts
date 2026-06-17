@@ -15,6 +15,7 @@
  * KM-08/09：queryProfile 分档 vectorTopK / maxHits；Intake queryType 优先。
  * KM-10：表格 excerpt；KM-11：identityGuard。
  * KM-13～15：列举 experience 专扫 + fill + coverage；KM-16：同 path merge body。
+ * EV-01～04：confidenceTier 分档 + coverage 由 tier 推导 + 低置信弱 coalesce。
  */
 import { readFile } from "node:fs/promises";
 import path from "node:path";
@@ -44,7 +45,14 @@ import {
     pickExcerpt,
     rankCandidates,
 } from "./retrieve-helpers";
+import {
+    assessConfidence,
+    deriveCoverageFromTier,
+    shouldCoalesceEmptyHits,
+    tierNotes,
+} from "./score-candidate";
 import type {
+    ConfidenceTier,
     KnowledgeCandidate,
     KnowledgeHit,
     KnowledgeManagerInput,
@@ -229,10 +237,12 @@ const retrieveByKeywords = (
     candidates: CandidateRow[],
     maxHits: number,
     queryProfile: QueryProfile
-): KnowledgeRetrievalResult => {
+): Omit<KnowledgeRetrievalResult, "coverage" | "confidenceTier" | "confidenceScore"> & {
+    hits: KnowledgeHit[];
+} => {
     const tokens = tokenizeForRecall(input.searchQuery, input.subTasks);
     if (candidates.length === 0) {
-        return { hits: [], coverage: "none", notes: null };
+        return { hits: [], notes: null };
     }
 
     const ranked = rankCandidates(
@@ -252,28 +262,29 @@ const retrieveByKeywords = (
         })
     );
 
-    const top = hits[0]?.relevance ?? 0;
-    const coverage =
-        top >= 0.6 ? "sufficient" : top > 0 ? "partial" : "none";
-
-    return {
-        hits,
-        coverage,
-        notes:
-            coverage === "partial"
-                ? "规则匹配部分覆盖；excerpt 来自 chunk 原文截断。"
-                : null,
-    };
+    return { hits, notes: null };
 };
 
-/** candidates 非空时禁止最终 hits 为空（D3-2）；KM-06 与 rank 共用 rankCandidates */
+/** EV-03：低置信不硬塞 Top1；high/mid 仍 coalesce（D3-2）。 */
 const ensureNonEmptyHits = (
     input: Pick<KnowledgeManagerInput, "searchQuery" | "subTasks">,
     candidates: CandidateRow[],
     result: KnowledgeRetrievalResult,
-    queryProfile: QueryProfile
+    queryProfile: QueryProfile,
+    tier: ConfidenceTier,
+    topRelevance: number
 ): KnowledgeRetrievalResult => {
     if (result.hits.length > 0 || candidates.length === 0) return result;
+    if (!shouldCoalesceEmptyHits(tier, topRelevance)) {
+        return {
+            ...result,
+            coverage: "none",
+            notes: tierNotes(
+                tier,
+                "候选非空但置信过低，未强制补选 Top1。"
+            ),
+        };
+    }
 
     const tokens = tokenizeForRecall(input.searchQuery, input.subTasks);
     const ranked = rankCandidates(
@@ -286,6 +297,7 @@ const ensureNonEmptyHits = (
     if (!top) return result;
 
     return {
+        ...result,
         hits: [
             {
                 path: top.path,
@@ -295,7 +307,10 @@ const ensureNonEmptyHits = (
             },
         ],
         coverage: "partial",
-        notes: "候选非空但 token 未命中，按 token+vector+pathBoost 加权补选。",
+        notes: tierNotes(
+            tier,
+            "候选非空但 token 未命中，按 token+vector+pathBoost 加权补选。"
+        ),
     };
 };
 
@@ -304,12 +319,18 @@ const finalizeHits = (
     candidates: CandidateRow[],
     queryProfile: QueryProfile,
     maxHits: number,
+    recallMeta: {
+        recallSource: RecallSource;
+        topCandidate?: KnowledgeCandidate;
+    },
     expectedExperiencePaths: string[] = []
 ): {
     result: KnowledgeRetrievalResult;
     ranked: ReturnType<typeof rankCandidates>;
     guardApplied: boolean;
     fillApplied: boolean;
+    confidenceTier: ConfidenceTier;
+    confidenceScore: number;
 } => {
     const tokens = tokenizeForRecall(input.searchQuery, input.subTasks);
     const ranked = rankCandidates(
@@ -319,11 +340,30 @@ const finalizeHits = (
         queryProfile
     );
 
-    let result = ensureNonEmptyHits(
+    let result: KnowledgeRetrievalResult = {
+        ...retrieveByKeywords(input, candidates, maxHits, queryProfile),
+        coverage: "none",
+    };
+
+    const provisional = assessConfidence({
+        queryProfile,
+        hits: result.hits,
+        ranked,
+        recallSource: recallMeta.recallSource,
+        topCandidate: recallMeta.topCandidate ?? candidates[0],
+        guardApplied: false,
+        fillApplied: false,
+        candidateCount: candidates.length,
+        expectedExperienceCount: expectedExperiencePaths.length,
+    });
+
+    result = ensureNonEmptyHits(
         input,
         candidates,
-        retrieveByKeywords(input, candidates, maxHits, queryProfile),
-        queryProfile
+        result,
+        queryProfile,
+        provisional.tier,
+        provisional.top1Relevance
     );
 
     const guarded = applyIdentityGuard(
@@ -368,7 +408,47 @@ const finalizeHits = (
             expectedExperiencePaths.length,
             filled.filledCount
         );
-        result = { ...result, coverage, notes };
+        const assessment = assessConfidence({
+            queryProfile,
+            hits: result.hits,
+            ranked,
+            recallSource: recallMeta.recallSource,
+            topCandidate: recallMeta.topCandidate ?? candidates[0],
+            guardApplied: guarded.guardApplied,
+            fillApplied: filled.fillApplied,
+            candidateCount: candidates.length,
+            expectedExperienceCount: expectedExperiencePaths.length,
+        });
+        result = {
+            ...result,
+            coverage,
+            notes: tierNotes(assessment.tier, notes),
+            confidenceTier: assessment.tier,
+            confidenceScore: assessment.score,
+        };
+    } else {
+        const assessment = assessConfidence({
+            queryProfile,
+            hits: result.hits,
+            ranked,
+            recallSource: recallMeta.recallSource,
+            topCandidate: recallMeta.topCandidate ?? candidates[0],
+            guardApplied: guarded.guardApplied,
+            fillApplied: filled.fillApplied,
+            candidateCount: candidates.length,
+            expectedExperienceCount: expectedExperiencePaths.length,
+        });
+        result = {
+            ...result,
+            coverage: deriveCoverageFromTier(
+                assessment.tier,
+                result.hits,
+                assessment.top1Relevance
+            ),
+            notes: tierNotes(assessment.tier, result.notes),
+            confidenceTier: assessment.tier,
+            confidenceScore: assessment.score,
+        };
     }
 
     return {
@@ -376,6 +456,8 @@ const finalizeHits = (
         ranked,
         guardApplied: guarded.guardApplied,
         fillApplied: filled.fillApplied,
+        confidenceTier: result.confidenceTier ?? "low",
+        confidenceScore: result.confidenceScore ?? 0,
     };
 };
 
@@ -475,7 +557,13 @@ export const retrieveKnowledge = async (
     candidates = enumCandidates;
 
     if (candidates.length === 0) {
-        const empty = { hits: [], coverage: "none" as const, notes: null };
+        const empty: KnowledgeRetrievalResult = {
+            hits: [],
+            coverage: "none",
+            notes: null,
+            confidenceTier: "low",
+            confidenceScore: 0,
+        };
         logAgentOut("KnowledgeManager", "出去", summarizeRetrievalOut(empty, {
             recallSource,
             resultSource: "empty",
@@ -486,12 +574,30 @@ export const retrieveKnowledge = async (
             queryProfile,
             vectorTopK,
             maxHits,
+            confidenceTier: "low",
+            confidenceScore: 0,
         }));
         return empty;
     }
 
-    const { result: ruleResult, ranked: topRankedList, guardApplied, fillApplied } =
-        finalizeHits(input, candidates, queryProfile, maxHits, expectedExperiencePaths);
+    const {
+        result: ruleResult,
+        ranked: topRankedList,
+        guardApplied,
+        fillApplied,
+        confidenceTier,
+        confidenceScore,
+    } = finalizeHits(
+        input,
+        candidates,
+        queryProfile,
+        maxHits,
+        {
+            recallSource,
+            topCandidate: rawCandidates[0],
+        },
+        expectedExperiencePaths
+    );
 
     const topRanked = topRankedList[0];
 
@@ -507,6 +613,10 @@ export const retrieveKnowledge = async (
         maxHits,
         guardApplied,
         fillApplied,
+        confidenceTier,
+        confidenceScore,
+        fusionScore: rawCandidates[0]?.fusionScore ?? null,
+        recallChannel: rawCandidates[0]?.recallChannel ?? null,
         expectedExperienceCount: expectedExperiencePaths.length,
         candidateCount: candidates.length,
         candidatesPreview: summarizeCandidate(candidates[0]!, 0),

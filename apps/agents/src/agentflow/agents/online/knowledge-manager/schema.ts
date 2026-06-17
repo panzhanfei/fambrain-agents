@@ -17,6 +17,8 @@ export const knowledgeRetrievalResultSchema = z.object({
     hits: knowledgeHitsSchema,
     coverage: knowledgeCoverageSchema,
     notes: nullableTrimmedString,
+    confidenceTier: z.enum(["high", "mid", "low"]).optional(),
+    confidenceScore: unitInterval.optional(),
 });
 export const parseKnowledgeHits = (raw: unknown): KnowledgeHit[] => {
     const parsed = knowledgeHitsSchema.safeParse(raw);
@@ -42,6 +44,8 @@ export const parseKnowledgeRetrievalResult = (raw: unknown, fallback: KnowledgeR
             hits: parsed.data.hits,
             coverage: parsed.data.coverage,
             notes: parsed.data.notes,
+            confidenceTier: parsed.data.confidenceTier,
+            confidenceScore: parsed.data.confidenceScore,
         };
     }
     if (!raw || typeof raw !== "object")
