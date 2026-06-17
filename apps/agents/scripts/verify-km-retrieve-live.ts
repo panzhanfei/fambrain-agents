@@ -1,5 +1,5 @@
 /**
- * KM 在线自测：真实语料 + Chroma（可用时）/ 扫盘 fallback。
+ * KM 在线自测：真实语料 + Hybrid（Chroma 可用时 vector+sparse，否则 sparse）。
  *
  *   FAMBRAIN_CORPUS_USER_ID=xxx pnpm --filter @fambrain/agents run verify:km-retrieve:live
  */

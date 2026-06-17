@@ -20,6 +20,7 @@
     "verify:km-retrieve": "tsx scripts/verify-km-retrieve.ts",
     "verify:km-retrieve:live": "tsx --env-file=../../.env scripts/verify-km-retrieve-live.ts",
     "verify:sparse-recall": "tsx --env-file=../../.env scripts/verify-sparse-recall.ts",
+    "verify:hybrid-recall": "tsx --env-file=../../.env scripts/verify-hybrid-recall.ts",
     "verify:embed-batches": "tsx scripts/verify-embed-batches.ts",
     "verify:memory": "tsx --env-file=../../.env scripts/verify-memory.ts",
     "verify:content-summarizer": "tsx scripts/verify-content-summarizer.ts",

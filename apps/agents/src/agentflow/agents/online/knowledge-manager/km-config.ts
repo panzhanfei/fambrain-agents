@@ -31,7 +31,7 @@ export const EXCERPT_MAX = 320;
 /** agent-log 📤 里 body / excerpt 预览长度。用于：summarizeCandidate、summarizeRetrievalOut。 */
 export const LOG_BODY_PREVIEW = 160;
 
-/** 关键词扫盘读盘时，单文件 body 读入上限（避免大 md 占内存）。用于：scanDocCandidates。 */
+/** 读盘时单文件 body 上限（personal/experience 补注入、sparse 扫盘）。 */
 export const SCAN_BODY_MAX = 4000;
 
 /**
@@ -46,9 +46,15 @@ export const MAX_CHUNKS_PER_PATH = 2;
  */
 export const MERGED_CHUNK_BODY_MAX = 6000;
 
+/** HY-06：融合前向量 raw topK 倍数（dedupe 后再截断）。 */
+export const VECTOR_FETCH_MULTIPLIER = 2;
+
+/** HY-03：RRF 平滑常数 k。 */
+export const RRF_K = 60;
+
 /**
  * Chroma L2 距离：越小越相似。
- * top1 距离 ≤ 此值视为「向量高置信」，可跳过扫盘。用于：isVectorConfident。
+ * HY-04 前用于 isVectorConfident；Hybrid 主路径不再串行 gating。
  */
 export const VECTOR_CONFIDENT_TOP1_MAX = 1.25;
 
@@ -92,6 +98,8 @@ export const getKmRetrievalConfig = () => ({
     mergedChunkBodyMax: MERGED_CHUNK_BODY_MAX,
     vectorConfidentTop1Max: VECTOR_CONFIDENT_TOP1_MAX,
     vectorConfidentGapMin: VECTOR_CONFIDENT_GAP_MIN,
+    vectorFetchMultiplier: VECTOR_FETCH_MULTIPLIER,
+    rrfK: RRF_K,
     pathBoostPersonal: PATH_BOOST_PERSONAL,
     pathBoostExperience: PATH_BOOST_EXPERIENCE,
     pathBoostProjects: PATH_BOOST_PROJECTS,

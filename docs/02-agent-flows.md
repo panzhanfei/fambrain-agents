@@ -150,33 +150,29 @@ flowchart TD
 
 **职责：** 产出 `hits[]`（path / excerpt / relevance），不对用户说话。
 
-**技术：** **纯规则精排**（无 LLM）。向量语义召回（Chroma）→ 低置信时关键词扫盘补充 → `tokenize` + `pickExcerpt` 确定性输出。与业界「检索层不用 Chat LLM、生成留给 Analyst」一致；避免小模型在精排阶段改写 excerpt、编造 `notes`（见 [坑点 P0-4 / D3-3](./04-pitfalls.md)）。
+**技术：** **纯规则精排**（无 LLM）。**Hybrid 并行召回**（Chroma 向量 ∥ corpus BM25）→ RRF 融合 → `tokenize` + `pickExcerpt` 确定性输出。与业界「检索层不用 Chat LLM、生成留给 Analyst」一致；避免小模型在精排阶段改写 excerpt、编造 `notes`（见 [坑点 P0-4 / D3-3](./04-pitfalls.md)）。
 
 > **v3 进度（Wave A）：** … Wave A 规则层收尾完成。  
-> **Wave B：** HY-01 BM25 sparse ✅ · 下一步 HY-02 并行 Hybrid + HY-03 RRF
+> **Wave B：** HY-01～07 ✅ 并行 Hybrid + RRF 已接入 KM 主链
 
 ```mermaid
 flowchart TD
   IN["searchQuery + queryType + topics + subTasks"] --> PROFILE["resolveQueryProfile"]
-  PROFILE --> VEC["searchCorpusVectors(topK 按 profile)"]
-  VEC -->|无结果| SCAN["scanDocCandidates()"]
-  VEC -->|低置信| SCAN
-  VEC -->|低置信| MERGE["mergeCandidates()"]
-  SCAN --> MERGE
-  VEC -->|高置信| RAW[candidates]
-  MERGE --> RAW
+  PROFILE --> HY["hybridRecall: vector ∥ BM25 sparse"]
+  HY --> RRF["fuseRrf + merge by path"]
+  RRF --> RAW[candidates + recallChannel]
   RAW --> IDINJ["identity: 补注入 personal 简历"]
   IDINJ --> ENUMINJ["enumeration: 注入 experience/ 全量"]
   ENUMINJ --> CAND[candidates 就绪]
-  CAND --> RULE["rankCandidates: token+vector+pathBoost"]
+  CAND --> RULE["rankCandidates: token+vector/sparse+pathBoost"]
   RULE --> GUARD["identityGuard / enumerationFill"]
   GUARD --> OUT["hits(maxHits 按 profile) / coverage / notes"]
 ```
 
 | 步骤 | 做什么 | 规则 | 文件 | 方法 |
 |------|--------|------|------|------|
-| 1 | 向量预扫 | Chroma；L2 + top1/top2 gap；**topK 按 queryProfile** | `@fambrain/corpus` | `searchCorpusVectors()` |
-| 2 | 关键词扫盘 | 向量空或低置信时扫三目录 | `retrieve.ts` | `scanDocCandidates()` |
+| 1 | Hybrid 召回 | 向量 + BM25 **并行**；RRF 融合；topK 按 profile | `hybrid-recall.ts`、`fusion-rrf.ts` | `hybridRecall()` |
+| 2 | 关键词扫盘 | ~~向量空或低置信时扫三目录~~ **已移除**（由 BM25 sparse 替代） | — | — |
 | 3 | 规则精排 | **token + vector + pathBoost**；`pickExcerpt`（表格行优先） | `retrieve-helpers.ts` | `rankCandidates()`、`pickTableExcerpt()` |
 | 4 | identity / 列举保底 | identity 补注入 personal + Top1；enumeration 注入 experience + fill | `retrieve.ts`、`retrieve-helpers.ts` | `ensureIdentityPersonalCandidate()`、`applyIdentityGuard()`、`ensureEnumerationExperienceCandidates()`、`applyEnumerationFill()` |
 | 5 | 兜底 | candidates 非空禁止 `hits:[]`；与 rank 同一公式 | `retrieve.ts` | `ensureNonEmptyHits()` |

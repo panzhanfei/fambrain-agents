@@ -11,12 +11,15 @@ import {
 import type { QueryProfile } from "./types";
 import type { KnowledgeHit } from "./types";
 
-/** 与 retrieve.ts CandidateRow 对齐 */
+/** 与 retrieve.ts CandidateRow / KnowledgeCandidate 对齐 */
 export type VectorChunkRow = {
     path: string;
     title: string;
     body: string;
     score?: number;
+    rawScore?: number;
+    recallChannel?: "vector" | "sparse" | "hybrid";
+    fusionScore?: number;
 };
 
 /** KM-16：同 path 多段 body 合并（去重后拼接，封顶 MERGED_CHUNK_BODY_MAX）。 */
@@ -55,6 +58,9 @@ export const mergeCandidatesByPath = (
             title: best.title,
             body: mergeChunkBodies(kept.map((k) => k.body)),
             score: best.score,
+            rawScore: best.rawScore,
+            recallChannel: best.recallChannel,
+            fusionScore: best.fusionScore,
         });
     }
 
@@ -78,6 +84,20 @@ export const dedupeVectorByPath = (
 export const vectorScoreToRelevance = (score: number | undefined): number => {
     if (typeof score !== "number") return 0;
     return Math.max(0, Math.min(1, 1 - score / 2));
+};
+
+/** BM25 raw score → 0–1（HY-05 sparse 通道 rank 用）。 */
+export const sparseScoreToRelevance = (bm25: number | undefined): number => {
+    if (typeof bm25 !== "number" || bm25 <= 0) return 0;
+    return Math.min(1, bm25 / (bm25 + 4));
+};
+
+const resolveRecallRelevance = (c: VectorChunkRow): number => {
+    const vectorRel = vectorScoreToRelevance(c.score);
+    const sparseRel = sparseScoreToRelevance(c.rawScore);
+    if (c.recallChannel === "sparse") return sparseRel;
+    if (c.recallChannel === "hybrid") return Math.max(vectorRel, sparseRel);
+    return vectorRel;
 };
 
 /** 字面 token 命中率 → 0–1。用于：computeRelevance（KM-05）。 */
@@ -140,7 +160,7 @@ export const rankCandidates = (
         .map((c) => {
             const haystack = `${c.path} ${c.title} ${c.body}`.toLowerCase();
             const keywordRelevance = computeKeywordRelevance(haystack, tokens);
-            const vectorRelevance = vectorScoreToRelevance(c.score);
+            const vectorRelevance = resolveRecallRelevance(c);
             const pathBoost = getPathBoost(c.path);
             const relevance = computeRelevance(
                 keywordRelevance,

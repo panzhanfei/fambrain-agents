@@ -1,15 +1,16 @@
 /**
- * KnowledgeManager 检索：向量召回 →（低置信时）关键词扫盘 → 规则精排输出。
+ * KnowledgeManager 检索：Hybrid 并行召回（向量 ∥ BM25）→ RRF 融合 → 规则精排输出。
  *
  * 不做 LLM 精排：excerpt / coverage 由确定性规则生成，避免小模型改写 excerpt、
  * 编造 notes，并与业界「检索层不用 Chat LLM、生成留给 Analyst」一致。
  *
- * L1a：Chroma 向量语义召回（优先）
- * L1b：磁盘关键词扫盘（向量空/低置信时补充）
+ * L1a：Chroma 向量语义召回（与 sparse 并行）
+ * L1b：corpus BM25 sparse 召回（与向量并行）
+ * L1c：RRF 融合候选（HY-02～03）
  * L2：内存关键词打分 + pickExcerpt（唯一输出路径）
  *
- * KM-01 topics 分流：topics 仅拼入向量 query；字面 token 只用 searchQuery + subTasks。
- * KM-05 rank：relevance = token + vector + pathBoost（封顶 1.0）。
+ * KM-01 topics 分流：topics 仅拼入向量 query；sparse 用 searchQuery + subTasks。
+ * KM-05 rank：relevance = token + vector/sparse + pathBoost（封顶 1.0）。
  * KM-06 兜底：ensureNonEmptyHits 与 rank 共用 rankCandidates。
  * KM-08/09：queryProfile 分档 vectorTopK / maxHits；Intake queryType 优先。
  * KM-10：表格 excerpt；KM-11：identityGuard。
@@ -21,24 +22,20 @@ import { logAgentIn, logAgentOut } from "@fambrain/agent-shared/agent-log";
 import {
     listCorpusScanRoots,
     listMarkdownFiles,
-    SCAN_FOLDERS,
-    searchCorpusVectors,
     toRepoPath,
 } from "@fambrain/corpus";
+import { hybridRecall } from "./hybrid-recall";
 import {
     getProfileRecallParams,
     LOG_BODY_PREVIEW,
     MAX_CANDIDATES,
     SCAN_BODY_MAX,
-    VECTOR_CONFIDENT_GAP_MIN,
-    VECTOR_CONFIDENT_TOP1_MAX,
 } from "./km-config";
 import { resolveQueryProfile } from "./query-profile";
 import {
     applyEnumerationFill,
     applyIdentityGuard,
     buildEnumerationCoverage,
-    dedupeVectorByPath,
     findPersonalResumeCandidate,
     isExperienceEntryPath,
     isPersonalResumePath,
@@ -48,17 +45,15 @@ import {
     rankCandidates,
 } from "./retrieve-helpers";
 import type {
+    KnowledgeCandidate,
     KnowledgeHit,
     KnowledgeManagerInput,
     KnowledgeRetrievalResult,
     QueryProfile,
+    RecallSource,
 } from "./types";
 
-type CandidateRow = KnowledgeManagerInput["candidates"][number] & {
-    score?: number;
-};
-
-type RecallSource = "provided" | "vector" | "vector+keyword_scan" | "keyword_scan";
+type CandidateRow = KnowledgeCandidate;
 
 const summarizeCandidate = (c: CandidateRow, index: number) => ({
     rank: index + 1,
@@ -67,6 +62,9 @@ const summarizeCandidate = (c: CandidateRow, index: number) => ({
     bodyChars: c.body.length,
     bodyPreview: c.body.replace(/\s+/g, " ").trim().slice(0, LOG_BODY_PREVIEW),
     score: c.score,
+    rawScore: c.rawScore,
+    recallChannel: c.recallChannel,
+    fusionScore: c.fusionScore,
 });
 
 const summarizeRetrievalOut = (
@@ -117,25 +115,7 @@ const titleFromMarkdown = (fileName: string, body: string): string => {
     return line || fileName.replace(/\.md$/i, "");
 };
 
-/** L2 距离越小越好；无 score 的扫盘候选视为低置信 */
-const isVectorConfident = (candidates: CandidateRow[]): boolean => {
-    if (candidates.length === 0) return false;
-    const scored = candidates.filter((c) => typeof c.score === "number");
-    if (scored.length === 0) return false;
-    const sorted = [...scored].sort(
-        (a, b) => (a.score ?? Number.POSITIVE_INFINITY) - (b.score ?? Number.POSITIVE_INFINITY)
-    );
-    const top1 = sorted[0]!;
-    if ((top1.score ?? Number.POSITIVE_INFINITY) > VECTOR_CONFIDENT_TOP1_MAX) {
-        return false;
-    }
-    if (sorted.length === 1) return true;
-    const top2 = sorted[1]!;
-    return (
-        (top2.score ?? 0) - (top1.score ?? 0) >= VECTOR_CONFIDENT_GAP_MIN
-    );
-};
-
+/** 合并两路候选（identity / enumeration 补注入用） */
 const mergeCandidates = (
     primary: CandidateRow[],
     secondary: CandidateRow[],
@@ -160,49 +140,7 @@ const mergeCandidates = (
     return [...byPath.values()].slice(0, maxCandidates);
 };
 
-const scanDocCandidates = async (
-    corpusUserId: string,
-    searchQuery: string,
-    subTasks: string[] = [],
-    maxCandidates: number = MAX_CANDIDATES
-): Promise<CandidateRow[]> => {
-    const tokens = tokenizeForRecall(searchQuery, subTasks);
-    if (tokens.length === 0) return [];
-
-    type Scored = CandidateRow & { score: number };
-    const scored: Scored[] = [];
-    const scanRoots = await listCorpusScanRoots(corpusUserId, listMarkdownFiles);
-    for (const { root: corpusRoot } of scanRoots) {
-        for (const folder of SCAN_FOLDERS) {
-            const dir = path.join(corpusRoot, folder);
-            for (const abs of await listMarkdownFiles(dir)) {
-                const body = await readFile(abs, "utf8").catch(() => "");
-                if (!body) continue;
-                const repoPath = toRepoPath(abs);
-                const haystack = `${repoPath} ${body}`.toLowerCase();
-                let score = 0;
-                for (const t of tokens) {
-                    if (haystack.includes(t)) score += 1;
-                }
-                if (score === 0) continue;
-                scored.push({
-                    path: repoPath,
-                    title: titleFromMarkdown(path.basename(abs), body),
-                    body: body.slice(0, SCAN_BODY_MAX),
-                    score,
-                });
-            }
-        }
-    }
-    scored.sort((a, b) => b.score - a.score);
-    return scored.slice(0, maxCandidates).map(({ path, title, body }) => ({
-        path,
-        title,
-        body,
-    }));
-};
-
-/** KM-11：identity 问法时若扫盘未命中 personal 简历，从 personal/ 目录补注入 */
+/** KM-11：identity 问法时若召回未命中 personal 简历，从 personal/ 目录补注入 */
 const loadPersonalResumeCandidate = async (
     corpusUserId: string
 ): Promise<CandidateRow | null> => {
@@ -447,18 +385,20 @@ const loadCandidates = async (
 ): Promise<{
     candidates: CandidateRow[];
     recallSource: RecallSource;
-    vectorConfident: boolean;
     vectorRawCount: number;
+    sparseRawCount: number;
     uniquePathCount: number;
+    fusionTopPath: string | null;
 }> => {
     if (input.candidates.length > 0) {
         const uniquePathCount = new Set(input.candidates.map((c) => c.path)).size;
         return {
             candidates: input.candidates,
             recallSource: "provided",
-            vectorConfident: true,
             vectorRawCount: input.candidates.length,
+            sparseRawCount: 0,
             uniquePathCount,
+            fusionTopPath: input.candidates[0]?.path ?? null,
         };
     }
 
@@ -467,71 +407,22 @@ const loadCandidates = async (
         ...input.topics,
         ...input.subTasks,
     ].join(" ");
+    const sparseQuery = [input.searchQuery, ...input.subTasks].join(" ");
 
-    let vectorCandidates: CandidateRow[] = [];
-    let vectorRawCount = 0;
-    try {
-        const vectorHits = await searchCorpusVectors(
-            input.corpusUserId,
-            vectorQuery,
-            vectorTopK
-        );
-        vectorRawCount = vectorHits.length;
-        vectorCandidates = dedupeVectorByPath(
-            vectorHits.map((h) => ({
-                path: h.path,
-                title: h.title,
-                body: h.body,
-                score: h.score,
-            })),
-            undefined,
-            vectorTopK
-        );
-    } catch {
-        vectorCandidates = [];
-    }
-
-    const uniquePathCount = new Set(vectorCandidates.map((c) => c.path)).size;
-
-    if (vectorCandidates.length === 0) {
-        const scanned = await scanDocCandidates(
-            input.corpusUserId,
-            input.searchQuery,
-            input.subTasks,
-            vectorTopK
-        );
-        return {
-            candidates: scanned,
-            recallSource: "keyword_scan",
-            vectorConfident: false,
-            vectorRawCount: 0,
-            uniquePathCount: new Set(scanned.map((c) => c.path)).size,
-        };
-    }
-
-    if (isVectorConfident(vectorCandidates)) {
-        return {
-            candidates: vectorCandidates,
-            recallSource: "vector",
-            vectorConfident: true,
-            vectorRawCount,
-            uniquePathCount,
-        };
-    }
-
-    const scanned = await scanDocCandidates(
+    const hybrid = await hybridRecall(
         input.corpusUserId,
-        input.searchQuery,
-        input.subTasks,
+        vectorQuery,
+        sparseQuery,
         vectorTopK
     );
-    const merged = mergeCandidates(vectorCandidates, scanned, vectorTopK);
+
     return {
-        candidates: merged,
-        recallSource: "vector+keyword_scan",
-        vectorConfident: false,
-        vectorRawCount,
-        uniquePathCount: new Set(merged.map((c) => c.path)).size,
+        candidates: hybrid.candidates,
+        recallSource: hybrid.recallSource,
+        vectorRawCount: hybrid.vectorRawCount,
+        sparseRawCount: hybrid.sparseRawCount,
+        uniquePathCount: hybrid.uniquePathCount,
+        fusionTopPath: hybrid.candidates[0]?.path ?? null,
     };
 };
 
@@ -557,8 +448,14 @@ export const retrieveKnowledge = async (
         candidatesProvided: input.candidates.length,
     });
 
-    const { candidates: rawCandidates, recallSource, vectorConfident, vectorRawCount, uniquePathCount } =
-        await loadCandidates(input, vectorTopK);
+    const {
+        candidates: rawCandidates,
+        recallSource,
+        vectorRawCount,
+        sparseRawCount,
+        uniquePathCount,
+        fusionTopPath,
+    } = await loadCandidates(input, vectorTopK);
     let candidates = mergeCandidatesByPath(
         rawCandidates,
         MAX_CANDIDATES,
@@ -582,9 +479,10 @@ export const retrieveKnowledge = async (
         logAgentOut("KnowledgeManager", "出去", summarizeRetrievalOut(empty, {
             recallSource,
             resultSource: "empty",
-            vectorConfident,
             vectorRawCount,
+            sparseRawCount,
             uniquePathCount,
+            fusionTopPath,
             queryProfile,
             vectorTopK,
             maxHits,
@@ -600,9 +498,10 @@ export const retrieveKnowledge = async (
     logAgentOut("KnowledgeManager", "出去", summarizeRetrievalOut(ruleResult, {
         recallSource,
         resultSource: "rule",
-        vectorConfident,
         vectorRawCount,
+        sparseRawCount,
         uniquePathCount,
+        fusionTopPath,
         queryProfile,
         vectorTopK,
         maxHits,

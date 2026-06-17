@@ -2,6 +2,29 @@ import type { QueryProfile } from "./query-profile";
 
 export type { QueryProfile };
 
+/** HY-05：召回通道 */
+export type RecallChannel = "vector" | "sparse" | "hybrid";
+
+/** HY-04：Hybrid 主路径 recallSource */
+export type RecallSource =
+    | "provided"
+    | "hybrid"
+    | "vector"
+    | "sparse"
+    | "empty";
+
+/** HY-05：统一候选（向量 L2 / BM25 rawScore + 可选 fusionScore） */
+export type KnowledgeCandidate = {
+    path: string;
+    title: string;
+    body: string;
+    /** Chroma L2 距离（越小越好）；sparse-only 无此项 */
+    score?: number;
+    rawScore?: number;
+    recallChannel?: RecallChannel;
+    fusionScore?: number;
+};
+
 /**
  * KnowledgeManager 输入/输出类型（检索合同）。
  * 在线检索不调 LLM，见 retrieve.ts。
@@ -27,9 +50,5 @@ export type KnowledgeManagerInput = {
     subTasks: string[];
     /** Intake queryType；缺失时 KM 规则推断（KM-08） */
     queryType?: QueryProfile | null;
-    candidates: {
-        path: string;
-        title: string;
-        body: string;
-    }[];
+    candidates: KnowledgeCandidate[];
 };

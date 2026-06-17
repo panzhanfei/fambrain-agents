@@ -172,5 +172,7 @@ pnpm run dev
 | `summarizeContent` | `agentflow/agents/online/content-summarizer/` | 在线摘要分支 + CLI（D9） |
 | `listVaultFiles` | `agentflow/knowledge/list-vault-files.ts` | vault 只读列举（MCP 共用） |
 | `recallSparseRetrieve` | `packages/corpus/src/recall-keyword-retrieve.ts` | BM25 sparse 检索（HY-01） |
+| `hybridRecall` / `fuseRrf` | `knowledge-manager/hybrid-recall.ts`、`fusion-rrf.ts` | 并行 Hybrid + RRF（HY-02～03） |
+| `verify:hybrid-recall` | `apps/agents/scripts/` | HY-02～03 单测 + live |
 | `indexAllCorpora` | `agentflow/agents/offline/knowledge-indexer/` | 离线 corpus → Chroma |
 | `logAgentIn` / `logAgentOut` | `packages/agent-shared/src/agent-log.ts` | 调试：含 FactChecker 🔍、ContentOrganizer 📋 |

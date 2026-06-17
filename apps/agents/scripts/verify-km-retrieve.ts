@@ -327,6 +327,38 @@ assert("enumerationFill 补全缺失经历并剔除 projects", () => {
     }
 });
 
+console.log("\n— HY-05 sparse rank —");
+
+assert("sparse-only 候选用 BM25 rawScore 参与 rank", () => {
+    const ranked = rankCandidates(
+        [
+            {
+                path: "data/doc/u/corpus/personal/个人简历.md",
+                title: "简历",
+                body: "姓名 潘展飞",
+                rawScore: 12,
+                recallChannel: "sparse",
+            },
+            {
+                path: "data/doc/u/corpus/projects/noise.md",
+                title: "noise",
+                body: "无关",
+                rawScore: 0.1,
+                recallChannel: "sparse",
+            },
+        ],
+        tokenize("姓名 潘展飞"),
+        pickExcerpt,
+        "identity"
+    );
+    if (!ranked[0]?.path.includes("personal")) {
+        throw new Error(`sparse Top1 应为 personal，实际 ${ranked[0]?.path}`);
+    }
+    if (ranked[0]!.vectorRelevance <= 0) {
+        throw new Error("sparse vectorRelevance 应 > 0");
+    }
+});
+
 function tokenize(q: string): string[] {
     return q
         .toLowerCase()

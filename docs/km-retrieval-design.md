@@ -63,12 +63,12 @@ Intake（L1）→ KM（L2～L5）→ FactChecker → ContentOrganizer → Analys
 | **P0-12** | KM-12 | L3 | KM | 改 | 日志增加 `queryProfile`、`vectorTopK`、`maxHits`、`topRank`、`guardApplied` | `retrieve.ts` | 建议 agent-log | KM-08 | ✅ | KM 📤 可见 guardApplied |
 | **P0-13** | KM-16 | L4 | KM | 改 | 同 path 多 chunk **merge body** 再摘抄 | `retrieve-helpers.ts` | — | KM-02 | ✅ | 同文件 excerpt 更完整 |
 | **P1-1** | HY-01 | L2 | corpus | 改 | 升级 **sparse 检索**（keyword → **BM25**） | `recall-keyword-retrieve.ts`、`bm25.ts` | 必配 KM | — | ✅ | `verify:sparse-recall` 绿；sparse 独立出 candidates |
-| **P1-2** | HY-02 | L2 | KM | 增 | **hybrid-recall**：向量 ∥ sparse **并行**召回 | `recall/hybrid-recall.ts` | 必配 corpus | HY-01 | ⬜ | 两路同时返回，不再串行 fallback |
-| **P1-3** | HY-03 | L2 | KM | 增 | **RRF 融合**（倒数排名融合） | `recall/fusion-rrf.ts` | — | HY-02 | ⬜ | 融合分排序 ≠ 单路 Top1 |
-| **P1-4** | HY-04 | L2 | KM | 改 | **删/弱** 主路径「向量低置信 → 才 scanDocCandidates」 | `retrieve.ts` | — | HY-02 | ⬜ | recallSource 不再只有串行组合 |
-| **P1-5** | HY-05 | L2 | KM | 改 | 统一 **Candidate**：`recallChannel`、`rawScore` | `types.ts` | — | HY-02 | ⬜ | vector/sparse/rule 可区分 |
-| **P1-6** | HY-06 | L2 | corpus | 改 | 向量 **raw topK 加大**（融合前多取，dedupe 后截） | `corpus-vector.ts`、`km-config.ts` | 建议 KM | HY-03 | ⬜ | 融合后 unique path 仍充足 |
-| **P1-7** | HY-07 | — | scripts | 改 | compare-recall 或并入 verify：对比 vector/sparse/RRF | `scripts/compare-recall.ts` | — | HY-03 | ⬜ | 三问法 RRF 优于单路 |
+| **P1-2** | HY-02 | L2 | KM | 增 | **hybrid-recall**：向量 ∥ sparse **并行**召回 | `hybrid-recall.ts` | 必配 corpus | HY-01 | ✅ | 两路 `Promise.all`，不再串行 fallback |
+| **P1-3** | HY-03 | L2 | KM | 增 | **RRF 融合**（倒数排名融合） | `fusion-rrf.ts` | — | HY-02 | ✅ | 融合分排序 ≠ 单路 Top1 |
+| **P1-4** | HY-04 | L2 | KM | 改 | **删/弱** 主路径「向量低置信 → 才 scanDocCandidates」 | `retrieve.ts` | — | HY-02 | ✅ | `recallSource`: hybrid/vector/sparse/empty |
+| **P1-5** | HY-05 | L2 | KM | 改 | 统一 **Candidate**：`recallChannel`、`rawScore` | `types.ts` | — | HY-02 | ✅ | vector/sparse/hybrid 可区分 |
+| **P1-6** | HY-06 | L2 | corpus | 改 | 向量 **raw topK 加大**（融合前多取，dedupe 后截） | `km-config.ts`（`VECTOR_FETCH_MULTIPLIER`） | 建议 KM | HY-03 | ✅ | 融合前 fetchK = topK × 2 |
+| **P1-7** | HY-07 | — | scripts | 改 | compare-recall 或并入 verify：对比 vector/sparse/RRF | `verify-hybrid-recall.ts` | — | HY-03 | ✅ | RRF 单测 + hybridRecall live |
 | **P2-1** | QU-01 | L1 | Intake | 增 | 输出 **queryType**（与 KM profile 对齐） | `schema.ts`、`prompt.ts` | 必配 pipeline | P0-6 或并行 | ✅ | Intake JSON 含 queryType |
 | **P2-2** | QU-02 | L1 | Intake | 改 | **多轮指代补全** searchQuery | `prompt.ts` | — | — | ⬜ | 「那个项目呢」能补全实体 |
 | **P2-3** | QU-03 | L1 | pipeline | 改 | `compile.ts` 传 **queryType** 给 `retrieveKnowledge` | `compile.ts` | 必配 QU-01 | QU-01 | ✅ | retrievalNode 入参含 queryType |
@@ -258,6 +258,7 @@ Intake `queryType` 与上表 **同名枚举**（Wave C）。
 | 命令 | 说明 |
 |------|------|
 | `pnpm --filter @fambrain/agents run verify:sparse-recall` | HY-01：BM25 sparse 三问（不需 Chroma） |
+| `pnpm --filter @fambrain/agents run verify:hybrid-recall` | HY-02～03：RRF 单测 + hybridRecall live |
 | `pnpm --filter @fambrain/agents run verify:km-retrieve` | 规则单测：pathBoost、rank、queryProfile |
 | `pnpm --filter @fambrain/agents run verify:km-retrieve:live` | 真实语料 KM 五问（需 corpus） |
 | `pnpm --filter @fambrain/agents exec tsx --env-file=../../.env scripts/verify-km-e2e-identity.ts` | 全链路 spot check：「我的名字是什么？」 |
@@ -276,7 +277,7 @@ Intake `queryType` 与上表 **同名枚举**（Wave C）。
 
 | 现象 | 下一步 |
 |------|--------|
-| 自测时 Chroma 未起，全走 `keyword_scan` | 起 Chroma 后再测向量；Wave B Hybrid |
+| 自测时 Chroma 未起，recallSource 为 `sparse`（向量路空、BM25 仍跑） | 起 Chroma 后 recallSource 应为 `hybrid` |
 | Wave A 文档收尾 | DOC-02 + DOC-03 |
 
 ---
@@ -287,6 +288,7 @@ Intake `queryType` 与上表 **同名枚举**（Wave C）。
 |------|------|
 | 2026-06 | KM-04 ✅ km-config；KM-01 ✅ topics 分流；KM-02 ✅ 向量 path 去重 |
 | 2026-06 | **v3 计划定稿**：业界五层对标；主计划表 P0～P5；Wave A～F |
+| 2026-06 | **HY-02～07 ✅**：并行 Hybrid + RRF；删 scanDocCandidates；`verify:hybrid-recall` |
 | 2026-06 | **HY-01 ✅**：corpus 内 Okapi BM25；`recallSparseRetrieve`；`verify:sparse-recall` |
 | 2026-06 | **KM-13～16 ✅**：experience 专扫 + enumerationFill + 列举 coverage/notes；chunk merge |
 | 2026-06 | **KM-10～12 ✅**：表格 excerpt；identityGuard + personal 补注入；日志 `guardApplied` |
