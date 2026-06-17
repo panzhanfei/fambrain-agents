@@ -4,10 +4,14 @@
  *   pnpm --filter @fambrain/agents run verify:km-retrieve
  */
 import {
+    applyEnumerationFill,
     applyIdentityGuard,
     computeRelevance,
     findPersonalResumeCandidate,
     getPathBoost,
+    isExperienceEntryPath,
+    mergeChunkBodies,
+    mergeCandidatesByPath,
     pickExcerpt,
     pickTableExcerpt,
     rankCandidates,
@@ -249,6 +253,77 @@ assert("findPersonalResumeCandidate 优先「个人简历」文件名", () => {
     ]);
     if (!c?.path.includes("个人简历")) {
         throw new Error(`应选个人简历文件，实际 ${c?.path}`);
+    }
+});
+
+console.log("\n— KM-16 chunk merge —");
+
+assert("mergeChunkBodies 拼接多段", () => {
+    const merged = mergeChunkBodies(["# 头部", "## 技术栈\n\nVue React"]);
+    if (!merged.includes("头部") || !merged.includes("Vue")) {
+        throw new Error(`应含两段内容，实际 ${merged}`);
+    }
+});
+
+assert("mergeCandidatesByPath 同 path 合并", () => {
+    const path = "data/doc/u/corpus/projects/城管.md";
+    const merged = mergeCandidatesByPath([
+        { path, title: "t", body: "# 背景", score: 0.8 },
+        { path, title: "t", body: "| 技术 | Vue |", score: 0.3 },
+    ]);
+    if (merged.length !== 1) throw new Error("应合并为 1 条");
+    const ex = pickExcerpt(merged[0]!.body, ["vue"], "tech");
+    if (!ex.includes("Vue")) throw new Error(`合并后应能摘到技术栈，实际 ${ex}`);
+});
+
+console.log("\n— KM-13～15 列举 experience —");
+
+assert("isExperienceEntryPath 排除 README", () => {
+    if (!isExperienceEntryPath("data/doc/u/corpus/experience/2021-西安奥卡云.md")) {
+        throw new Error("任职 md 应为 experience entry");
+    }
+    if (isExperienceEntryPath("data/doc/u/corpus/experience/README.md")) {
+        throw new Error("README 不应算 entry");
+    }
+});
+
+assert("enumerationFill 补全缺失经历并剔除 projects", () => {
+    const exp1 = "data/doc/u/corpus/experience/2016-a.md";
+    const exp2 = "data/doc/u/corpus/experience/2018-b.md";
+    const proj = "data/doc/u/corpus/projects/_TEMPLATE.md";
+    const body1 = "# A 公司";
+    const body2 = "# B 公司";
+    const candidates = [
+        { path: proj, title: "tpl", body: "公司 模板", score: 0.9 },
+        { path: exp1, title: "A", body: body1, score: 0.2 },
+        { path: exp2, title: "B", body: body2, score: 0.1 },
+    ];
+    const tokens = tokenize("哪几家公司");
+    const ranked = rankCandidates(candidates, tokens, pickExcerpt, "enumeration");
+    const hitsBefore = [
+        {
+            path: proj,
+            title: "tpl",
+            excerpt: "wrong",
+            relevance: 0.9,
+        },
+    ];
+    const { hits, fillApplied, filledCount } = applyEnumerationFill(
+        hitsBefore,
+        candidates,
+        ranked,
+        "enumeration",
+        8,
+        [exp1, exp2],
+        tokens
+    );
+    if (!fillApplied) throw new Error("fillApplied 应为 true");
+    if (filledCount !== 2) throw new Error(`应补全 2 段经历，实际 ${filledCount}`);
+    if (hits.some((h) => h.path === proj)) {
+        throw new Error("列举 hits 不应含 projects");
+    }
+    if (!hits.every((h) => isExperienceEntryPath(h.path))) {
+        throw new Error("列举 hits 应均为 experience entry");
     }
 });
 

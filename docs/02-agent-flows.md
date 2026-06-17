@@ -152,7 +152,7 @@ flowchart TD
 
 **技术：** **纯规则精排**（无 LLM）。向量语义召回（Chroma）→ 低置信时关键词扫盘补充 → `tokenize` + `pickExcerpt` 确定性输出。与业界「检索层不用 Chat LLM、生成留给 Analyst」一致；避免小模型在精排阶段改写 excerpt、编造 `notes`（见 [坑点 P0-4 / D3-3](./04-pitfalls.md)）。
 
-> **v3 进度（Wave A）：** pathBoost + rank（KM-03～06）✅ · queryProfile 分档（KM-08～09）✅ · 表格 excerpt + identityGuard（KM-10～12）✅ · Intake `queryType` ✅ · 待做：KM-13～16
+> **v3 进度（Wave A）：** pathBoost + rank（KM-03～06）✅ · queryProfile 分档（KM-08～09）✅ · 表格 excerpt + identityGuard（KM-10～12）✅ · 列举 experience + chunk merge（KM-13～16）✅ · Intake `queryType` ✅ · Wave A 规则层收尾完成，下一步 Wave B Hybrid
 
 ```mermaid
 flowchart TD
@@ -165,9 +165,10 @@ flowchart TD
   VEC -->|高置信| RAW[candidates]
   MERGE --> RAW
   RAW --> IDINJ["identity: 补注入 personal 简历"]
-  IDINJ --> CAND[candidates 就绪]
+  IDINJ --> ENUMINJ["enumeration: 注入 experience/ 全量"]
+  ENUMINJ --> CAND[candidates 就绪]
   CAND --> RULE["rankCandidates: token+vector+pathBoost"]
-  RULE --> GUARD["identityGuard → Top1 personal"]
+  RULE --> GUARD["identityGuard / enumerationFill"]
   GUARD --> OUT["hits(maxHits 按 profile) / coverage / notes"]
 ```
 
@@ -176,9 +177,9 @@ flowchart TD
 | 1 | 向量预扫 | Chroma；L2 + top1/top2 gap；**topK 按 queryProfile** | `@fambrain/corpus` | `searchCorpusVectors()` |
 | 2 | 关键词扫盘 | 向量空或低置信时扫三目录 | `retrieve.ts` | `scanDocCandidates()` |
 | 3 | 规则精排 | **token + vector + pathBoost**；`pickExcerpt`（表格行优先） | `retrieve-helpers.ts` | `rankCandidates()`、`pickTableExcerpt()` |
-| 4 | identity 保底 | 扫盘未命中时补注入 personal 简历；强制 Top1 | `retrieve.ts` | `ensureIdentityPersonalCandidate()`、`applyIdentityGuard()` |
+| 4 | identity / 列举保底 | identity 补注入 personal + Top1；enumeration 注入 experience + fill | `retrieve.ts`、`retrieve-helpers.ts` | `ensureIdentityPersonalCandidate()`、`applyIdentityGuard()`、`ensureEnumerationExperienceCandidates()`、`applyEnumerationFill()` |
 | 5 | 兜底 | candidates 非空禁止 `hits:[]`；与 rank 同一公式 | `retrieve.ts` | `ensureNonEmptyHits()` |
-| 6 | 输出 | **maxHits 按 profile**（identity 4 / enumeration 8 …） | `types.ts` | `KnowledgeRetrievalResult` |
+| 6 | 输出 | **maxHits 按 profile**；列举型 notes 标明覆盖段数 | `types.ts` | `KnowledgeRetrievalResult` |
 
 ### 4. FactChecker — 事实核查员（D5）🔄
 

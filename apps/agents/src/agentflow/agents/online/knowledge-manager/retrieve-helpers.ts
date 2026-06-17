@@ -19,17 +19,23 @@ export type VectorChunkRow = {
     score?: number;
 };
 
+/** KM-16：同 path 多段 body 合并（去重后拼接，封顶 MERGED_CHUNK_BODY_MAX）。 */
+export const mergeChunkBodies = (bodies: string[]): string => {
+    const unique = bodies.map((b) => b.trim()).filter(Boolean);
+    if (unique.length <= 1) return unique[0] ?? "";
+    return unique.join("\n\n---\n\n").slice(0, MERGED_CHUNK_BODY_MAX);
+};
+
 /**
- * KM-02：向量按 chunk 召回时，同一 md path 会出现多次。
- * 按 path 分组，每文件最多保留 MAX_CHUNKS_PER_PATH 段（L2 最优），多段则合并 body。
+ * KM-02 / KM-16：按 path 合并候选；向量 chunk 每 path 最多 MAX_CHUNKS_PER_PATH 段。
  */
-export const dedupeVectorByPath = (
-    chunks: VectorChunkRow[],
+export const mergeCandidatesByPath = (
+    candidates: VectorChunkRow[],
     maxPerPath = MAX_CHUNKS_PER_PATH,
     maxCandidates = MAX_CANDIDATES
 ): VectorChunkRow[] => {
     const byPath = new Map<string, VectorChunkRow[]>();
-    for (const c of chunks) {
+    for (const c of candidates) {
         const list = byPath.get(c.path) ?? [];
         list.push(c);
         byPath.set(c.path, list);
@@ -44,17 +50,10 @@ export const dedupeVectorByPath = (
         );
         const kept = sorted.slice(0, maxPerPath);
         const best = kept[0]!;
-        if (kept.length === 1) {
-            merged.push(best);
-            continue;
-        }
         merged.push({
             path: best.path,
             title: best.title,
-            body: kept
-                .map((k) => k.body)
-                .join("\n\n---\n\n")
-                .slice(0, MERGED_CHUNK_BODY_MAX),
+            body: mergeChunkBodies(kept.map((k) => k.body)),
             score: best.score,
         });
     }
@@ -67,6 +66,13 @@ export const dedupeVectorByPath = (
         )
         .slice(0, maxCandidates);
 };
+
+/** KM-02：向量按 chunk 召回时，同一 md path 会出现多次。 */
+export const dedupeVectorByPath = (
+    chunks: VectorChunkRow[],
+    maxPerPath = MAX_CHUNKS_PER_PATH,
+    maxCandidates = MAX_CANDIDATES
+): VectorChunkRow[] => mergeCandidatesByPath(chunks, maxPerPath, maxCandidates);
 
 /** Chroma L2 距离 → 0–1 语义相关度（越小越相似）。用于：computeRelevance（KM-05）。 */
 export const vectorScoreToRelevance = (score: number | undefined): number => {
@@ -280,6 +286,127 @@ export const findPersonalResumeCandidate = (
     return [...personal].sort(
         (a, b) => personalResumeRank(b.path) - personalResumeRank(a.path)
     )[0]!;
+};
+
+/** KM-13：experience/ 下任职 md（不含 README）。 */
+export const isExperienceEntryPath = (repoPath: string): boolean => {
+    const p = repoPath.replace(/\\/g, "/").toLowerCase();
+    if (!p.includes("/experience/")) return false;
+    if (p.includes("readme")) return false;
+    return /\.md$/i.test(p);
+};
+
+/** KM-14：列举型补全 — 每段经历至少 1 hit，优先 experience、剔除 projects。 */
+export const applyEnumerationFill = (
+    hits: KnowledgeHit[],
+    candidates: VectorChunkRow[],
+    ranked: RankedCandidate[],
+    queryProfile: QueryProfile,
+    maxHits: number,
+    expectedPaths: string[],
+    tokens: string[]
+): { hits: KnowledgeHit[]; fillApplied: boolean; filledCount: number } => {
+    if (queryProfile !== "enumeration" || expectedPaths.length === 0) {
+        return { hits, fillApplied: false, filledCount: 0 };
+    }
+
+    const byPath = new Map<string, KnowledgeHit>();
+    for (const h of hits) {
+        if (!byPath.has(h.path)) byPath.set(h.path, h);
+    }
+
+    let fillApplied = false;
+    for (const p of expectedPaths) {
+        if (byPath.has(p)) continue;
+        const fromRanked = ranked.find((r) => r.path === p);
+        const fromCand = candidates.find((c) => c.path === p);
+        if (fromRanked) {
+            byPath.set(p, {
+                path: p,
+                title: fromRanked.title,
+                excerpt: fromRanked.excerpt,
+                relevance: Math.max(0.35, fromRanked.relevance),
+            });
+            fillApplied = true;
+        } else if (fromCand) {
+            byPath.set(p, {
+                path: p,
+                title: fromCand.title,
+                excerpt:
+                    pickExcerpt(fromCand.body, tokens, "enumeration") ||
+                    fromCand.body.slice(0, EXCERPT_MAX).trim(),
+                relevance: 0.35,
+            });
+            fillApplied = true;
+        }
+    }
+
+    const experienceHits: KnowledgeHit[] = [];
+    for (const p of expectedPaths) {
+        const h = byPath.get(p);
+        if (h) experienceHits.push(h);
+    }
+    experienceHits.sort((a, b) => b.relevance - a.relevance);
+
+    const others = [...byPath.values()]
+        .filter(
+            (h) =>
+                !expectedPaths.includes(h.path) &&
+                !h.path.replace(/\\/g, "/").toLowerCase().includes("/projects/")
+        )
+        .sort((a, b) => b.relevance - a.relevance);
+
+    const newHits = [...experienceHits, ...others].slice(0, maxHits);
+
+    const hadProjects = hits.some((h) =>
+        h.path.replace(/\\/g, "/").toLowerCase().includes("/projects/")
+    );
+    const hasProjects = newHits.some((h) =>
+        h.path.replace(/\\/g, "/").toLowerCase().includes("/projects/")
+    );
+    if (hadProjects && !hasProjects) fillApplied = true;
+    if (
+        newHits.length !== hits.length ||
+        newHits.some((h, i) => h.path !== hits[i]?.path)
+    ) {
+        fillApplied = true;
+    }
+
+    return {
+        hits: newHits,
+        fillApplied,
+        filledCount: experienceHits.length,
+    };
+};
+
+/** KM-15：列举型 coverage / notes。 */
+export const buildEnumerationCoverage = (
+    hits: KnowledgeHit[],
+    expectedCount: number,
+    filledCount: number
+): { coverage: "sufficient" | "partial" | "none"; notes: string | null } => {
+    if (expectedCount === 0) {
+        const top = hits[0]?.relevance ?? 0;
+        return {
+            coverage: top >= 0.6 ? "sufficient" : top > 0 ? "partial" : "none",
+            notes: null,
+        };
+    }
+
+    const notes =
+        filledCount >= expectedCount
+            ? `列举已覆盖 ${filledCount}/${expectedCount} 段经历。`
+            : `列举覆盖 ${filledCount}/${expectedCount} 段经历，部分任职文档未进入 hits。`;
+
+    const top = hits[0]?.relevance ?? 0;
+    const coverage =
+        filledCount >= expectedCount && top >= 0.35
+            ? "sufficient"
+            : filledCount > 0
+              ? "partial"
+              : "none";
+
+    return { coverage, notes };
 };
 
 /** KM-11：identity 问法强制 personal 简历 Top1，同 path 去重 */

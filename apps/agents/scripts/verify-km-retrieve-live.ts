@@ -20,6 +20,9 @@ type Case = {
     topPathRe?: RegExp;
     notPathRe?: RegExp;
     excerptRe?: RegExp;
+    minExperienceHits?: number;
+    noProjectsInHits?: boolean;
+    notesRe?: RegExp;
 };
 
 const cases: Case[] = [
@@ -44,7 +47,9 @@ const cases: Case[] = [
         q: "我在哪几家公司上过班？",
         queryType: "enumeration",
         expectProfile: "enumeration",
-        minHits: 2,
+        minExperienceHits: 4,
+        noProjectsInHits: true,
+        notesRe: /列举已覆盖|列举覆盖/,
     },
     {
         q: "城管平台用了什么技术？",
@@ -128,6 +133,22 @@ const main = async () => {
         }
         if (c.excerptRe && r.hits[0] && !c.excerptRe.test(r.hits[0].excerpt)) {
             issues.push(`Top1 excerpt 未匹配 ${c.excerptRe}`);
+        }
+        if (c.minExperienceHits !== undefined) {
+            const expCount = r.hits.filter((h) =>
+                /\/experience\//i.test(h.path) && !/readme/i.test(h.path)
+            ).length;
+            if (expCount < c.minExperienceHits) {
+                issues.push(
+                    `experience hits 期望 >=${c.minExperienceHits} 实际 ${expCount}`
+                );
+            }
+        }
+        if (c.noProjectsInHits && r.hits.some((h) => /\/projects\//i.test(h.path))) {
+            issues.push("hits 不应含 projects/");
+        }
+        if (c.notesRe && (!r.notes || !c.notesRe.test(r.notes))) {
+            issues.push(`notes 未匹配 ${c.notesRe}，实际 ${r.notes}`);
         }
         if (r.hits.length === 0) issues.push("hits 为空");
 

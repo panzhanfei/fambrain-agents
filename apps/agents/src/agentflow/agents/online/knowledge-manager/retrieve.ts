@@ -13,6 +13,7 @@
  * KM-06 兜底：ensureNonEmptyHits 与 rank 共用 rankCandidates。
  * KM-08/09：queryProfile 分档 vectorTopK / maxHits；Intake queryType 优先。
  * KM-10：表格 excerpt；KM-11：identityGuard。
+ * KM-13～15：列举 experience 专扫 + fill + coverage；KM-16：同 path merge body。
  */
 import { readFile } from "node:fs/promises";
 import path from "node:path";
@@ -34,10 +35,15 @@ import {
 } from "./km-config";
 import { resolveQueryProfile } from "./query-profile";
 import {
+    applyEnumerationFill,
     applyIdentityGuard,
+    buildEnumerationCoverage,
     dedupeVectorByPath,
     findPersonalResumeCandidate,
+    isExperienceEntryPath,
     isPersonalResumePath,
+    mergeCandidatesByPath,
+    mergeChunkBodies,
     pickExcerpt,
     rankCandidates,
 } from "./retrieve-helpers";
@@ -144,10 +150,11 @@ const mergeCandidates = (
         }
         const existingScore = existing.score ?? Number.POSITIVE_INFINITY;
         const nextScore = c.score ?? Number.POSITIVE_INFINITY;
+        const mergedBody = mergeChunkBodies([existing.body, c.body]);
         if (nextScore < existingScore) {
-            byPath.set(c.path, { ...c, body: c.body.length > existing.body.length ? c.body : existing.body });
-        } else if (c.body.length > existing.body.length) {
-            byPath.set(c.path, { ...existing, body: c.body });
+            byPath.set(c.path, { ...c, body: mergedBody });
+        } else {
+            byPath.set(c.path, { ...existing, body: mergedBody });
         }
     }
     return [...byPath.values()].slice(0, maxCandidates);
@@ -218,6 +225,29 @@ const loadPersonalResumeCandidate = async (
     return findPersonalResumeCandidate(personalFiles);
 };
 
+/** KM-13：列举问法时加载 experience/ 下全部任职 md。 */
+const loadExperienceEntryCandidates = async (
+    corpusUserId: string
+): Promise<CandidateRow[]> => {
+    const scanRoots = await listCorpusScanRoots(corpusUserId, listMarkdownFiles);
+    const entries: CandidateRow[] = [];
+    for (const { root: corpusRoot } of scanRoots) {
+        const dir = path.join(corpusRoot, "experience");
+        for (const abs of await listMarkdownFiles(dir)) {
+            const repoPath = toRepoPath(abs);
+            if (!isExperienceEntryPath(repoPath)) continue;
+            const body = await readFile(abs, "utf8").catch(() => "");
+            if (!body) continue;
+            entries.push({
+                path: repoPath,
+                title: titleFromMarkdown(path.basename(abs), body),
+                body: body.slice(0, SCAN_BODY_MAX),
+            });
+        }
+    }
+    return entries.sort((a, b) => a.path.localeCompare(b.path));
+};
+
 const ensureIdentityPersonalCandidate = async (
     corpusUserId: string,
     queryProfile: QueryProfile,
@@ -228,6 +258,32 @@ const ensureIdentityPersonalCandidate = async (
     const loaded = await loadPersonalResumeCandidate(corpusUserId);
     if (!loaded) return candidates;
     return mergeCandidates([loaded], candidates, Math.max(candidates.length + 1, MAX_CANDIDATES));
+};
+
+const ensureEnumerationExperienceCandidates = async (
+    corpusUserId: string,
+    queryProfile: QueryProfile,
+    candidates: CandidateRow[]
+): Promise<{ candidates: CandidateRow[]; expectedPaths: string[] }> => {
+    if (queryProfile !== "enumeration") {
+        return { candidates, expectedPaths: [] };
+    }
+    const loaded = await loadExperienceEntryCandidates(corpusUserId);
+    const expectedPaths = loaded.map((c) => c.path);
+    if (loaded.length === 0) return { candidates, expectedPaths: [] };
+    const merged = mergeCandidates(
+        loaded,
+        candidates,
+        Math.max(candidates.length + loaded.length, MAX_CANDIDATES * 2)
+    );
+    return {
+        candidates: mergeCandidatesByPath(
+            merged,
+            MAX_CANDIDATES * 2,
+            MAX_CANDIDATES * 2
+        ),
+        expectedPaths,
+    };
 };
 
 const retrieveByKeywords = (
@@ -309,8 +365,14 @@ const finalizeHits = (
     input: KnowledgeManagerInput,
     candidates: CandidateRow[],
     queryProfile: QueryProfile,
-    maxHits: number
-): { result: KnowledgeRetrievalResult; ranked: ReturnType<typeof rankCandidates>; guardApplied: boolean } => {
+    maxHits: number,
+    expectedExperiencePaths: string[] = []
+): {
+    result: KnowledgeRetrievalResult;
+    ranked: ReturnType<typeof rankCandidates>;
+    guardApplied: boolean;
+    fillApplied: boolean;
+} => {
     const tokens = tokenizeForRecall(input.searchQuery, input.subTasks);
     const ranked = rankCandidates(
         candidates,
@@ -351,7 +413,32 @@ const finalizeHits = (
         }
     }
 
-    return { result, ranked, guardApplied: guarded.guardApplied };
+    const filled = applyEnumerationFill(
+        result.hits,
+        candidates,
+        ranked,
+        queryProfile,
+        maxHits,
+        expectedExperiencePaths,
+        tokens
+    );
+    result = { ...result, hits: filled.hits };
+
+    if (queryProfile === "enumeration" && expectedExperiencePaths.length > 0) {
+        const { coverage, notes } = buildEnumerationCoverage(
+            result.hits,
+            expectedExperiencePaths.length,
+            filled.filledCount
+        );
+        result = { ...result, coverage, notes };
+    }
+
+    return {
+        result,
+        ranked,
+        guardApplied: guarded.guardApplied,
+        fillApplied: filled.fillApplied,
+    };
 };
 
 const loadCandidates = async (
@@ -472,11 +559,23 @@ export const retrieveKnowledge = async (
 
     const { candidates: rawCandidates, recallSource, vectorConfident, vectorRawCount, uniquePathCount } =
         await loadCandidates(input, vectorTopK);
-    const candidates = await ensureIdentityPersonalCandidate(
+    let candidates = mergeCandidatesByPath(
+        rawCandidates,
+        MAX_CANDIDATES,
+        MAX_CANDIDATES
+    );
+    candidates = await ensureIdentityPersonalCandidate(
         input.corpusUserId,
         queryProfile,
-        rawCandidates
+        candidates
     );
+    const { candidates: enumCandidates, expectedPaths: expectedExperiencePaths } =
+        await ensureEnumerationExperienceCandidates(
+            input.corpusUserId,
+            queryProfile,
+            candidates
+        );
+    candidates = enumCandidates;
 
     if (candidates.length === 0) {
         const empty = { hits: [], coverage: "none" as const, notes: null };
@@ -493,8 +592,8 @@ export const retrieveKnowledge = async (
         return empty;
     }
 
-    const { result: ruleResult, ranked: topRankedList, guardApplied } =
-        finalizeHits(input, candidates, queryProfile, maxHits);
+    const { result: ruleResult, ranked: topRankedList, guardApplied, fillApplied } =
+        finalizeHits(input, candidates, queryProfile, maxHits, expectedExperiencePaths);
 
     const topRanked = topRankedList[0];
 
@@ -508,6 +607,8 @@ export const retrieveKnowledge = async (
         vectorTopK,
         maxHits,
         guardApplied,
+        fillApplied,
+        expectedExperienceCount: expectedExperiencePaths.length,
         candidateCount: candidates.length,
         candidatesPreview: summarizeCandidate(candidates[0]!, 0),
         topRank: topRanked
