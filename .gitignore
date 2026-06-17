@@ -36,6 +36,11 @@ package-lock.json
 /logs/*
 !/logs/.gitkeep
 
+# eval 报告（eval:run 本地生成）
+/data/eval/reports/*
+!/data/eval/.gitkeep
+!/data/eval/reports/.gitkeep
+
 # misc
 .DS_Store
 *.pem

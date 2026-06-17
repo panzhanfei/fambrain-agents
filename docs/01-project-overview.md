@@ -174,5 +174,7 @@ pnpm run dev
 | `recallSparseRetrieve` | `packages/corpus/src/recall-keyword-retrieve.ts` | BM25 sparse 检索（HY-01） |
 | `hybridRecall` / `fuseRrf` | `knowledge-manager/hybrid-recall.ts`、`fusion-rrf.ts` | 并行 Hybrid + RRF（HY-02～03） |
 | `verify:recall-compare` | `apps/agents/scripts/` | HY-07 三问 vector/sparse/RRF（需 Chroma） |
+| `eval:run` | `apps/agents/scripts/eval/` | Eval MVP：golden.json + 四指标报告 |
+| `golden:regression` | `apps/agents/scripts/` | G1～G5 全链路回归（多遍稳定性） |
 | `indexAllCorpora` | `agentflow/agents/offline/knowledge-indexer/` | 离线 corpus → Chroma |
 | `logAgentIn` / `logAgentOut` | `packages/agent-shared/src/agent-log.ts` | 调试：含 FactChecker 🔍、ContentOrganizer 📋 |

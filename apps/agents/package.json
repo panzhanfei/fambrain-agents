@@ -14,6 +14,7 @@
     "verify:doc-parser": "tsx scripts/verify-doc-parser.ts",
     "verify:fact-checker": "tsx --env-file=../../.env scripts/verify-fact-checker.ts",
     "golden:regression": "tsx --env-file=../../.env scripts/golden-regression.ts",
+    "eval:run": "tsx --env-file=../../.env scripts/eval/run-eval.ts",
     "verify:fact-checker:pipeline": "tsx --env-file=../../.env scripts/verify-fact-checker-pipeline.ts",
     "verify:content-organizer": "tsx scripts/verify-content-organizer.ts",
     "verify:agent-schemas": "tsx scripts/verify-agent-schemas.ts",

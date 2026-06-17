@@ -196,6 +196,13 @@ pnpm run golden:regression   # G1～G5 全链路标准回归
 | `scripts/eval/run-eval.ts` | 调 `runPipelineStream` 或 KM 单测，输出 JSON/Markdown 报告 |
 | **最少 4 项指标** | Golden 通过率；candidates>0 但 hits=0 率（→0）；cache 命中率；端到端 `latencyMs` |
 
+**状态：** ✅ 2026-06-17 — `pnpm run eval:run` 12/12 通过；Chroma hybrid KM；cache 占位 0/1
+
+```bash
+pnpm --filter @fambrain/agents run eval:run
+EVAL_WRITE_REPORT=1 pnpm --filter @fambrain/agents run eval:run  # 写入 data/eval/reports/
+```
+
 **与 A6 关系：** eval 脚本即 A6 的自动化延伸。
 
 ### 第 10 天 — SLO + 记录（#18 剩余）
@@ -226,7 +233,7 @@ pnpm run golden:regression   # G1～G5 全链路标准回归
 - [ ] **D3-2 不可复现**（12 candidates → hits ≥1）
 - [ ] **D5-2**：同会话 G4 连续两问，第二次命中 cache 或 Intake 复用
 - [ ] **R6-1**：列举型「哪几家公司」→ 4 家且同句再问一致
-- [ ] **eval MVP**：`run-eval` 输出报告（通过率 + 指标 4 项）
+- [x] **eval MVP**：`run-eval` 输出报告（通过率 + 指标 4 项）— 2026-06-17 12/12
 - [ ] **SLO 日志**：每轮至少含 step 耗时；可选 token
 - [ ] 坑点表与路线图状态已更新
 - [ ] 第 11 天总复盘文档或会话纪要归档

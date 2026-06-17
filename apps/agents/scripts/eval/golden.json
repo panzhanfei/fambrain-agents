@@ -1,0 +1,190 @@
+{
+  "version": 1,
+  "description": "Eval MVP：Pipeline Golden G1～G5 + KM 五问；断言见 run-eval.ts",
+  "cases": [
+    {
+      "id": "G1",
+      "tier": "pipeline",
+      "label": "闲聊不检索",
+      "question": "你好",
+      "assert": {
+        "mustNotIncludeSteps": ["retrieval", "fact_checker"],
+        "minAnswerLength": 1
+      }
+    },
+    {
+      "id": "G2",
+      "tier": "pipeline",
+      "label": "姓名检索",
+      "question": "我的名字",
+      "assert": {
+        "mustIncludeSteps": ["retrieval"],
+        "minAnswerLength": 1,
+        "answerMustNotRe": "哪|哪个|请说明|指的是|哪一段"
+      }
+    },
+    {
+      "id": "G3",
+      "tier": "pipeline",
+      "label": "项目与技术",
+      "question": "我做过的项目和掌握的技术",
+      "assert": {
+        "mustIncludeSteps": ["retrieval", "analyst"],
+        "minAnswerLength": 60
+      }
+    },
+    {
+      "id": "G4",
+      "tier": "pipeline",
+      "label": "城管平台技术",
+      "question": "城管平台用了什么技术",
+      "assert": {
+        "mustIncludeSteps": [
+          "retrieval",
+          "fact_checker",
+          "content_organizer",
+          "analyst"
+        ],
+        "answerRe": "城管|城市管理平台"
+      }
+    },
+    {
+      "id": "G5",
+      "tier": "pipeline",
+      "label": "无上下文 clarify",
+      "question": "那个项目呢？",
+      "assert": {
+        "mustIncludeSteps": ["intake"],
+        "mustNotIncludeSteps": ["analyst"],
+        "answerRe": "哪|哪个|请说明|指的是|哪一段|哪一家|什么项目|能否说明"
+      }
+    },
+    {
+      "id": "K1",
+      "tier": "km",
+      "label": "姓名（Intake 改写 searchQuery）",
+      "km": {
+        "searchQuery": "个人简介 简历 姓名",
+        "queryType": "identity",
+        "topics": [],
+        "subTasks": []
+      },
+      "assert": {
+        "expectProfile": "identity",
+        "minHits": 1,
+        "topPathRe": "personal",
+        "notTopPathRe": "projects/resume|_TEMPLATE"
+      }
+    },
+    {
+      "id": "K2",
+      "tier": "km",
+      "label": "姓名（identityGuard）",
+      "km": {
+        "searchQuery": "我的名字是什么？",
+        "queryType": "identity",
+        "topics": [],
+        "subTasks": []
+      },
+      "assert": {
+        "expectProfile": "identity",
+        "minHits": 1,
+        "topPathRe": "personal",
+        "notTopPathRe": "projects/resume|_TEMPLATE",
+        "excerptRe": "姓名.*潘展飞|潘展飞"
+      }
+    },
+    {
+      "id": "K3",
+      "tier": "km",
+      "label": "列举经历",
+      "km": {
+        "searchQuery": "我在哪几家公司上过班？",
+        "queryType": "enumeration",
+        "topics": [],
+        "subTasks": []
+      },
+      "assert": {
+        "expectProfile": "enumeration",
+        "minHits": 1,
+        "minExperienceHits": 4,
+        "noProjectsInHits": true,
+        "notesRe": "列举已覆盖|列举覆盖"
+      }
+    },
+    {
+      "id": "K4",
+      "tier": "km",
+      "label": "项目技术",
+      "km": {
+        "searchQuery": "城管平台用了什么技术？",
+        "queryType": "tech",
+        "topics": [],
+        "subTasks": []
+      },
+      "assert": {
+        "expectProfile": "tech",
+        "minHits": 1,
+        "topPathRe": "urban|城管|platform|project|experience|city|management"
+      }
+    },
+    {
+      "id": "K5",
+      "tier": "km",
+      "label": "奥卡云经历",
+      "km": {
+        "searchQuery": "介绍一下西安奥卡云的工作经历",
+        "queryType": "default",
+        "topics": [],
+        "subTasks": []
+      },
+      "assert": {
+        "expectProfile": "default",
+        "minHits": 1,
+        "topPathRe": "experience|奥卡云"
+      }
+    },
+    {
+      "id": "E2E-identity",
+      "tier": "pipeline",
+      "label": "全链路姓名",
+      "question": "我的名字是什么？",
+      "assert": {
+        "mustIncludeSteps": ["retrieval", "fact_checker"],
+        "answerRe": "潘展飞"
+      }
+    },
+    {
+      "id": "E2E-enumeration",
+      "tier": "pipeline",
+      "label": "全链路列举",
+      "question": "我在哪几家公司上过班？",
+      "assert": {
+        "mustIncludeSteps": ["retrieval", "analyst"],
+        "answerRe": "云联智慧|友谊时光|奖多多|奥卡云"
+      }
+    }
+  ],
+  "cacheProbe": {
+    "id": "CACHE-G4-repeat",
+    "label": "同问重复（cache 探测）",
+    "conversationIdPrefix": "eval-cache",
+    "turns": [
+      {
+        "question": "城管平台用了什么技术",
+        "assert": {
+          "mustIncludeSteps": ["retrieval"],
+          "answerRe": "城管|城市管理平台|技术"
+        }
+      },
+      {
+        "question": "城管平台用了什么技术",
+        "assert": {
+          "mustIncludeSteps": ["retrieval"],
+          "answerRe": "城管|城市管理平台|技术"
+        },
+        "expectCacheHit": true
+      }
+    ]
+  }
+}

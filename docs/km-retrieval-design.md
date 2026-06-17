@@ -258,6 +258,7 @@ Intake `queryType` 与上表 **同名枚举**（Wave C）。
 | 命令 | 说明 |
 |------|------|
 | `pnpm --filter @fambrain/agents run verify:sparse-recall` | HY-01：BM25 sparse 三问（不需 Chroma） |
+| `pnpm --filter @fambrain/agents run eval:run` | Eval MVP：G1～G5 + KM 五问 + E2E（四指标报告） |
 | `pnpm --filter @fambrain/agents run verify:recall-compare` | HY-07：三问 vector/sparse/RRF（**需 Chroma**） |
 | `pnpm --filter @fambrain/agents run verify:hybrid-recall` | HY-02～03：RRF 单测 + hybridRecall live |
 | `pnpm --filter @fambrain/agents run verify:km-retrieve` | 规则单测：pathBoost、rank、queryProfile |
@@ -296,7 +297,7 @@ Intake `queryType` 与上表 **同名枚举**（Wave C）。
 |------|------|
 | 2026-06 | KM-04 ✅ km-config；KM-01 ✅ topics 分流；KM-02 ✅ 向量 path 去重 |
 | 2026-06 | **v3 计划定稿**：业界五层对标；主计划表 P0～P5；Wave A～F |
-| 2026-06-17 | **Wave B 收工**：Chroma hybrid 三问 A/B 绿；RRF 权重 + Top1 保入池；`verify:recall-compare` |
+| 2026-06-17 | **Eval MVP ✅**：`golden.json` + `eval:run`；12 用例 100%；D3-2 coalesce 0/5 |
 | 2026-06 | **HY-02～07 ✅**：并行 Hybrid + RRF；删 scanDocCandidates；`verify:hybrid-recall` |
 | 2026-06 | **HY-01 ✅**：corpus 内 Okapi BM25；`recallSparseRetrieve`；`verify:sparse-recall` |
 | 2026-06 | **KM-13～16 ✅**：experience 专扫 + enumerationFill + 列举 coverage/notes；chunk merge |
