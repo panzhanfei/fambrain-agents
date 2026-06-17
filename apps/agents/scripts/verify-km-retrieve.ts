@@ -160,6 +160,20 @@ assert("Intake queryType 优先于规则", () => {
     }
 });
 
+assert("QU-06：queryType=null 时用 default 不再规则推断", () => {
+    const p = resolveQueryProfile("我的名字是什么？", [], null);
+    if (p !== "default") {
+        throw new Error(`Intake null 应为 default，实际 ${p}`);
+    }
+});
+
+assert("QU-06：queryType 未传时脚本仍 infer", () => {
+    const p = resolveQueryProfile("我的名字是什么？", []);
+    if (p !== "identity") {
+        throw new Error(`未传 queryType 应 infer identity，实际 ${p}`);
+    }
+});
+
 console.log("\n— KM-10 表格 excerpt —");
 
 assert("identity 问法优先摘 | 姓名 | 行", () => {

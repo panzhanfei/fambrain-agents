@@ -70,11 +70,11 @@ Intake（L1）→ KM（L2～L5）→ FactChecker → ContentOrganizer → Analys
 | **P1-6** | HY-06 | L2 | corpus | 改 | 向量 **raw topK 加大**（融合前多取，dedupe 后截） | `km-config.ts`（`VECTOR_FETCH_MULTIPLIER`） | 建议 KM | HY-03 | ✅ | 融合前 fetchK = topK × 2 |
 | **P1-7** | HY-07 | — | scripts | 改 | compare-recall 或并入 verify：对比 vector/sparse/RRF | `verify-recall-compare.ts` | — | HY-03 | ✅ | 三问 A/B + Chroma hybrid 必过 |
 | **P2-1** | QU-01 | L1 | Intake | 增 | 输出 **queryType**（与 KM profile 对齐） | `schema.ts`、`prompt.ts` | 必配 pipeline | P0-6 或并行 | ✅ | Intake JSON 含 queryType |
-| **P2-2** | QU-02 | L1 | Intake | 改 | **多轮指代补全** searchQuery | `prompt.ts` | — | — | ⬜ | 「那个项目呢」能补全实体 |
+| **P2-2** | QU-02 | L1 | Intake | 改 | **多轮指代补全** searchQuery | `prompt.ts`、`intake-coreference-guard.ts` | — | — | ✅ | G5 clarify + G5b 有上文检索 |
 | **P2-3** | QU-03 | L1 | pipeline | 改 | `compile.ts` 传 **queryType** 给 `retrieveKnowledge` | `compile.ts` | 必配 QU-01 | QU-01 | ✅ | retrievalNode 入参含 queryType |
 | **P2-4** | QU-04 | L1 | pipeline | 改 | `parse-intake.ts` / `state.ts` 扩展 decision | `parse-intake.ts`、`state.ts` | 必配 QU-01 | QU-01 | ✅ | schema 校验通过 |
 | **P2-5** | QU-05 | L1 | KM | 改 | KM **优先 Intake queryType**，无则规则 fallback | `retrieve.ts`、`query-profile.ts` | 建议 | QU-03 | ✅ | 双源一致时不重复推断 |
-| **P2-6** | QU-06 | L1 | KM | 删/弱 | KM 内纯规则 queryProfile（Intake 稳定后） | `query-profile.ts` | — | QU-05 | ⬜ | 单一意图来源 |
+| **P2-6** | QU-06 | L1 | KM | 删/弱 | KM 内纯规则 queryProfile（Intake 稳定后） | `query-profile.ts` | — | QU-05 | ✅ | null→default；infer 仅脚本/兜底 |
 | **P3-1** | EV-01 | L3 | KM | 改 | **多维置信度**：融合分 + top1-top2 gap + path 权威 | `score-candidate.ts` | — | HY-03、KM-05 | ✅ | high/mid/low 分档稳定 |
 | **P3-2** | EV-02 | L3 | KM | 改 | **coverage** 基于分档，非单一 token 比 | `retrieve.ts` | — | EV-01 | ✅ | sufficient 与 hits 一致 |
 | **P3-3** | EV-03 | L3 | KM | 改 | **删/弱** 无差别 ensureNonEmptyHits；低置信才补 | `retrieve.ts` | — | EV-01 | ✅ | 高冲突 query 不硬塞 Top1 |
@@ -258,7 +258,8 @@ Intake `queryType` 与上表 **同名枚举**（Wave C）。
 | 命令 | 说明 |
 |------|------|
 | `pnpm --filter @fambrain/agents run verify:sparse-recall` | HY-01：BM25 sparse 三问（不需 Chroma） |
-| `pnpm --filter @fambrain/agents run eval:run` | Eval MVP：G1～G5 + KM 五问 + E2E（四指标报告） |
+| `pnpm --filter @fambrain/agents run verify:intake-coreference` | QU-02：指代 guard 单测 + Intake live |
+| `pnpm --filter @fambrain/agents run eval:run` | Eval MVP：G1～G5b + KM 五问 + E2E（四指标报告） |
 | `pnpm --filter @fambrain/agents run verify:recall-compare` | HY-07：三问 vector/sparse/RRF（**需 Chroma**） |
 | `pnpm --filter @fambrain/agents run verify:hybrid-recall` | HY-02～03：RRF 单测 + hybridRecall live |
 | `pnpm --filter @fambrain/agents run verify:km-retrieve` | 规则单测：pathBoost、rank、queryProfile |

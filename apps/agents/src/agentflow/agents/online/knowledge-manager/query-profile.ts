@@ -1,6 +1,6 @@
 /**
- * KM-08 queryProfile：按 searchQuery + subTasks 规则推断问法类型。
- * Wave C 起 Intake 可传 queryType，见 resolveQueryProfile。
+ * KM-08 queryProfile：Intake queryType 为单一意图来源（Wave C / QU-06）。
+ * inferQueryProfile 仅用于 Intake 解析失败兜底、脚本直调 KM（queryType 未传）。
  */
 export type QueryProfile = "identity" | "enumeration" | "tech" | "default";
 
@@ -20,7 +20,10 @@ const TECH_RE =
 const TECH_TERMS_RE =
     /\b(react|vue|angular|typescript|javascript|python|java|go|docker|kubernetes|mysql|postgres|redis|vite|webpack|prisma)\b/i;
 
-/** 规则推断 queryProfile（不调 LLM） */
+/**
+ * 规则推断 queryProfile（不调 LLM）。
+ * QU-06：Pipeline 主路径不应依赖此函数；仅 defaultIntakeDecision / 脚本直调 KM。
+ */
 export const inferQueryProfile = (
     searchQuery: string,
     subTasks: string[] = []
@@ -32,9 +35,22 @@ export const inferQueryProfile = (
     return "default";
 };
 
-/** Intake queryType 优先；缺失时规则 fallback（QU-05） */
+/**
+ * QU-05/06：Intake queryType 优先。
+ * - 有明确 queryType → 直接用；
+ * - queryType === null（Intake 未给类型）→ default，不再二次规则推断；
+ * - queryType === undefined（脚本直调 KM）→ inferQueryProfile fallback。
+ */
 export const resolveQueryProfile = (
     searchQuery: string,
     subTasks: string[] = [],
     queryType?: QueryProfile | null
-): QueryProfile => queryType ?? inferQueryProfile(searchQuery, subTasks);
+): QueryProfile => {
+    if (queryType !== undefined && queryType !== null) {
+        return queryType;
+    }
+    if (queryType === null) {
+        return "default";
+    }
+    return inferQueryProfile(searchQuery, subTasks);
+};

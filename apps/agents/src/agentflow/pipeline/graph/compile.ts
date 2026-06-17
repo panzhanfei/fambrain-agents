@@ -4,6 +4,7 @@ import { organizeKnowledge } from "@/agentflow/agents/online/content-organizer";
 import { buildSummarizeSourceText, formatSummaryAsAnswer, summarizeContent, } from "@/agentflow/agents/online/content-summarizer";
 import { completeFactCheck } from "@/agentflow/agents/online/fact-checker";
 import { completeIntakeCoordinator } from "@/agentflow/agents/online/intake-coordinator";
+import { applyIntakeCoreferenceGuard } from "@/agentflow/agents/online/intake-coordinator/intake-coreference-guard";
 import { streamAnalyzeInformation } from "@/agentflow/agents/online/information-analyst";
 import { retrieveKnowledge } from "@/agentflow/agents/online/knowledge-manager";
 import { defaultIntakeDecision, parseIntakeDecision } from "../parse-intake";
@@ -51,8 +52,12 @@ const intakeNode = async (state: PipelineGraphState): Promise<Partial<PipelineGr
             memoryBlock: state.memoryBlock,
             intakeHistory: state.intakeHistory,
         });
-        const decision = parseIntakeDecision(intakeRaw) ??
+        const parsed = parseIntakeDecision(intakeRaw) ??
             defaultIntakeDecision(state.userQuestion);
+        const decision = applyIntakeCoreferenceGuard(
+            parsed,
+            state.intakeHistory
+        );
         return { decision };
     }
     catch (e) {

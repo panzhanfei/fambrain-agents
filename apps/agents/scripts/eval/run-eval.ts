@@ -36,6 +36,8 @@ type GoldenCase = {
     tier: GoldenTier;
     label: string;
     question?: string;
+    /** QU-02：多轮 history（不含本轮 question） */
+    history?: DbChatTurn[];
     km?: {
         searchQuery: string;
         queryType: "identity" | "enumeration" | "tech" | "default";
@@ -133,7 +135,8 @@ const resolveCorpusUserId = async (): Promise<string> => {
 const runPipelineCase = async (
     corpusUserId: string,
     question: string,
-    conversationId: string
+    conversationId: string,
+    priorHistory: DbChatTurn[] = []
 ): Promise<PipelineEvalSnapshot> => {
     const started = Date.now();
     const steps: string[] = [];
@@ -141,7 +144,10 @@ const runPipelineCase = async (
     let error: string | undefined;
     let hitCount = 0;
     let coverage = "none";
-    const history: DbChatTurn[] = [{ role: "user", content: question }];
+    const history: DbChatTurn[] = [
+        ...priorHistory,
+        { role: "user", content: question },
+    ];
     const context: AgentPipelineContext = {
         actorUserId: corpusUserId,
         corpusUserId,
@@ -255,7 +261,8 @@ const evaluateCase = async (
     const snap = await runPipelineCase(
         corpusUserId,
         spec.question ?? "",
-        conversationId
+        conversationId,
+        spec.history ?? []
     );
     const issues = assertPipeline(snap, spec.assert);
     return {

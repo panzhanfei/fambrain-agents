@@ -154,6 +154,7 @@ flowchart TD
 
 > **v3 进度（Wave A）：** … Wave A 规则层收尾完成。  
 > **Wave B：** HY-01～07 ✅ 并行 Hybrid + RRF 已接入 KM 主链  
+> **Wave C：** QU-01～06 ✅ Intake `queryType` + 多轮指代补全（`verify:intake-coreference`）  
 > **Wave D：** EV-01～07 ✅ `confidenceTier` 分档 + FC 高置信规则快检（`tier_skip_llm`）
 
 ```mermaid

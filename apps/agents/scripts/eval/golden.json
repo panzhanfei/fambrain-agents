@@ -60,6 +60,26 @@
       }
     },
     {
+      "id": "G5b",
+      "tier": "pipeline",
+      "label": "多轮指代补全（QU-02）",
+      "history": [
+        {
+          "role": "user",
+          "content": "城管平台用了什么技术"
+        },
+        {
+          "role": "assistant",
+          "content": "城市管理平台前端使用 React、TypeScript、Vite；小程序端使用 UniApp。"
+        }
+      ],
+      "question": "那个项目呢？",
+      "assert": {
+        "mustIncludeSteps": ["retrieval"],
+        "answerMustNotRe": "哪|哪个|请说明|指的是|哪一段|哪一家|什么项目|能否说明"
+      }
+    },
+    {
       "id": "K1",
       "tier": "km",
       "label": "姓名（Intake 改写 searchQuery）",

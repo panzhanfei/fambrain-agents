@@ -19,7 +19,7 @@ import { bootstrapAgentsRuntime } from "@/config";
 /** 默认连跑遍数；也可用环境变量 GOLDEN_RUNS 或 CLI 参数覆盖 */
 const DEFAULT_GOLDEN_RUNS = 3;
 
-type GoldenId = "G1" | "G2" | "G3" | "G4" | "G5";
+type GoldenId = "G1" | "G2" | "G3" | "G4" | "G5" | "G5b";
 
 type PipelineCaseResult = {
   id: GoldenId;
@@ -43,6 +43,7 @@ type GoldenCase = {
   id: GoldenId;
   label: string;
   question: string;
+  history?: DbChatTurn[];
   assert: (
     result: Omit<
       PipelineCaseResult,
@@ -104,7 +105,10 @@ const runPipelineCase = async (
   const steps: string[] = [];
   let answer = "";
   let error: string | undefined;
-  const history: DbChatTurn[] = [{ role: "user", content: spec.question }];
+  const history: DbChatTurn[] = [
+    ...(spec.history ?? []),
+    { role: "user", content: spec.question },
+  ];
   const gen = runPipelineStream(
     history,
     buildContext(corpusUserId, spec.id, runIndex)
@@ -190,6 +194,26 @@ const GOLDEN_CASES: GoldenCase[] = [
       if (!hasStep(steps, "intake")) return "应至少经过 intake";
       if (!CLARIFY_ANSWER.test(answer))
         return "answer 应像澄清问句（含「哪/哪个/指的是」等）";
+      return null;
+    },
+  },
+  {
+    id: "G5b",
+    label: "多轮指代补全（QU-02）",
+    history: [
+      { role: "user", content: "城管平台用了什么技术" },
+      {
+        role: "assistant",
+        content:
+          "城市管理平台前端使用 React、TypeScript、Vite；小程序端使用 UniApp。",
+      },
+    ],
+    question: "那个项目呢？",
+    assert: ({ steps, answer }) => {
+      if (!hasStep(steps, "retrieval"))
+        return "有上文时应走 retrieval，不应 clarify";
+      if (CLARIFY_ANSWER.test(answer))
+        return "answer 不应再澄清「哪个项目」";
       return null;
     },
   },
