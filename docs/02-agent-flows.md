@@ -357,7 +357,7 @@ flowchart TD
 |------|------|------|
 | MCP 列 vault | `pnpm run experiment:mcp-vault` | stdio MCP 工具 `list_vault_files` |
 | Recall 对比 | `pnpm run experiment:recall-compare -- <userId> "query"` | BM25 sparse vs `searchCorpusVectors` |
-| Sparse 自测 | `pnpm run verify:sparse-recall` | HY-01 BM25 三问 |
+| Sparse / Hybrid 自测 | `pnpm run verify:sparse-recall` / `verify:hybrid-recall` / `verify:recall-compare` | HY-01～07 |
 | Vercel AI SDK | `pnpm run experiment:vercel-ai -- "prompt"` | `streamText` + Ollama（主链仍自研 SSE） |
 
 **验证：** `pnpm run verify:vault-list`（vault 列举单测）。

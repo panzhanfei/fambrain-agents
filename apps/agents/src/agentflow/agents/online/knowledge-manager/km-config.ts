@@ -52,6 +52,10 @@ export const VECTOR_FETCH_MULTIPLIER = 2;
 /** HY-03：RRF 平滑常数 k。 */
 export const RRF_K = 60;
 
+/** HY-03：RRF 通道权重（sparse 字面匹配略加权）。 */
+export const RRF_VECTOR_WEIGHT = 0.85;
+export const RRF_SPARSE_WEIGHT = 1.2;
+
 /**
  * Chroma L2 距离：越小越相似。
  * HY-04 前用于 isVectorConfident；Hybrid 主路径不再串行 gating。
@@ -100,6 +104,8 @@ export const getKmRetrievalConfig = () => ({
     vectorConfidentGapMin: VECTOR_CONFIDENT_GAP_MIN,
     vectorFetchMultiplier: VECTOR_FETCH_MULTIPLIER,
     rrfK: RRF_K,
+    rrfVectorWeight: RRF_VECTOR_WEIGHT,
+    rrfSparseWeight: RRF_SPARSE_WEIGHT,
     pathBoostPersonal: PATH_BOOST_PERSONAL,
     pathBoostExperience: PATH_BOOST_EXPERIENCE,
     pathBoostProjects: PATH_BOOST_PROJECTS,

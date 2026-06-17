@@ -68,7 +68,7 @@ Intake（L1）→ KM（L2～L5）→ FactChecker → ContentOrganizer → Analys
 | **P1-4** | HY-04 | L2 | KM | 改 | **删/弱** 主路径「向量低置信 → 才 scanDocCandidates」 | `retrieve.ts` | — | HY-02 | ✅ | `recallSource`: hybrid/vector/sparse/empty |
 | **P1-5** | HY-05 | L2 | KM | 改 | 统一 **Candidate**：`recallChannel`、`rawScore` | `types.ts` | — | HY-02 | ✅ | vector/sparse/hybrid 可区分 |
 | **P1-6** | HY-06 | L2 | corpus | 改 | 向量 **raw topK 加大**（融合前多取，dedupe 后截） | `km-config.ts`（`VECTOR_FETCH_MULTIPLIER`） | 建议 KM | HY-03 | ✅ | 融合前 fetchK = topK × 2 |
-| **P1-7** | HY-07 | — | scripts | 改 | compare-recall 或并入 verify：对比 vector/sparse/RRF | `verify-hybrid-recall.ts` | — | HY-03 | ✅ | RRF 单测 + hybridRecall live |
+| **P1-7** | HY-07 | — | scripts | 改 | compare-recall 或并入 verify：对比 vector/sparse/RRF | `verify-recall-compare.ts` | — | HY-03 | ✅ | 三问 A/B + Chroma hybrid 必过 |
 | **P2-1** | QU-01 | L1 | Intake | 增 | 输出 **queryType**（与 KM profile 对齐） | `schema.ts`、`prompt.ts` | 必配 pipeline | P0-6 或并行 | ✅ | Intake JSON 含 queryType |
 | **P2-2** | QU-02 | L1 | Intake | 改 | **多轮指代补全** searchQuery | `prompt.ts` | — | — | ⬜ | 「那个项目呢」能补全实体 |
 | **P2-3** | QU-03 | L1 | pipeline | 改 | `compile.ts` 传 **queryType** 给 `retrieveKnowledge` | `compile.ts` | 必配 QU-01 | QU-01 | ✅ | retrievalNode 入参含 queryType |
@@ -258,12 +258,20 @@ Intake `queryType` 与上表 **同名枚举**（Wave C）。
 | 命令 | 说明 |
 |------|------|
 | `pnpm --filter @fambrain/agents run verify:sparse-recall` | HY-01：BM25 sparse 三问（不需 Chroma） |
+| `pnpm --filter @fambrain/agents run verify:recall-compare` | HY-07：三问 vector/sparse/RRF（**需 Chroma**） |
 | `pnpm --filter @fambrain/agents run verify:hybrid-recall` | HY-02～03：RRF 单测 + hybridRecall live |
 | `pnpm --filter @fambrain/agents run verify:km-retrieve` | 规则单测：pathBoost、rank、queryProfile |
 | `pnpm --filter @fambrain/agents run verify:km-retrieve:live` | 真实语料 KM 五问（需 corpus） |
 | `pnpm --filter @fambrain/agents exec tsx --env-file=../../.env scripts/verify-km-e2e-identity.ts` | 全链路 spot check：「我的名字是什么？」 |
 | `pnpm --filter @fambrain/agents exec tsx --env-file=../../.env scripts/verify-km-e2e-enumeration.ts` | 全链路 spot check：「哪几家公司上过班？」 |
 | `pnpm --filter @fambrain/agents run verify:agent-schemas` | Intake `queryType` 等 Zod |
+
+### Chroma hybrid 模式（2026-06-17）
+
+- 环境：本地 Chroma `:8030` + 远程 Ollama embed（`.env` `OLLAMA_HOST`）
+- `verify:recall-compare`：**3/3 PASSED**（姓名 personal Top1 RRF；列举/技术 OK）
+- `verify:km-retrieve:live`：**5/5 PASSED**，`recallSource=hybrid`，`vectorRawCount=24`
+- RRF 调优：`RRF_VECTOR_WEIGHT=0.85`、`RRF_SPARSE_WEIGHT=1.2`；向量路过滤 README/_TEMPLATE；各路 Top1 保入候选池
 
 ### 全链路 spot check（Ollama 可用）
 
@@ -277,7 +285,7 @@ Intake `queryType` 与上表 **同名枚举**（Wave C）。
 
 | 现象 | 下一步 |
 |------|--------|
-| 自测时 Chroma 未起，recallSource 为 `sparse`（向量路空、BM25 仍跑） | 起 Chroma 后 recallSource 应为 `hybrid` |
+| 自测时 Chroma 未起，recallSource 为 `sparse` | 起 Chroma 后 `verify:recall-compare` 应全绿 |
 | Wave A 文档收尾 | DOC-02 + DOC-03 |
 
 ---
@@ -288,6 +296,7 @@ Intake `queryType` 与上表 **同名枚举**（Wave C）。
 |------|------|
 | 2026-06 | KM-04 ✅ km-config；KM-01 ✅ topics 分流；KM-02 ✅ 向量 path 去重 |
 | 2026-06 | **v3 计划定稿**：业界五层对标；主计划表 P0～P5；Wave A～F |
+| 2026-06-17 | **Wave B 收工**：Chroma hybrid 三问 A/B 绿；RRF 权重 + Top1 保入池；`verify:recall-compare` |
 | 2026-06 | **HY-02～07 ✅**：并行 Hybrid + RRF；删 scanDocCandidates；`verify:hybrid-recall` |
 | 2026-06 | **HY-01 ✅**：corpus 内 Okapi BM25；`recallSparseRetrieve`；`verify:sparse-recall` |
 | 2026-06 | **KM-13～16 ✅**：experience 专扫 + enumerationFill + 列举 coverage/notes；chunk merge |

@@ -58,7 +58,25 @@ assert("BM25 > 0 映射到 (0,1)", () => {
     if (r <= 0 || r >= 1) throw new Error(`expected (0,1), got ${r}`);
 });
 
-console.log("\n— hybridRecall（真实语料，不需 Chroma）—");
+console.log("\n— hybridRecall live —");
+
+const chromaUrl = (): string => {
+    const base =
+        process.env.CHROMA_SERVER_URL?.trim() ||
+        `http://${process.env.CHROMA_HOST ?? "127.0.0.1"}:${process.env.CHROMA_PORT ?? "8030"}`;
+    return base.replace(/\/$/, "");
+};
+
+const chromaReady = async (): Promise<boolean> => {
+    try {
+        const res = await fetch(`${chromaUrl()}/api/v2/heartbeat`, {
+            signal: AbortSignal.timeout(3000),
+        });
+        return res.ok;
+    } catch {
+        return false;
+    }
+};
 
 const runLive = async () => {
     const fromEnv = process.env.FAMBRAIN_CORPUS_USER_ID?.trim();
@@ -68,15 +86,13 @@ const runLive = async () => {
         return;
     }
     const corpusUserId = ids[0]!;
+    const chromaUp = await chromaReady();
     const r = await hybridRecall(
         corpusUserId,
         "我的名字是什么",
         "我的名字是什么",
         12
     );
-    if (r.recallSource !== "sparse" && r.recallSource !== "hybrid") {
-        throw new Error(`Chroma 未起时期望 sparse/hybrid，实际 ${r.recallSource}`);
-    }
     if (r.sparseRawCount === 0) {
         throw new Error("sparse 路应至少 1 条");
     }
@@ -87,9 +103,26 @@ const runLive = async () => {
     if (!top.recallChannel) {
         throw new Error("candidate 应有 recallChannel");
     }
-    console.log(
-        `  ✓ hybridRecall corpus=${corpusUserId} source=${r.recallSource} vector=${r.vectorRawCount} sparse=${r.sparseRawCount} top=${top.path}`
-    );
+    if (chromaUp) {
+        if (r.recallSource !== "hybrid") {
+            throw new Error(
+                `Chroma 在线时期望 hybrid，实际 ${r.recallSource} (vector=${r.vectorRawCount})`
+            );
+        }
+        if (r.vectorRawCount === 0) {
+            throw new Error("Chroma 在线但 vectorRawCount=0，请 index:corpus");
+        }
+        console.log(
+            `  ✓ hybrid mode corpus=${corpusUserId} source=${r.recallSource} vector=${r.vectorRawCount} sparse=${r.sparseRawCount} top=${top.path}`
+        );
+    } else {
+        if (r.recallSource !== "sparse") {
+            throw new Error(`Chroma 未起时期望 sparse，实际 ${r.recallSource}`);
+        }
+        console.log(
+            `  ✓ sparse-only corpus=${corpusUserId} (Chroma DOWN) sparse=${r.sparseRawCount} top=${top.path}`
+        );
+    }
 };
 
 await runLive().catch((e) => {

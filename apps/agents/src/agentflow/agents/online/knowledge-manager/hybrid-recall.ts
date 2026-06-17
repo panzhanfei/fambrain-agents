@@ -4,6 +4,8 @@
 import { recallSparseRetrieve, searchCorpusVectors } from "@fambrain/corpus";
 import {
     RRF_K,
+    RRF_SPARSE_WEIGHT,
+    RRF_VECTOR_WEIGHT,
     VECTOR_FETCH_MULTIPLIER,
 } from "./km-config";
 import { fuseRrf } from "./fusion-rrf";
@@ -16,6 +18,14 @@ export type HybridRecallResult = {
     vectorRawCount: number;
     sparseRawCount: number;
     uniquePathCount: number;
+};
+
+/** 向量路常见噪声（README/模板），不参与 RRF 排名。 */
+const isVectorNoisePath = (repoPath: string): boolean => {
+    const p = repoPath.replace(/\\/g, "/").toLowerCase();
+    if (p.endsWith("/readme.md")) return true;
+    if (p.includes("/_template.md")) return true;
+    return false;
 };
 
 const mergeHybridCandidates = (
@@ -53,14 +63,29 @@ const mergeHybridCandidates = (
         });
     }
 
+    const fusionScoreByPath = new Map(
+        fusionOrder.map(({ path, fusionScore }) => [path, fusionScore])
+    );
+
     const fused: KnowledgeCandidate[] = [];
-    for (const { path, fusionScore } of fusionOrder) {
+    const seen = new Set<string>();
+    const pushFused = (path: string) => {
+        if (seen.has(path)) return;
         const row = byPath.get(path);
-        if (!row) continue;
-        fused.push({ ...row, fusionScore });
+        if (!row) return;
+        seen.add(path);
+        fused.push({ ...row, fusionScore: fusionScoreByPath.get(path) });
+    };
+
+    // 各路 Top1 先入池，避免 RRF 截断丢掉 sparse/vector 最佳字面或语义命中
+    for (const pin of [sparseRows[0]?.path, vectorRows[0]?.path]) {
+        if (pin) pushFused(pin);
+    }
+    for (const { path } of fusionOrder) {
+        pushFused(path);
         if (fused.length >= maxCandidates) break;
     }
-    return fused;
+    return fused.slice(0, maxCandidates);
 };
 
 export const hybridRecall = async (
@@ -81,7 +106,9 @@ export const hybridRecall = async (
         );
         vectorRawCount = vectorHits.length;
         vectorRaw = dedupeVectorByPath(
-            vectorHits.map((h) => ({
+            vectorHits
+                .filter((h) => !isVectorNoisePath(h.path))
+                .map((h) => ({
                 path: h.path,
                 title: h.title,
                 body: h.body,
@@ -111,8 +138,8 @@ export const hybridRecall = async (
 
     const fusionOrder = fuseRrf(
         [
-            { paths: vectorRaw.map((c) => c.path) },
-            { paths: sparseRaw.map((c) => c.path) },
+            { paths: vectorRaw.map((c) => c.path), weight: RRF_VECTOR_WEIGHT },
+            { paths: sparseRaw.map((c) => c.path), weight: RRF_SPARSE_WEIGHT },
         ],
         RRF_K
     );
