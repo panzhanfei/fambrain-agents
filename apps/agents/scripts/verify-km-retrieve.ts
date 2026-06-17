@@ -8,6 +8,13 @@ import {
     getPathBoost,
     rankCandidates,
 } from "../src/agentflow/agents/online/knowledge-manager/retrieve-helpers.ts";
+import {
+    getProfileRecallParams,
+} from "../src/agentflow/agents/online/knowledge-manager/km-config.ts";
+import {
+    inferQueryProfile,
+    resolveQueryProfile,
+} from "../src/agentflow/agents/online/knowledge-manager/query-profile.ts";
 
 const pickExcerpt = (body: string) => body.slice(0, 120);
 
@@ -103,6 +110,41 @@ assert("token 全未命中时 pathBoost 仍可排前（兜底场景）", () => {
         throw new Error(
             `兜底应优先 personal（pathBoost），实际 ${top?.path} relevance=${top?.relevance}`
         );
+    }
+});
+
+console.log("\n— queryProfile（KM-08/09）—");
+
+assert("identity：我的名字是什么？", () => {
+    if (inferQueryProfile("我的名字是什么？", []) !== "identity") {
+        throw new Error("应为 identity");
+    }
+    const { maxHits, vectorTopK } = getProfileRecallParams("identity");
+    if (maxHits !== 4 || vectorTopK !== 12) {
+        throw new Error(`identity 参数应为 12/4，实际 ${vectorTopK}/${maxHits}`);
+    }
+});
+
+assert("enumeration：哪几家公司上过班", () => {
+    if (inferQueryProfile("我在哪几家公司上过班？", []) !== "enumeration") {
+        throw new Error("应为 enumeration");
+    }
+    const { maxHits, vectorTopK } = getProfileRecallParams("enumeration");
+    if (maxHits !== 8 || vectorTopK !== 24) {
+        throw new Error(`enumeration 参数应为 24/8，实际 ${vectorTopK}/${maxHits}`);
+    }
+});
+
+assert("tech：城管平台技术栈", () => {
+    if (inferQueryProfile("城管平台用了什么技术栈？", []) !== "tech") {
+        throw new Error("应为 tech");
+    }
+});
+
+assert("Intake queryType 优先于规则", () => {
+    const p = resolveQueryProfile("城管平台技术栈", [], "default");
+    if (p !== "default") {
+        throw new Error("应使用 Intake 的 default");
     }
 });
 

@@ -76,6 +76,7 @@ const retrievalNode = async (state: PipelineGraphState): Promise<Partial<Pipelin
             searchQuery: decision.searchQuery || state.userQuestion,
             topics: decision.topics,
             subTasks: decision.subTasks,
+            queryType: decision.queryType,
             candidates: [],
         });
         return {

@@ -1,5 +1,21 @@
 export { retrieveKnowledge } from "./retrieve";
-export { MAX_CANDIDATES, getKmRetrievalConfig } from "./km-config";
+export {
+    MAX_CANDIDATES,
+    getKmRetrievalConfig,
+    getProfileRecallParams,
+} from "./km-config";
+export { inferQueryProfile, resolveQueryProfile } from "./query-profile";
 export { searchCorpusVectors } from "@fambrain/corpus/corpus-vector";
-export { knowledgeHitSchema, knowledgeHitsSchema, knowledgeRetrievalResultSchema, parseKnowledgeHits, parseKnowledgeRetrievalResult, } from "./schema";
-export { type KnowledgeHit, type KnowledgeManagerInput, type KnowledgeRetrievalResult, } from "./types";
+export {
+    knowledgeHitSchema,
+    knowledgeHitsSchema,
+    knowledgeRetrievalResultSchema,
+    parseKnowledgeHits,
+    parseKnowledgeRetrievalResult,
+} from "./schema";
+export {
+    type KnowledgeHit,
+    type KnowledgeManagerInput,
+    type KnowledgeRetrievalResult,
+    type QueryProfile,
+} from "./types";

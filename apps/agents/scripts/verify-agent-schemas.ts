@@ -19,6 +19,7 @@ const testIntake = () => {
         topics: ["project"],
         language: "zh",
         confidence: 1.5,
+        queryType: "tech",
         clarifyingQuestion: null,
         briefReply: null,
     });
@@ -26,6 +27,7 @@ const testIntake = () => {
     assert.equal(ok.searchQuery, "城管平台");
     assert.equal(ok.subTasks.length, 1);
     assert.equal(ok.confidence, 1);
+    assert.equal(ok.queryType, "tech");
     const summarize = parseIntakeRoutingDecision({
         intent: "summarize_content",
         needsRetrieval: true,
@@ -34,6 +36,7 @@ const testIntake = () => {
         topics: ["project"],
         language: "zh",
         confidence: 0.88,
+        queryType: null,
         clarifyingQuestion: null,
         briefReply: null,
     });

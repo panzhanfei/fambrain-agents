@@ -18,6 +18,7 @@
     "verify:content-organizer": "tsx scripts/verify-content-organizer.ts",
     "verify:agent-schemas": "tsx scripts/verify-agent-schemas.ts",
     "verify:km-retrieve": "tsx scripts/verify-km-retrieve.ts",
+    "verify:km-retrieve:live": "tsx --env-file=../../.env scripts/verify-km-retrieve-live.ts",
     "verify:embed-batches": "tsx scripts/verify-embed-batches.ts",
     "verify:memory": "tsx --env-file=../../.env scripts/verify-memory.ts",
     "verify:content-summarizer": "tsx scripts/verify-content-summarizer.ts",

@@ -1,6 +1,12 @@
 import { z } from "zod";
 import { nonEmptyStringArray, nullableTrimmedString, unitInterval, } from "@/agentflow/utils";
 import type { IntakeRoutingDecision } from "./prompt";
+export const intakeQueryTypeSchema = z.enum([
+    "identity",
+    "enumeration",
+    "tech",
+    "default",
+]);
 export const intakeIntentSchema = z.enum([
     "retrieve_and_answer",
     "summarize_content",
@@ -20,6 +26,7 @@ export const intakeRoutingDecisionSchema = z.object({
     topics: nonEmptyStringArray.catch([]),
     language: intakeLanguageSchema,
     confidence: unitInterval,
+    queryType: intakeQueryTypeSchema.nullable().catch(null),
     clarifyingQuestion: nullableTrimmedString,
     briefReply: nullableTrimmedString,
 });

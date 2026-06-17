@@ -2,12 +2,28 @@
  * KnowledgeManager 检索参数（KM-04 集中配置）。
  * 后续 path 加权、queryProfile 分档等亦在此扩展。
  */
+import type { QueryProfile } from "./query-profile";
 
-/** 向量 topK / 扫盘 / merge 后保留的候选条数上限。用于：loadCandidates、mergeCandidates、scanDocCandidates 截断。 */
+/** 默认 vector topK / maxHits（profile 未命中时的兜底，等同 default）。 */
 export const MAX_CANDIDATES = 12;
 
-/** 最终输出 hits 条数上限。用于：retrieveByKeywords 的 slice。 */
+/** 默认最终 hits 上限（等同 default profile）。 */
 export const MAX_HITS = 5;
+
+/** KM-09：各 queryProfile 的向量 topK 与 maxHits。 */
+export const PROFILE_VECTOR_TOP_K = {
+    identity: 12,
+    enumeration: 24,
+    tech: 16,
+    default: 12,
+} as const;
+
+export const PROFILE_MAX_HITS = {
+    identity: 4,
+    enumeration: 8,
+    tech: 6,
+    default: 5,
+} as const;
 
 /** 单条 hit 的 excerpt 最大字符数。用于：pickExcerpt、ensureNonEmptyHits 截断。 */
 export const EXCERPT_MAX = 320;
@@ -57,10 +73,18 @@ export const PATH_BOOST_PROJECTS = 0;
  */
 export const PATH_BOOST_PROJECTS_RESUME = -0.2;
 
+/** KM-09：按 profile 取 vectorTopK / maxHits。 */
+export const getProfileRecallParams = (profile: QueryProfile) => ({
+    vectorTopK: PROFILE_VECTOR_TOP_K[profile],
+    maxHits: PROFILE_MAX_HITS[profile],
+});
+
 /** 供测试 / 脚本读取当前 KM 参数快照。 */
 export const getKmRetrievalConfig = () => ({
     maxCandidates: MAX_CANDIDATES,
     maxHits: MAX_HITS,
+    profileVectorTopK: PROFILE_VECTOR_TOP_K,
+    profileMaxHits: PROFILE_MAX_HITS,
     excerptMax: EXCERPT_MAX,
     logBodyPreview: LOG_BODY_PREVIEW,
     scanBodyMax: SCAN_BODY_MAX,

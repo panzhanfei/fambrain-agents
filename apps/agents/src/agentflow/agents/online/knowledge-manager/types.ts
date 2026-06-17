@@ -1,3 +1,7 @@
+import type { QueryProfile } from "./query-profile";
+
+export type { QueryProfile };
+
 /**
  * KnowledgeManager 输入/输出类型（检索合同）。
  * 在线检索不调 LLM，见 retrieve.ts。
@@ -21,6 +25,8 @@ export type KnowledgeManagerInput = {
     searchQuery: string;
     topics: string[];
     subTasks: string[];
+    /** Intake queryType；缺失时 KM 规则推断（KM-08） */
+    queryType?: QueryProfile | null;
     candidates: {
         path: string;
         title: string;

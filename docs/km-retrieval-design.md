@@ -49,18 +49,18 @@ Intake（L1）→ KM（L2～L5）→ FactChecker → ContentOrganizer → Analys
 
 | 优先级 | ID | 业界层 | 模块 | 类型 | 做什么 | 主要文件 | 配合 | 依赖 | 状态 | 验收（一句话） |
 |:------:|:---:|--------|------|:----:|--------|----------|:----:|------|:----:|----------------|
-| **P0-1** | KM-03 | L4 | KM | 增 | **pathBoost** 路径权威表（personal↑、projects/resume↓） | `km-config.ts` | — | KM-04 | ⬜ | 姓名类 Top1 为 `personal/` |
-| **P0-2** | KM-05 | L4 | KM | 改 | **rank 公式**：token + vector + pathBoost，封顶 1.0 | `retrieve.ts` | — | KM-03 | ⬜ | 日志可见加权 relevance |
-| **P0-3** | KM-06 | L5 | KM | 改 | **ensureNonEmptyHits** 按加权排序补选，非裸 Top1 | `retrieve.ts` | — | KM-05 | ⬜ | token 弱时仍优先 personal |
-| **P0-4** | KM-07 | — | scripts | 增 | **verify-km-retrieve** 单测（不测全链路） | `scripts/verify-km-retrieve.ts` | — | KM-03～06 | ⬜ | `pnpm run verify:km-retrieve` 绿 |
+| **P0-1** | KM-03 | L4 | KM | 增 | **pathBoost** 路径权威表（personal↑、projects/resume↓） | `km-config.ts` | — | KM-04 | ✅ | 姓名类 Top1 为 `personal/` |
+| **P0-2** | KM-05 | L4 | KM | 改 | **rank 公式**：token + vector + pathBoost，封顶 1.0 | `retrieve.ts`、`retrieve-helpers.ts` | — | KM-03 | ✅ | 日志可见 `topRank.pathBoost` |
+| **P0-3** | KM-06 | L5 | KM | 改 | **ensureNonEmptyHits** 按加权排序补选，非裸 Top1 | `retrieve.ts` | — | KM-05 | ✅ | token 弱时仍优先 personal |
+| **P0-4** | KM-07 | — | scripts | 增 | **verify-km-retrieve** 单测（不测全链路） | `scripts/verify-km-retrieve.ts` | — | KM-03～06 | ✅ | `pnpm run verify:km-retrieve` 绿 |
 | **P0-5** | KM-10 | L4 | KM | 增 | **表格 excerpt**（`\| 姓名 \| xxx \|` 优先） | `retrieve-helpers.ts` | — | — | ⬜ | 姓名 excerpt 含表格行 |
-| **P0-6** | KM-08 | L1 | KM | 增 | **queryProfile** 规则推断（identity/enumeration/tech/default） | `query-profile.ts`、`retrieve.ts` | — | — | ⬜ | 固定问法 profile 正确 |
-| **P0-7** | KM-09 | L2 | KM | 改 | 按 profile 分档 **vectorTopK / maxHits** | `km-config.ts`、`retrieve.ts` | — | KM-08 | ⬜ | 列举 maxHits=8 |
+| **P0-6** | KM-08 | L1 | KM | 增 | **queryProfile** 规则推断（identity/enumeration/tech/default） | `query-profile.ts`、`retrieve.ts` | — | — | ✅ | 固定问法 profile 正确 |
+| **P0-7** | KM-09 | L2 | KM | 改 | 按 profile 分档 **vectorTopK / maxHits** | `km-config.ts`、`retrieve.ts` | — | KM-08 | ✅ | 列举 maxHits=8 |
 | **P0-8** | KM-11 | L4 | KM | 增 | **identityGuard**：有 personal 简历则强制 Top1 | `retrieve.ts` | — | KM-08 | ⬜ | 复合档案问 3 遍 Top1 稳定 |
 | **P0-9** | KM-13 | L2 | KM | 改 | 列举 profile **主动扫 experience/** 全目录 | `retrieve.ts` | — | KM-08 | ⬜ | 「哪几家公司」覆盖多文件 |
 | **P0-10** | KM-14 | L5 | KM | 增 | **enumerationFill**：每 experience/*.md ≥1 hit | `retrieve.ts` | — | KM-13 | ⬜ | hits 覆盖全部经历文件 |
 | **P0-11** | KM-15 | L3 | KM | 改 | 列举型 **coverage / notes** 文案 | `retrieve.ts` | — | KM-14 | ⬜ | notes 标明是否补全 |
-| **P0-12** | KM-12 | L3 | KM | 改 | 日志：`queryProfile`、`guardApplied`、`uniquePathCount` | `retrieve.ts` | 建议 agent-log | KM-08 | ⬜ | agent-log 📤 含上述字段 |
+| **P0-12** | KM-12 | L3 | KM | 改 | 日志增加 `queryProfile`、`vectorTopK`、`maxHits`、`topRank` | `retrieve.ts` | 建议 agent-log | KM-08 | 🔄 | `guardApplied` 待 KM-11 |
 | **P0-13** | KM-16 | L4 | KM | 改 | 同 path 多 chunk **merge body** 再摘抄 | `retrieve-helpers.ts` | — | KM-02 | ⬜ | 同文件 excerpt 更完整 |
 | **P1-1** | HY-01 | L2 | corpus | 改 | 升级 **sparse 检索**（keyword → BM25 或等价打分） | `recall-keyword-retrieve.ts` | 必配 KM | — | ⬜ | 稀疏路与向量路可独立出 candidates |
 | **P1-2** | HY-02 | L2 | KM | 增 | **hybrid-recall**：向量 ∥ sparse **并行**召回 | `recall/hybrid-recall.ts` | 必配 corpus | HY-01 | ⬜ | 两路同时返回，不再串行 fallback |
@@ -69,11 +69,11 @@ Intake（L1）→ KM（L2～L5）→ FactChecker → ContentOrganizer → Analys
 | **P1-5** | HY-05 | L2 | KM | 改 | 统一 **Candidate**：`recallChannel`、`rawScore` | `types.ts` | — | HY-02 | ⬜ | vector/sparse/rule 可区分 |
 | **P1-6** | HY-06 | L2 | corpus | 改 | 向量 **raw topK 加大**（融合前多取，dedupe 后截） | `corpus-vector.ts`、`km-config.ts` | 建议 KM | HY-03 | ⬜ | 融合后 unique path 仍充足 |
 | **P1-7** | HY-07 | — | scripts | 改 | compare-recall 或并入 verify：对比 vector/sparse/RRF | `scripts/compare-recall.ts` | — | HY-03 | ⬜ | 三问法 RRF 优于单路 |
-| **P2-1** | QU-01 | L1 | Intake | 增 | 输出 **queryType**（与 KM profile 对齐） | `schema.ts`、`prompt.ts` | 必配 pipeline | P0-6 或并行 | ⬜ | Intake JSON 含 queryType |
+| **P2-1** | QU-01 | L1 | Intake | 增 | 输出 **queryType**（与 KM profile 对齐） | `schema.ts`、`prompt.ts` | 必配 pipeline | P0-6 或并行 | ✅ | Intake JSON 含 queryType |
 | **P2-2** | QU-02 | L1 | Intake | 改 | **多轮指代补全** searchQuery | `prompt.ts` | — | — | ⬜ | 「那个项目呢」能补全实体 |
-| **P2-3** | QU-03 | L1 | pipeline | 改 | `compile.ts` 传 **queryType** 给 `retrieveKnowledge` | `compile.ts` | 必配 QU-01 | QU-01 | ⬜ | retrievalNode 入参含 queryType |
-| **P2-4** | QU-04 | L1 | pipeline | 改 | `parse-intake.ts` / `state.ts` 扩展 decision | `parse-intake.ts`、`state.ts` | 必配 QU-01 | QU-01 | ⬜ | schema 校验通过 |
-| **P2-5** | QU-05 | L1 | KM | 改 | KM **优先 Intake queryType**，无则规则 fallback | `retrieve.ts`、`query-profile.ts` | 建议 | QU-03 | ⬜ | 双源一致时不重复推断 |
+| **P2-3** | QU-03 | L1 | pipeline | 改 | `compile.ts` 传 **queryType** 给 `retrieveKnowledge` | `compile.ts` | 必配 QU-01 | QU-01 | ✅ | retrievalNode 入参含 queryType |
+| **P2-4** | QU-04 | L1 | pipeline | 改 | `parse-intake.ts` / `state.ts` 扩展 decision | `parse-intake.ts`、`state.ts` | 必配 QU-01 | QU-01 | ✅ | schema 校验通过 |
+| **P2-5** | QU-05 | L1 | KM | 改 | KM **优先 Intake queryType**，无则规则 fallback | `retrieve.ts`、`query-profile.ts` | 建议 | QU-03 | ✅ | 双源一致时不重复推断 |
 | **P2-6** | QU-06 | L1 | KM | 删/弱 | KM 内纯规则 queryProfile（Intake 稳定后） | `query-profile.ts` | — | QU-05 | ⬜ | 单一意图来源 |
 | **P3-1** | EV-01 | L3 | KM | 改 | **多维置信度**：融合分 + top1-top2 gap + path 权威 | `rank/score-candidate.ts` | — | HY-03、KM-05 | ⬜ | high/mid/low 分档稳定 |
 | **P3-2** | EV-02 | L3 | KM | 改 | **coverage** 基于分档，非单一 token 比 | `retrieve.ts` | — | EV-01 | ⬜ | sufficient 与 hits 一致 |
@@ -91,7 +91,7 @@ Intake（L1）→ KM（L2～L5）→ FactChecker → ContentOrganizer → Analys
 | **P5-3** | FB-03 | L5 | KM | 增 | **三级兜底**：外部搜索 / MCP（可选） | experiments → KM | — | FB-01 | ⬜ | 语料无命中时有外源 |
 | **P5-4** | FB-04 | L5 | KM | 改 | **四级**：明确 coverage:none + notes | `retrieve.ts` | — | EV-03 | ⬜ | 无命中 notes 清晰 |
 | **P5-5** | FB-05 | L5 | Analyst | 改 | coverage:none 时 **禁止编造**（P0-12） | `information-analyst/prompt.ts` | 建议 | FB-04 | ⬜ | 无 hits 不虚构履历 |
-| **—** | DOC-01 | — | docs | 改 | 本文 + 架构图 v3（Hybrid/RRF） | 本文 | — | 各 Wave | 🔄 | 与代码一致 |
+| **—** | DOC-01 | — | docs | 改 | 本文 + 架构图 v3（Hybrid/RRF） | 本文 | — | 各 Wave | 🔄 | Wave A 进度已同步 |
 | **—** | DOC-02 | — | docs | 改 | 同步 `02-agent-flows` KM 步骤 | `02-agent-flows.md` | — | DOC-01 | ⬜ | 流程图与代码一致 |
 | **—** | DOC-03 | — | docs | 改 | 坑点表 D3/R6 状态 | `04-pitfalls.md` | — | Wave A | ⬜ | 对应坑 ✅ |
 
@@ -102,6 +102,9 @@ Intake（L1）→ KM（L2～L5）→ FactChecker → ContentOrganizer → Analys
 | KM-01 | topics 仅参与向量 query，不参与字面 tokenize | ✅ |
 | KM-02 | 向量结果按 path 去重（max 2 chunk/path） | ✅ |
 | KM-04 | 常量集中到 `km-config.ts` | ✅ |
+| KM-03～06 | pathBoost、rank、兜底、verify 脚本 | ✅ |
+| KM-08～09 | queryProfile + 分档 topK/maxHits | ✅ |
+| QU-01/03/04/05 | Intake `queryType` → compile → KM（Wave C 提前） | ✅ |
 
 ### v1 已有（长期保留）
 
@@ -248,9 +251,35 @@ Intake `queryType` 与上表 **同名枚举**（Wave C）。
 
 ---
 
-## 十二、变更记录
+## 十二、验收记录（2026-06）
+
+### 脚本
+
+| 命令 | 说明 |
+|------|------|
+| `pnpm --filter @fambrain/agents run verify:km-retrieve` | 规则单测：pathBoost、rank、queryProfile |
+| `pnpm --filter @fambrain/agents run verify:km-retrieve:live` | 真实语料 KM 四问（需 corpus） |
+| `pnpm --filter @fambrain/agents run verify:agent-schemas` | Intake `queryType` 等 Zod |
+
+### 全链路 spot check（Ollama 可用）
+
+问法「我的名字是什么？」→ Intake 输出 `queryType: identity`、`searchQuery: 个人简介 简历 姓名` → KM Top1 `personal/个人简历-潘展飞.md` → FC `personal_skip_llm` → 回答含「潘展飞」。✅
+
+### 已知差距（Wave A 剩余）
+
+| 现象 | 下一步 |
+|------|--------|
+| 裸 `searchQuery`「我的名字是什么？」KM Top1 非 personal | KM-11 identityGuard |
+| excerpt 未优先 `\| 姓名 \|` 表格行 | KM-10 表格 excerpt |
+| 列举 hits 混入 projects | KM-13/14 experience 专扫 + fill |
+| 自测时 Chroma 未起，全走 `keyword_scan` | 起 Chroma 后再测向量；Wave B Hybrid |
+
+---
+
+## 十三、变更记录
 
 | 日期 | 说明 |
 |------|------|
 | 2026-06 | KM-04 ✅ km-config；KM-01 ✅ topics 分流；KM-02 ✅ 向量 path 去重 |
-| 2026-06 | **v3 计划定稿**：业界五层对标；主计划表 P0～P5；Wave A～F；Intake/pipeline 配合项列入 QU-xx |
+| 2026-06 | **v3 计划定稿**：业界五层对标；主计划表 P0～P5；Wave A～F |
+| 2026-06 | **KM-03～09 ✅**：pathBoost/rank/兜底；queryProfile 分档；Intake `queryType`；`verify:km-retrieve` + `:live` |

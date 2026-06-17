@@ -152,27 +152,28 @@ flowchart TD
 
 **技术：** **纯规则精排**（无 LLM）。向量语义召回（Chroma）→ 低置信时关键词扫盘补充 → `tokenize` + `pickExcerpt` 确定性输出。与业界「检索层不用 Chat LLM、生成留给 Analyst」一致；避免小模型在精排阶段改写 excerpt、编造 `notes`（见 [坑点 P0-4 / D3-3](./04-pitfalls.md)）。
 
-> **v3 业界对标计划：** [km-retrieval-design.md](./km-retrieval-design.md)（[§三 主计划表](./km-retrieval-design.md#三主计划表按优先级)：Wave A 规则层 → Wave B Hybrid/RRF → Wave C Intake queryType）
+> **v3 进度（Wave A）：** pathBoost + rank（KM-03～06）✅ · queryProfile 分档（KM-08～09）✅ · Intake `queryType` ✅ · 待做：KM-10/11/13～16
 
 ```mermaid
 flowchart TD
-  IN["searchQuery + corpusUserId"] --> VEC["searchCorpusVectors()"]
+  IN["searchQuery + queryType + topics + subTasks"] --> PROFILE["resolveQueryProfile"]
+  PROFILE --> VEC["searchCorpusVectors(topK 按 profile)"]
   VEC -->|无结果| SCAN["scanDocCandidates()"]
   VEC -->|低置信| SCAN
   VEC -->|高置信| CAND[candidates]
   SCAN --> MERGE["mergeCandidates()"]
   MERGE --> CAND
-  CAND --> RULE["retrieveByKeywords() + ensureNonEmptyHits()"]
-  RULE --> OUT["hits / coverage / notes<br/>resultSource: rule"]
+  CAND --> RULE["rankCandidates: token+vector+pathBoost"]
+  RULE --> OUT["hits(maxHits 按 profile) / coverage / notes"]
 ```
 
 | 步骤 | 做什么 | 规则 | 文件 | 方法 |
 |------|--------|------|------|------|
-| 1 | 向量预扫 | Chroma collection per user；L2 距离 + top1/top2 gap 判高置信 | `@fambrain/corpus` | `searchCorpusVectors()` |
-| 2 | 关键词扫盘 | 向量空或低置信时扫 `experience/projects/personal`；中文二元切分 | `retrieve.ts` | `scanDocCandidates()`, `tokenize()` |
-| 3 | 规则精排 | 关键词 relevance ∪ 向量 score；`pickExcerpt` 截原文 | `retrieve.ts` | `retrieveByKeywords()` |
-| 4 | 兜底 | candidates 非空禁止 `hits:[]`（D3-2） | `retrieve.ts` | `ensureNonEmptyHits()` |
-| 5 | 输出 | 最多 5 条；coverage 三档；日志 `resultSource: "rule"` | `prompt.ts`（类型） | `KnowledgeRetrievalResult` |
+| 1 | 向量预扫 | Chroma；L2 + top1/top2 gap；**topK 按 queryProfile** | `@fambrain/corpus` | `searchCorpusVectors()` |
+| 2 | 关键词扫盘 | 向量空或低置信时扫三目录 | `retrieve.ts` | `scanDocCandidates()` |
+| 3 | 规则精排 | **token + vector + pathBoost**；`pickExcerpt` | `retrieve-helpers.ts` | `rankCandidates()` |
+| 4 | 兜底 | candidates 非空禁止 `hits:[]`；与 rank 同一公式 | `retrieve.ts` | `ensureNonEmptyHits()` |
+| 5 | 输出 | **maxHits 按 profile**（identity 4 / enumeration 8 …） | `types.ts` | `KnowledgeRetrievalResult` |
 
 ### 4. FactChecker — 事实核查员（D5）🔄
 

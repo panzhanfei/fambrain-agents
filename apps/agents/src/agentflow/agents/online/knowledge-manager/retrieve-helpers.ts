@@ -23,7 +23,8 @@ export type VectorChunkRow = {
  */
 export const dedupeVectorByPath = (
     chunks: VectorChunkRow[],
-    maxPerPath = MAX_CHUNKS_PER_PATH
+    maxPerPath = MAX_CHUNKS_PER_PATH,
+    maxCandidates = MAX_CANDIDATES
 ): VectorChunkRow[] => {
     const byPath = new Map<string, VectorChunkRow[]>();
     for (const c of chunks) {
@@ -62,7 +63,7 @@ export const dedupeVectorByPath = (
                 (a.score ?? Number.POSITIVE_INFINITY) -
                 (b.score ?? Number.POSITIVE_INFINITY)
         )
-        .slice(0, MAX_CANDIDATES);
+        .slice(0, maxCandidates);
 };
 
 /** Chroma L2 距离 → 0–1 语义相关度（越小越相似）。用于：computeRelevance（KM-05）。 */
