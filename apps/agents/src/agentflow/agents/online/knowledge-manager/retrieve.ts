@@ -12,6 +12,7 @@
  * KM-05 rank：relevance = token + vector + pathBoost（封顶 1.0）。
  * KM-06 兜底：ensureNonEmptyHits 与 rank 共用 rankCandidates。
  * KM-08/09：queryProfile 分档 vectorTopK / maxHits；Intake queryType 优先。
+ * KM-10：表格 excerpt；KM-11：identityGuard。
  */
 import { readFile } from "node:fs/promises";
 import path from "node:path";
@@ -24,7 +25,6 @@ import {
     toRepoPath,
 } from "@fambrain/corpus";
 import {
-    EXCERPT_MAX,
     getProfileRecallParams,
     LOG_BODY_PREVIEW,
     MAX_CANDIDATES,
@@ -33,7 +33,14 @@ import {
     VECTOR_CONFIDENT_TOP1_MAX,
 } from "./km-config";
 import { resolveQueryProfile } from "./query-profile";
-import { dedupeVectorByPath, rankCandidates } from "./retrieve-helpers";
+import {
+    applyIdentityGuard,
+    dedupeVectorByPath,
+    findPersonalResumeCandidate,
+    isPersonalResumePath,
+    pickExcerpt,
+    rankCandidates,
+} from "./retrieve-helpers";
 import type {
     KnowledgeHit,
     KnowledgeManagerInput,
@@ -102,25 +109,6 @@ const tokenizeForRecall = (
 const titleFromMarkdown = (fileName: string, body: string): string => {
     const line = body.match(/^#\s+(.+)$/m)?.[1]?.trim();
     return line || fileName.replace(/\.md$/i, "");
-};
-
-const pickExcerpt = (body: string, tokens: string[]): string => {
-    const text = body.replace(/\s+/g, " ").trim();
-    if (!text) return "";
-    const lower = text.toLowerCase();
-    let idx = -1;
-    for (const t of tokens) {
-        const i = lower.indexOf(t);
-        if (i >= 0 && (idx < 0 || i < idx)) idx = i;
-    }
-    if (idx < 0) return text.slice(0, EXCERPT_MAX);
-    const start = Math.max(0, idx - 60);
-    const slice = text.slice(start, start + EXCERPT_MAX);
-    return (
-        (start > 0 ? "…" : "") +
-        slice +
-        (start + EXCERPT_MAX < text.length ? "…" : "")
-    );
 };
 
 /** L2 距离越小越好；无 score 的扫盘候选视为低置信 */
@@ -207,19 +195,59 @@ const scanDocCandidates = async (
     }));
 };
 
+/** KM-11：identity 问法时若扫盘未命中 personal 简历，从 personal/ 目录补注入 */
+const loadPersonalResumeCandidate = async (
+    corpusUserId: string
+): Promise<CandidateRow | null> => {
+    const scanRoots = await listCorpusScanRoots(corpusUserId, listMarkdownFiles);
+    const personalFiles: CandidateRow[] = [];
+    for (const { root: corpusRoot } of scanRoots) {
+        const dir = path.join(corpusRoot, "personal");
+        for (const abs of await listMarkdownFiles(dir)) {
+            const repoPath = toRepoPath(abs);
+            if (!isPersonalResumePath(repoPath)) continue;
+            const body = await readFile(abs, "utf8").catch(() => "");
+            if (!body) continue;
+            personalFiles.push({
+                path: repoPath,
+                title: titleFromMarkdown(path.basename(abs), body),
+                body: body.slice(0, SCAN_BODY_MAX),
+            });
+        }
+    }
+    return findPersonalResumeCandidate(personalFiles);
+};
+
+const ensureIdentityPersonalCandidate = async (
+    corpusUserId: string,
+    queryProfile: QueryProfile,
+    candidates: CandidateRow[]
+): Promise<CandidateRow[]> => {
+    if (queryProfile !== "identity") return candidates;
+    if (findPersonalResumeCandidate(candidates)) return candidates;
+    const loaded = await loadPersonalResumeCandidate(corpusUserId);
+    if (!loaded) return candidates;
+    return mergeCandidates([loaded], candidates, Math.max(candidates.length + 1, MAX_CANDIDATES));
+};
+
 const retrieveByKeywords = (
     input: Pick<KnowledgeManagerInput, "searchQuery" | "subTasks">,
     candidates: CandidateRow[],
-    maxHits: number
+    maxHits: number,
+    queryProfile: QueryProfile
 ): KnowledgeRetrievalResult => {
     const tokens = tokenizeForRecall(input.searchQuery, input.subTasks);
     if (candidates.length === 0) {
         return { hits: [], coverage: "none", notes: null };
     }
 
-    const scored = rankCandidates(candidates, tokens, pickExcerpt).filter(
-        (h) => h.relevance > 0
+    const ranked = rankCandidates(
+        candidates,
+        tokens,
+        pickExcerpt,
+        queryProfile
     );
+    const scored = ranked.filter((h) => h.relevance > 0);
 
     const hits: KnowledgeHit[] = scored.slice(0, maxHits).map(
         ({ path: p, title, excerpt, relevance }) => ({
@@ -248,12 +276,18 @@ const retrieveByKeywords = (
 const ensureNonEmptyHits = (
     input: Pick<KnowledgeManagerInput, "searchQuery" | "subTasks">,
     candidates: CandidateRow[],
-    result: KnowledgeRetrievalResult
+    result: KnowledgeRetrievalResult,
+    queryProfile: QueryProfile
 ): KnowledgeRetrievalResult => {
     if (result.hits.length > 0 || candidates.length === 0) return result;
 
     const tokens = tokenizeForRecall(input.searchQuery, input.subTasks);
-    const ranked = rankCandidates(candidates, tokens, pickExcerpt);
+    const ranked = rankCandidates(
+        candidates,
+        tokens,
+        pickExcerpt,
+        queryProfile
+    );
     const top = ranked[0];
     if (!top) return result;
 
@@ -269,6 +303,55 @@ const ensureNonEmptyHits = (
         coverage: "partial",
         notes: "候选非空但 token 未命中，按 token+vector+pathBoost 加权补选。",
     };
+};
+
+const finalizeHits = (
+    input: KnowledgeManagerInput,
+    candidates: CandidateRow[],
+    queryProfile: QueryProfile,
+    maxHits: number
+): { result: KnowledgeRetrievalResult; ranked: ReturnType<typeof rankCandidates>; guardApplied: boolean } => {
+    const tokens = tokenizeForRecall(input.searchQuery, input.subTasks);
+    const ranked = rankCandidates(
+        candidates,
+        tokens,
+        pickExcerpt,
+        queryProfile
+    );
+
+    let result = ensureNonEmptyHits(
+        input,
+        candidates,
+        retrieveByKeywords(input, candidates, maxHits, queryProfile),
+        queryProfile
+    );
+
+    const guarded = applyIdentityGuard(
+        result.hits,
+        candidates,
+        ranked,
+        queryProfile,
+        maxHits,
+        tokens
+    );
+    result = { ...result, hits: guarded.hits };
+
+    if (guarded.guardApplied && result.hits[0]) {
+        const top = ranked.find((r) => r.path === result.hits[0]!.path);
+        if (top) {
+            result.hits[0] = {
+                ...result.hits[0]!,
+                excerpt: pickExcerpt(
+                    candidates.find((c) => c.path === top.path)?.body ??
+                        top.body,
+                    tokens,
+                    queryProfile
+                ),
+            };
+        }
+    }
+
+    return { result, ranked, guardApplied: guarded.guardApplied };
 };
 
 const loadCandidates = async (
@@ -387,8 +470,13 @@ export const retrieveKnowledge = async (
         candidatesProvided: input.candidates.length,
     });
 
-    const { candidates, recallSource, vectorConfident, vectorRawCount, uniquePathCount } =
+    const { candidates: rawCandidates, recallSource, vectorConfident, vectorRawCount, uniquePathCount } =
         await loadCandidates(input, vectorTopK);
+    const candidates = await ensureIdentityPersonalCandidate(
+        input.corpusUserId,
+        queryProfile,
+        rawCandidates
+    );
 
     if (candidates.length === 0) {
         const empty = { hits: [], coverage: "none" as const, notes: null };
@@ -405,14 +493,10 @@ export const retrieveKnowledge = async (
         return empty;
     }
 
-    const ruleResult = ensureNonEmptyHits(
-        input,
-        candidates,
-        retrieveByKeywords(input, candidates, maxHits)
-    );
+    const { result: ruleResult, ranked: topRankedList, guardApplied } =
+        finalizeHits(input, candidates, queryProfile, maxHits);
 
-    const tokens = tokenizeForRecall(input.searchQuery, input.subTasks);
-    const topRanked = rankCandidates(candidates, tokens, pickExcerpt)[0];
+    const topRanked = topRankedList[0];
 
     logAgentOut("KnowledgeManager", "出去", summarizeRetrievalOut(ruleResult, {
         recallSource,
@@ -423,6 +507,7 @@ export const retrieveKnowledge = async (
         queryProfile,
         vectorTopK,
         maxHits,
+        guardApplied,
         candidateCount: candidates.length,
         candidatesPreview: summarizeCandidate(candidates[0]!, 0),
         topRank: topRanked

@@ -53,14 +53,14 @@ Intake（L1）→ KM（L2～L5）→ FactChecker → ContentOrganizer → Analys
 | **P0-2** | KM-05 | L4 | KM | 改 | **rank 公式**：token + vector + pathBoost，封顶 1.0 | `retrieve.ts`、`retrieve-helpers.ts` | — | KM-03 | ✅ | 日志可见 `topRank.pathBoost` |
 | **P0-3** | KM-06 | L5 | KM | 改 | **ensureNonEmptyHits** 按加权排序补选，非裸 Top1 | `retrieve.ts` | — | KM-05 | ✅ | token 弱时仍优先 personal |
 | **P0-4** | KM-07 | — | scripts | 增 | **verify-km-retrieve** 单测（不测全链路） | `scripts/verify-km-retrieve.ts` | — | KM-03～06 | ✅ | `pnpm run verify:km-retrieve` 绿 |
-| **P0-5** | KM-10 | L4 | KM | 增 | **表格 excerpt**（`\| 姓名 \| xxx \|` 优先） | `retrieve-helpers.ts` | — | — | ⬜ | 姓名 excerpt 含表格行 |
+| **P0-5** | KM-10 | L4 | KM | 增 | **表格 excerpt**（`\| 姓名 \| xxx \|` 优先） | `retrieve-helpers.ts` | — | — | ✅ | 姓名 excerpt 含表格行 |
 | **P0-6** | KM-08 | L1 | KM | 增 | **queryProfile** 规则推断（identity/enumeration/tech/default） | `query-profile.ts`、`retrieve.ts` | — | — | ✅ | 固定问法 profile 正确 |
 | **P0-7** | KM-09 | L2 | KM | 改 | 按 profile 分档 **vectorTopK / maxHits** | `km-config.ts`、`retrieve.ts` | — | KM-08 | ✅ | 列举 maxHits=8 |
-| **P0-8** | KM-11 | L4 | KM | 增 | **identityGuard**：有 personal 简历则强制 Top1 | `retrieve.ts` | — | KM-08 | ⬜ | 复合档案问 3 遍 Top1 稳定 |
+| **P0-8** | KM-11 | L4 | KM | 增 | **identityGuard**：有 personal 简历则强制 Top1；扫盘未命中时 **补注入** personal 简历 | `retrieve.ts`、`retrieve-helpers.ts` | — | KM-08 | ✅ | 裸问「我的名字」Top1 为 personal |
 | **P0-9** | KM-13 | L2 | KM | 改 | 列举 profile **主动扫 experience/** 全目录 | `retrieve.ts` | — | KM-08 | ⬜ | 「哪几家公司」覆盖多文件 |
 | **P0-10** | KM-14 | L5 | KM | 增 | **enumerationFill**：每 experience/*.md ≥1 hit | `retrieve.ts` | — | KM-13 | ⬜ | hits 覆盖全部经历文件 |
 | **P0-11** | KM-15 | L3 | KM | 改 | 列举型 **coverage / notes** 文案 | `retrieve.ts` | — | KM-14 | ⬜ | notes 标明是否补全 |
-| **P0-12** | KM-12 | L3 | KM | 改 | 日志增加 `queryProfile`、`vectorTopK`、`maxHits`、`topRank` | `retrieve.ts` | 建议 agent-log | KM-08 | 🔄 | `guardApplied` 待 KM-11 |
+| **P0-12** | KM-12 | L3 | KM | 改 | 日志增加 `queryProfile`、`vectorTopK`、`maxHits`、`topRank`、`guardApplied` | `retrieve.ts` | 建议 agent-log | KM-08 | ✅ | KM 📤 可见 guardApplied |
 | **P0-13** | KM-16 | L4 | KM | 改 | 同 path 多 chunk **merge body** 再摘抄 | `retrieve-helpers.ts` | — | KM-02 | ⬜ | 同文件 excerpt 更完整 |
 | **P1-1** | HY-01 | L2 | corpus | 改 | 升级 **sparse 检索**（keyword → BM25 或等价打分） | `recall-keyword-retrieve.ts` | 必配 KM | — | ⬜ | 稀疏路与向量路可独立出 candidates |
 | **P1-2** | HY-02 | L2 | KM | 增 | **hybrid-recall**：向量 ∥ sparse **并行**召回 | `recall/hybrid-recall.ts` | 必配 corpus | HY-01 | ⬜ | 两路同时返回，不再串行 fallback |
@@ -138,8 +138,8 @@ Intake（L1）→ KM（L2～L5）→ FactChecker → ContentOrganizer → Analys
 | 2 | KM-06 | 兜底增强 |
 | 3 | KM-07 | verify 脚本 |
 | 4 | KM-08 + KM-09 | queryProfile + 分档 |
-| 5 | KM-10 + KM-11 | 表格 excerpt + identity guard |
-| 6 | KM-12 | 日志 |
+| 5 | KM-10 + KM-11 ✅ | 表格 excerpt + identity guard |
+| 6 | KM-12 ✅ | 日志 |
 | 7 | KM-16 | chunk merge |
 | 8 | KM-13 + KM-14 + KM-15 | 列举召回 + fill + coverage |
 | 9 | DOC-02 + DOC-03 | 文档同步 |
@@ -258,19 +258,20 @@ Intake `queryType` 与上表 **同名枚举**（Wave C）。
 | 命令 | 说明 |
 |------|------|
 | `pnpm --filter @fambrain/agents run verify:km-retrieve` | 规则单测：pathBoost、rank、queryProfile |
-| `pnpm --filter @fambrain/agents run verify:km-retrieve:live` | 真实语料 KM 四问（需 corpus） |
+| `pnpm --filter @fambrain/agents run verify:km-retrieve:live` | 真实语料 KM 五问（需 corpus） |
+| `pnpm --filter @fambrain/agents exec tsx --env-file=../../.env scripts/verify-km-e2e-identity.ts` | 全链路 spot check：「我的名字是什么？」 |
 | `pnpm --filter @fambrain/agents run verify:agent-schemas` | Intake `queryType` 等 Zod |
 
 ### 全链路 spot check（Ollama 可用）
 
-问法「我的名字是什么？」→ Intake 输出 `queryType: identity`、`searchQuery: 个人简介 简历 姓名` → KM Top1 `personal/个人简历-潘展飞.md` → FC `personal_skip_llm` → 回答含「潘展飞」。✅
+问法「我的名字是什么？」→ Intake 输出 `queryType: identity`、`searchQuery: 个人简介 简历 姓名` → KM Top1 `personal/个人简历-潘展飞.md`、excerpt 含 `\| 姓名 \| 潘展飞 \|` → FC `personal_skip_llm` → 回答含「潘展飞」。✅
+
+裸 `searchQuery`「我的名字是什么？」（仅 KM live，不经 Intake 改写）→ `guardApplied: true`、Top1 同上、excerpt 含姓名表格行。✅
 
 ### 已知差距（Wave A 剩余）
 
 | 现象 | 下一步 |
 |------|--------|
-| 裸 `searchQuery`「我的名字是什么？」KM Top1 非 personal | KM-11 identityGuard |
-| excerpt 未优先 `\| 姓名 \|` 表格行 | KM-10 表格 excerpt |
 | 列举 hits 混入 projects | KM-13/14 experience 专扫 + fill |
 | 自测时 Chroma 未起，全走 `keyword_scan` | 起 Chroma 后再测向量；Wave B Hybrid |
 
@@ -282,4 +283,5 @@ Intake `queryType` 与上表 **同名枚举**（Wave C）。
 |------|------|
 | 2026-06 | KM-04 ✅ km-config；KM-01 ✅ topics 分流；KM-02 ✅ 向量 path 去重 |
 | 2026-06 | **v3 计划定稿**：业界五层对标；主计划表 P0～P5；Wave A～F |
+| 2026-06 | **KM-10～12 ✅**：表格 excerpt；identityGuard + personal 补注入；日志 `guardApplied`；`verify-km-e2e-identity` |
 | 2026-06 | **KM-03～09 ✅**：pathBoost/rank/兜底；queryProfile 分档；Intake `queryType`；`verify:km-retrieve` + `:live` |

@@ -16,10 +16,10 @@ type Case = {
     queryType: "identity" | "enumeration" | "tech" | "default";
     expectProfile: "identity" | "enumeration" | "tech" | "default";
     label?: string;
-    optional?: boolean;
     minHits?: number;
     topPathRe?: RegExp;
     notPathRe?: RegExp;
+    excerptRe?: RegExp;
 };
 
 const cases: Case[] = [
@@ -35,8 +35,10 @@ const cases: Case[] = [
         q: "我的名字是什么？",
         queryType: "identity",
         expectProfile: "identity",
-        label: "姓名（原始问法，依赖 KM-11 identityGuard）",
-        optional: true,
+        topPathRe: /personal/i,
+        notPathRe: /projects\/resume|_TEMPLATE/i,
+        excerptRe: /姓名.*潘展飞|潘展飞/,
+        label: "姓名（原始问法，KM-11 identityGuard）",
     },
     {
         q: "我在哪几家公司上过班？",
@@ -124,15 +126,14 @@ const main = async () => {
         if (c.notPathRe && r.hits[0] && c.notPathRe.test(r.hits[0].path)) {
             issues.push(`Top1 不应为 ${r.hits[0].path}`);
         }
+        if (c.excerptRe && r.hits[0] && !c.excerptRe.test(r.hits[0].excerpt)) {
+            issues.push(`Top1 excerpt 未匹配 ${c.excerptRe}`);
+        }
         if (r.hits.length === 0) issues.push("hits 为空");
 
         if (issues.length) {
-            if (c.optional) {
-                console.log("  ⚠️  已知差距（optional）:", issues.join("; "));
-            } else {
-                failed++;
-                console.log("  ❌", issues.join("; "));
-            }
+            failed++;
+            console.log("  ❌", issues.join("; "));
         } else {
             console.log("  ✅ OK");
         }
