@@ -164,7 +164,7 @@ pnpm run golden:regression   # G1～G5 全链路标准回归
 | Wave | 日历（参考） | 优先级 ID | 动哪些模块 | 验收 |
 |------|--------------|-----------|------------|------|
 | **A** 规则层收尾 | 第 6～7 天 | P0-1～P0-13（KM-03～16） | KM、scripts | **✅ 2026-06** verify 绿；姓名/列举/技术四问 |
-| **B** Hybrid 核心 | 第 8～11 天 | P1-1～P1-7（HY-xx） | KM、**corpus**、scripts | 并行召回 + RRF 优于单路 |
+| **B** Hybrid 核心 | 第 8～11 天 | P1-1～P1-7（HY-xx） | KM、**corpus**、scripts | **HY-01 ✅** BM25 sparse；HY-02～07 并行 + RRF |
 | **C** 查询理解上移 | 第 12 天 | P2-1～P2-6（QU-xx） | **Intake**、pipeline、KM | Intake 出 queryType |
 | **D** 置信分档 | 第 13～14 天 | P3-1～P3-7（EV-xx） | KM 必做；FC 建议 | confidenceTier；FC 高置信快检 |
 | **E/F** | 质量冲刺后 | P4、P5 | KM；Organizer/Analyst 可选 | FAQ、rerank、防编造 |

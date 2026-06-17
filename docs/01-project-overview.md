@@ -36,7 +36,7 @@
 | Mem0 | 跨会话语义记忆检索，注入 Intake / Analyst prompt |
 | LangMem | 单会话摘要压缩（`data/memory/sessions/`），配合 DB 历史裁剪 Intake 上下文 |
 | MCP SDK | 实验：`experiment:mcp-vault` 只读列 vault |
-| Recall（轻量 RAG） | `recallKeywordRetrieve`；对比脚本 `experiment:recall-compare` |
+| Recall（BM25 sparse） | `recallSparseRetrieve` / `recallKeywordRetrieve`；`verify:sparse-recall`；对比 `experiment:recall-compare` |
 | Vercel AI SDK | 实验：`experiment:vercel-ai`（主链仍自研 SSE） |
 
 编排与流程详见 [Agent 流程图](./02-agent-flows.md)。
@@ -171,6 +171,6 @@ pnpm run dev
 | `ingestDocumentBatch` | `agentflow/agents/offline/doc-parser/` | 批量上传解析 → corpus + 可选入库 |
 | `summarizeContent` | `agentflow/agents/online/content-summarizer/` | 在线摘要分支 + CLI（D9） |
 | `listVaultFiles` | `agentflow/knowledge/list-vault-files.ts` | vault 只读列举（MCP 共用） |
-| `recallKeywordRetrieve` | `agentflow/knowledge/recall-keyword-retrieve.ts` | 轻量关键词 RAG（对比用） |
+| `recallSparseRetrieve` | `packages/corpus/src/recall-keyword-retrieve.ts` | BM25 sparse 检索（HY-01） |
 | `indexAllCorpora` | `agentflow/agents/offline/knowledge-indexer/` | 离线 corpus → Chroma |
 | `logAgentIn` / `logAgentOut` | `packages/agent-shared/src/agent-log.ts` | 调试：含 FactChecker 🔍、ContentOrganizer 📋 |

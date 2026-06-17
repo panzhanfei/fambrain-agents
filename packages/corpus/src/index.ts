@@ -38,5 +38,10 @@ export { listMarkdownFiles, toRepoPath } from "./list-markdown-files";
 export { listVaultFiles, type VaultFileEntry } from "./list-vault-files";
 export {
   recallKeywordRetrieve,
+  recallSparseRetrieve,
+  SPARSE_BODY_MAX,
+  SPARSE_EXCERPT_MAX,
   type RecallKeywordHit,
 } from "./recall-keyword-retrieve";
+export { tokenizeForRecall } from "./recall-tokenize";
+export { buildBm25Index, type Bm25Index } from "./bm25";

@@ -152,7 +152,8 @@ flowchart TD
 
 **技术：** **纯规则精排**（无 LLM）。向量语义召回（Chroma）→ 低置信时关键词扫盘补充 → `tokenize` + `pickExcerpt` 确定性输出。与业界「检索层不用 Chat LLM、生成留给 Analyst」一致；避免小模型在精排阶段改写 excerpt、编造 `notes`（见 [坑点 P0-4 / D3-3](./04-pitfalls.md)）。
 
-> **v3 进度（Wave A）：** pathBoost + rank（KM-03～06）✅ · queryProfile 分档（KM-08～09）✅ · 表格 excerpt + identityGuard（KM-10～12）✅ · 列举 experience + chunk merge（KM-13～16）✅ · Intake `queryType` ✅ · Wave A 规则层收尾完成，下一步 Wave B Hybrid
+> **v3 进度（Wave A）：** … Wave A 规则层收尾完成。  
+> **Wave B：** HY-01 BM25 sparse ✅ · 下一步 HY-02 并行 Hybrid + HY-03 RRF
 
 ```mermaid
 flowchart TD
@@ -359,7 +360,8 @@ flowchart TD
 | 实验 | 命令 | 作用 |
 |------|------|------|
 | MCP 列 vault | `pnpm run experiment:mcp-vault` | stdio MCP 工具 `list_vault_files` |
-| Recall 对比 | `pnpm run experiment:recall-compare -- <userId> "query"` | `recallKeywordRetrieve` vs `searchCorpusVectors` |
+| Recall 对比 | `pnpm run experiment:recall-compare -- <userId> "query"` | BM25 sparse vs `searchCorpusVectors` |
+| Sparse 自测 | `pnpm run verify:sparse-recall` | HY-01 BM25 三问 |
 | Vercel AI SDK | `pnpm run experiment:vercel-ai -- "prompt"` | `streamText` + Ollama（主链仍自研 SSE） |
 
 **验证：** `pnpm run verify:vault-list`（vault 列举单测）。

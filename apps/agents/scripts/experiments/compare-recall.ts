@@ -1,5 +1,5 @@
 /**
- * Recall（关键词轻量 RAG）vs LlamaIndex 向量检索对比。
+ * Recall BM25 sparse vs LlamaIndex 向量检索对比。
  *
  *   pnpm run experiment:recall-compare -- <corpusUserId> "<query>"
  *
@@ -35,7 +35,7 @@ const main = async () => {
         recallKeywordRetrieve(corpusUserId, query, 8),
     ]);
     printHits("LangChain + Chroma (searchCorpusVectors)", vectorHits.map((h) => ({ path: h.path, title: h.title, score: h.score })));
-    printHits("Recall keyword (recallKeywordRetrieve)", recallHits);
+    printHits("BM25 sparse (recallSparseRetrieve)", recallHits);
     const vectorPaths = new Set(vectorHits.map((h) => h.path));
     const recallPaths = new Set(recallHits.map((h) => h.path));
     const overlap = [...vectorPaths].filter((p) => recallPaths.has(p));

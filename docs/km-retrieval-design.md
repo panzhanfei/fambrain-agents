@@ -62,7 +62,7 @@ Intake（L1）→ KM（L2～L5）→ FactChecker → ContentOrganizer → Analys
 | **P0-11** | KM-15 | L3 | KM | 改 | 列举型 **coverage / notes** 文案 | `retrieve-helpers.ts` | — | KM-14 | ✅ | notes 标明是否补全 |
 | **P0-12** | KM-12 | L3 | KM | 改 | 日志增加 `queryProfile`、`vectorTopK`、`maxHits`、`topRank`、`guardApplied` | `retrieve.ts` | 建议 agent-log | KM-08 | ✅ | KM 📤 可见 guardApplied |
 | **P0-13** | KM-16 | L4 | KM | 改 | 同 path 多 chunk **merge body** 再摘抄 | `retrieve-helpers.ts` | — | KM-02 | ✅ | 同文件 excerpt 更完整 |
-| **P1-1** | HY-01 | L2 | corpus | 改 | 升级 **sparse 检索**（keyword → BM25 或等价打分） | `recall-keyword-retrieve.ts` | 必配 KM | — | ⬜ | 稀疏路与向量路可独立出 candidates |
+| **P1-1** | HY-01 | L2 | corpus | 改 | 升级 **sparse 检索**（keyword → **BM25**） | `recall-keyword-retrieve.ts`、`bm25.ts` | 必配 KM | — | ✅ | `verify:sparse-recall` 绿；sparse 独立出 candidates |
 | **P1-2** | HY-02 | L2 | KM | 增 | **hybrid-recall**：向量 ∥ sparse **并行**召回 | `recall/hybrid-recall.ts` | 必配 corpus | HY-01 | ⬜ | 两路同时返回，不再串行 fallback |
 | **P1-3** | HY-03 | L2 | KM | 增 | **RRF 融合**（倒数排名融合） | `recall/fusion-rrf.ts` | — | HY-02 | ⬜ | 融合分排序 ≠ 单路 Top1 |
 | **P1-4** | HY-04 | L2 | KM | 改 | **删/弱** 主路径「向量低置信 → 才 scanDocCandidates」 | `retrieve.ts` | — | HY-02 | ⬜ | recallSource 不再只有串行组合 |
@@ -122,7 +122,7 @@ Intake（L1）→ KM（L2～L5）→ FactChecker → ContentOrganizer → Analys
 | Wave | 优先级 ID | 日历（参考） | 动哪些模块 | KM 单独能做？ | 必须配合 |
 |------|-----------|--------------|------------|:-------------:|----------|
 | **A** 规则层收尾 | P0-1～P0-13（KM-03～16，缺 KM-17/18 文档） | 1～2 天 | KM、scripts | ✅ | 无 |
-| **B** Hybrid 核心 | P1-1～P1-7 | 1～2 周 | KM、corpus、scripts | 大部分 | **corpus 必配** |
+| **B** Hybrid 核心 | P1-1～P1-7 | 1～2 周 | KM、corpus、scripts | 大部分 | **corpus 必配**；**HY-01 ✅** |
 | **C** 查询理解上移 | P2-1～P2-6 | 3～5 天 | Intake、pipeline、KM | 可 fallback 规则 | **Intake + compile 必配** |
 | **D** 置信分档 + FC 降本 | P3-1～P3-7 | 3～5 天 | KM 必做；FC/pipeline 建议 | ✅ tier 可选输出 | FC 建议 |
 | **E** FAQ + 精排 + 结构化 | P4-1～P4-4 | 1～2 周 | KM；Organizer 建议 | FAQ/structured 在 KM | Organizer 建议 |
@@ -257,6 +257,7 @@ Intake `queryType` 与上表 **同名枚举**（Wave C）。
 
 | 命令 | 说明 |
 |------|------|
+| `pnpm --filter @fambrain/agents run verify:sparse-recall` | HY-01：BM25 sparse 三问（不需 Chroma） |
 | `pnpm --filter @fambrain/agents run verify:km-retrieve` | 规则单测：pathBoost、rank、queryProfile |
 | `pnpm --filter @fambrain/agents run verify:km-retrieve:live` | 真实语料 KM 五问（需 corpus） |
 | `pnpm --filter @fambrain/agents exec tsx --env-file=../../.env scripts/verify-km-e2e-identity.ts` | 全链路 spot check：「我的名字是什么？」 |
@@ -286,6 +287,7 @@ Intake `queryType` 与上表 **同名枚举**（Wave C）。
 |------|------|
 | 2026-06 | KM-04 ✅ km-config；KM-01 ✅ topics 分流；KM-02 ✅ 向量 path 去重 |
 | 2026-06 | **v3 计划定稿**：业界五层对标；主计划表 P0～P5；Wave A～F |
+| 2026-06 | **HY-01 ✅**：corpus 内 Okapi BM25；`recallSparseRetrieve`；`verify:sparse-recall` |
 | 2026-06 | **KM-13～16 ✅**：experience 专扫 + enumerationFill + 列举 coverage/notes；chunk merge |
 | 2026-06 | **KM-10～12 ✅**：表格 excerpt；identityGuard + personal 补注入；日志 `guardApplied` |
 | 2026-06 | **KM-03～09 ✅**：pathBoost/rank/兜底；queryProfile 分档；Intake `queryType`；`verify:km-retrieve` + `:live` |
