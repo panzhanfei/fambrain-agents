@@ -1,4 +1,4 @@
-const PREFIX = "fambrain:retrieval:v1";
+import { getInfraConfig } from "../config.ts";
 
 /** 检索 cache key 组成部分 */
 export type RetrievalCacheKeyParts = {
@@ -19,7 +19,8 @@ export const normalizeSearchQuery = (searchQuery: string): string => {
 export const buildRetrievalCacheKey = (
     parts: RetrievalCacheKeyParts
 ): string => {
+    const prefix = getInfraConfig().retrievalCache.keyPrefix;
     const q = normalizeSearchQuery(parts.searchQuery);
     const qt = parts.queryType.trim() || "default";
-    return `${PREFIX}:${parts.corpusUserId}:${qt}:${q}`;
+    return `${prefix}:${parts.corpusUserId}:${qt}:${q}`;
 };

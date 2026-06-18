@@ -1,3 +1,4 @@
+import { buildRateLimitKeyPrefix } from "../config.ts";
 import { getRedisClient } from "../redis/client.ts";
 
 /**
@@ -16,7 +17,7 @@ export const tryConsumeRedisRateLimit = async (
     const redis = getRedisClient();
     if (!redis) return { ok: true, backend: "none" };
 
-    const redisKey = `fambrain:rl:${key}`;
+    const redisKey = `${buildRateLimitKeyPrefix()}:${key}`;
     try {
         if (redis.status !== "ready") await redis.connect();
         const count = await redis.incr(redisKey);

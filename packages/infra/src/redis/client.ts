@@ -8,28 +8,33 @@ export const isRedisConfigured = (): boolean => {
     return Boolean(getInfraConfig().redisUrl);
 };
 
+const redisClientCacheKey = (url: string, db: number): string => `${url}#${db}`;
+
 export const getRedisClient = (): Redis | null => {
-    const { redisUrl } = getInfraConfig();
+    const { redisUrl, redisDb } = getInfraConfig();
     if (!redisUrl) return null;
-    if (client && clientUrl === redisUrl) return client;
+    const cacheKey = redisClientCacheKey(redisUrl, redisDb);
+    if (client && clientUrl === cacheKey) return client;
     if (client) {
         client.disconnect();
         client = null;
     }
     client = new Redis(redisUrl, {
+        db: redisDb,
         maxRetriesPerRequest: null,
         lazyConnect: true,
     });
-    clientUrl = redisUrl;
+    clientUrl = cacheKey;
     return client;
 };
 
 export const createRedisConnection = (): Redis => {
-    const { redisUrl } = getInfraConfig();
+    const { redisUrl, redisDb } = getInfraConfig();
     if (!redisUrl) {
         throw new Error("REDIS_URL / REDIS_HOST 未配置，无法创建 Redis 连接");
     }
     return new Redis(redisUrl, {
+        db: redisDb,
         maxRetriesPerRequest: null,
     });
 };

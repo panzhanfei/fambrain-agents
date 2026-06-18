@@ -6,7 +6,7 @@
 
 基于 **Next.js（App Router）** 的家庭协作型对话应用：注册登录、成员审核、会话与消息持久化，以及 **P0 多 Agent 聊天闭环**（意图路由 → 知识库检索 → 归纳回答，SSE 流式）。
 
-**当前进度（2026-06）：** 在线 LangGraph 多 Agent 闭环 ✅；`@fambrain/corpus` / `@fambrain/agent-memory` 已抽包。**下一步：** [质量冲刺 10 日计划](./03-roadmap.md#质量冲刺--10-日计划2026-06)；消坑见 [坑点 §三](./04-pitfalls.md#三集中消坑计划核心-agent-完成后--并入-10-日质量冲刺)。详见 [路线图](./03-roadmap.md) · [流程图](./02-agent-flows.md) · [实验](../experiments/README.md)。
+**当前进度（2026-06）：** 在线 LangGraph 多 Agent 闭环 ✅；`@fambrain/corpus` / `@fambrain/agent-memory` / `@fambrain/infra` 已抽包；**`pnpm dev` 一键起 Chroma + Redis + Web + Agents** ✅。**下一步：** [质量冲刺 10 日计划](./03-roadmap.md#质量冲刺--10-日计划2026-06)；消坑见 [坑点 §三](./04-pitfalls.md#三集中消坑计划核心-agent-完成后--并入-10-日质量冲刺)。详见 [路线图](./03-roadmap.md) · [流程图](./02-agent-flows.md) · [实验](../experiments/README.md)。
 
 ## 应用层技术栈
 
@@ -54,10 +54,11 @@ pnpm run db:migrate
 pnpm run db:generate
 # 本地对话依赖 Ollama，请先安装并拉取模型，例如：
 #   ollama pull qwen2.5:14b
+# pnpm dev 会自动启动/等待 Chroma、Redis（可 Docker 拉起），并起 Web + Agents
 pnpm run dev
 ```
 
-浏览器访问 `http://localhost:${PORT}`（默认 3000，见 `.env` 的 `PORT`）。聊天需本机 **[Ollama](https://ollama.com/)** 已启动，且 `.env` 中 `OLLAMA_HOST`/`OLLAMA_PORT`（或 `OLLAMA_BASE_URL`）与 `OLLAMA_MODEL` 一致。
+浏览器访问 `http://localhost:${PORT}`（默认 3000，见 `.env` 的 `PORT`）。聊天需 **[Ollama](https://ollama.com/)** 可访问（`.env` 中 `OLLAMA_HOST`/`OLLAMA_PORT` 或 `OLLAMA_BASE_URL`），`OLLAMA_MODEL` 与本地已 pull 模型一致。**Chroma / Redis 无需另开终端**（`scripts/dev-all.sh` 会检测就绪或自动启动；Redis 不可达且 `DEV_REDIS_AUTO_START=1` 时用 `docker compose up redis`）。
 
 **pnpm 10+** 若安装后提示需批准依赖的构建脚本（如 `prisma`、`better-sqlite3`），在本仓库根目录执行一次 `pnpm approve-builds` 并按提示勾选即可；`package.json` 里已配置 `pnpm.onlyBuiltDependencies` 作为允许构建的名单，新开环境仍可能需要你本地确认一次。
 
@@ -73,17 +74,21 @@ pnpm run dev
 
 | 命令 | 说明 |
 |------|------|
-| `pnpm run dev` | 本地开发 |
+| `pnpm run dev` | **一键本地开发**：Chroma + Redis（可选 Docker 自动起）+ Web + Agents；`PIPELINE_QUEUE_ENABLED=1` 时另起 worker |
+| `pnpm run dev:web` | 仅 Web BFF |
+| `pnpm run dev:agents` | 仅 Agent HTTP（默认 `:3001`） |
+| `pnpm run dev:agents-worker` | 仅 BullMQ pipeline worker |
 | `pnpm run build` / `pnpm run start` | 构建 standalone / 生产启动（`apps/web`） |
 | `pnpm run pack:deploy` | 本地构建并打 tar 部署包 |
-| `pnpm run docker:up` | Docker 一键启动 web + ollama + chroma |
+| `pnpm run docker:up` | Docker 一键启动 web + agents + chroma + redis |
 | `pnpm run lint` | ESLint |
 | `pnpm run db:generate` | 生成 Prisma Client |
 | `pnpm run db:migrate` | 开发环境迁移 |
 | `pnpm run db:push` | 无迁移文件时推送 schema（慎用） |
 | `pnpm run db:studio` | Prisma Studio |
 | `pnpm run rebuild:native` | 重新编译 `better-sqlite3`（解决缺少 `.node` 绑定） |
-| `pnpm run chroma:server` | 启动 Chroma HTTP 服务（需 [uv](https://docs.astral.sh/uv/)，数据目录 `data/chroma/`） |
+| `pnpm run chroma:server` | 单独启动 Chroma（需 [uv](https://docs.astral.sh/uv/)，数据目录 `data/chroma/`） |
+| `pnpm run redis:server` | 单独 `docker compose up -d redis` |
 | `pnpm run index:corpus` | **知识入库师**：全量扫描 `corpus/*.md` → embed → 写入 Chroma（语料变更后手动重跑） |
 | `pnpm run parse:documents` | **文档解析师**：CLI 批量解析本地文件 → corpus md（可选入库） |
 | `cd apps/agents && pnpm run verify:memory` | Mem0 / LangMem 本地验证（LangMem 可不依赖 Mem0） |
@@ -105,7 +110,7 @@ pnpm run dev
 | `AGENTS_HOST` / `AGENTS_PORT` | 建议 | Agent HTTP 服务，默认 `127.0.0.1:3001`；Web BFF 通过此地址调用 pipeline |
 | `AGENTS_SERVICE_URL` | 否 | 完整 Agent 服务 URL；Docker 内通常为 `http://agents:3001` |
 | `OLLAMA_HOST` / `OLLAMA_PORT` | 建议 | Ollama 地址；或用 `OLLAMA_BASE_URL` 直接覆盖 |
-| `CHROMA_HOST` / `CHROMA_PORT` | 否 | 本地 Chroma（`pnpm run chroma:server`）；或用 `CHROMA_SERVER_URL` 覆盖 |
+| `CHROMA_HOST` / `CHROMA_PORT` | 否 | 本地 Chroma；`pnpm dev` 会自动启动/等待；或用 `CHROMA_SERVER_URL` 覆盖 |
 | `DATABASE_URL` | 建议 | 默认 `file:./packages/db/prisma/dev.db`（相对仓库根目录 `.env`） |
 | `JWT_SECRET` | 生产必填 | 长度 ≥ 24；开发未设置时会使用占位密钥（控制台告警） |
 | `JWT_RENEW_BEFORE_EXPIRY_SEC` | 否 | 中间件刷新 Cookie 的提前量（秒），默认约 4 天 |
@@ -121,7 +126,14 @@ pnpm run dev
 | `OLLAMA_MODEL_EMBED` | 否 | 嵌入模型；不配则 `nomic-embed-text`（知识入库师 embed 用） |
 | `INDEX_EMBED_CONCURRENCY` | 否 | 入库 embed 同时进行的批次数，默认 `3`（上限 16） |
 | `INDEX_EMBED_BATCH_SIZE` | 否 | 每批 chunk 数，默认 `8`（上限 64） |
-| `CHROMA_SERVER_URL` | 否 | Chroma HTTP 客户端地址；不设则由 `CHROMA_HOST` + `CHROMA_PORT` 拼接（先 `pnpm run chroma:server`） |
+| `CHROMA_SERVER_URL` | 否 | Chroma HTTP 客户端地址；不设则由 `CHROMA_HOST` + `CHROMA_PORT` 拼接 |
+| `REDIS_ENABLED` / `REDIS_HOST` / `REDIS_PORT` | 否 | 启用 Redis；未设 `REDIS_URL` 且 `REDIS_ENABLED≠1` 时检索 cache 用进程内 memory |
+| `REDIS_URL` | 否 | 完整 Redis URL（优先于 HOST+PORT）；路径 `/N` 指定库号，如 `redis://127.0.0.1:6379/2` |
+| `REDIS_DB` | 否 | 逻辑库号，默认 `0`（URL 无 `/N` 时生效） |
+| `REDIS_KEY_PREFIX` | 否 | Redis key 根前缀，默认 `fambrain`（检索 cache / 限流 / 队列名派生） |
+| `DEV_REDIS_AUTO_START` | 否 | `pnpm dev` 时 Redis 不可达且端口空闲则 `docker compose up redis`，默认 `1` |
+| `RETRIEVAL_CACHE_DISABLED` / `RETRIEVAL_CACHE_TTL_MS` | 否 | 检索结果 cache（D5-2）；Redis 不可用时自动 memory fallback |
+| `PIPELINE_QUEUE_ENABLED` | 否 | `1` 时 `pnpm dev` 另起 BullMQ worker（web 入队接好后再开） |
 | `OLLAMA_STREAM_THINK` | 否 | 流式是否请求 thinking；不支持时服务端会自动降级重试 |
 | `FAMBRAIN_CORPUS_USER_ID` | 否 | 强制所有登录用户检索 `data/doc/users/<此 userId>/`；不设则按用户表 `corpusUserId` 或本人 id |
 | `DOC_PARSE_CONCURRENCY` | 否 | DocParser 批量解析并发，默认 `2` |

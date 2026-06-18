@@ -302,7 +302,7 @@
 | ID | 环节 | 现象 | 根因 | 对策（计划） | 状态 |
 |----|------|------|------|--------------|------|
 | D5-1 | FactChecker | 证据无命中时 UI 出现两次「核查证据…」+ 两次检索 | `routeAfterFactChecker` 打回逻辑 | 保留；用 D3-2 提高首轮命中率，减少打回 | 🔄 预期行为 |
-| D5-2 | 编排 / UX | 聊天记录里**同一句再问**，仍走检索+核查 | 每轮 `runPipelineStream` 状态重置；无 cache | 检索 cache + Intake 重复问（§2.2 表） | ⬜ **消坑 sprint D5-消坑** |
+| D5-2 | 编排 / UX | 聊天记录里**同一句再问**，仍走检索+核查 | 每轮 `runPipelineStream` 状态重置；Intake 未识别重复问 | 检索 cache ✅（`@fambrain/infra` + Redis）；Intake 重复问 ⬜ | 🔄 **部分**（cache 2026-06-18） |
 | D5-3 | 职责 | 期望 FactChecker 校验**终稿** vs hits | P0 仅在生成前审证据包 | D6 后或 +3 增加生成后 groundedness | ⬜ 路线图 |
 | D5-4 | SSE | 重复问时 step 闪过快，用户只注意到「整理回答」 | `fact_checker` 与 `analyst` 连续 | 可选：重复问跳过 fact_checker step 展示 | ⬜ 低优 |
 | D5-5 | Analyst + FC | **路径 B：** 同轮 FC 二次 force_pass 后 KM 仍空/弱 hits，Analyst LLM 编造终稿（**P0-12**，待验证） | FC `force_pass_after_retry` 只写 notes；Analyst 无空 hits 硬兜底 | 见 §2.2.1；验证后再改 `stream.ts` | ⬜ 待复现 |
@@ -405,7 +405,7 @@ Intake searchQuery: "个人简介 简历 姓名"
 | D3-9 | Analyst | 追问「那个项目呢」易 clarify 或答偏 | Analyst **不读**全量 DB 历史，仅 `userQuestion` + hits + **memoryBlock** | 传最近 2～4 轮；D8 已注入 Mem0/LangMem，Golden 待验证 | 🔄 sprint D3 |
 | D3-10 | RAG | G3「项目+技术」hits 有但偏 `aky-*` 模板 | 向量未优先 `experience/` / `personal/` | 路径加权或 Intake topics 引导；Golden G3 断言 path 分布 | ⬜ sprint D2 |
 | D3-11 | 文档 | 流程图/roadmap 仍写 LlamaIndex retriever、D3 未接 | 迁移后未同步 docs | 与代码对齐 LangChain；更新 A2 验收状态 | ⬜ sprint D4 |
-| D3-12 | 开发 | `pnpm dev` agents `EADDRINUSE :3001` | 旧进程占端口 | 文档写「先 kill 3001」；或 dev 脚本检测复用 | ⬜ sprint D4 |
+| D3-12 | 开发 | `pnpm dev` agents `EADDRINUSE :3001`；需多终端起 Chroma/Redis | 旧进程占端口；依赖分散 | `scripts/dev-all.sh` 一键起 Chroma + Redis + Web + Agents；端口冲突仍需手动 kill | 🔄 **部分缓解**（2026-06-18） |
 
 **典型日志（D3-2）：**
 
