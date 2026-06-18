@@ -33,7 +33,7 @@
 | Zod | 注册/会话 + 入库 metadata；**在线 Agent JSON schema**（Intake / KM / FactChecker / Analyst / Organizer） |
 | Pino | 知识入库师结构化日志 |
 | p-limit | 入库 embed 并发控制；**DocParser** 批量解析并发（`DOC_PARSE_CONCURRENCY`） |
-| Redis + BullMQ | `@fambrain/infra`：检索 cache（D5-2）、pipeline 异步队列（可选 `PIPELINE_QUEUE_ENABLED`） |
+| Redis + BullMQ | `@fambrain/infra`：检索 cache L2（D5-2）、pipeline 异步队列（可选 `PIPELINE_QUEUE_ENABLED`） |
 | Mem0 | 跨会话语义记忆检索，注入 Intake / Analyst prompt |
 | LangMem | 单会话摘要压缩（`data/memory/sessions/`），配合 DB 历史裁剪 Intake 上下文 |
 | MCP SDK | 实验：`experiment:mcp-vault` 只读列 vault |
@@ -132,7 +132,7 @@ pnpm run dev
 | `REDIS_DB` | 否 | 逻辑库号，默认 `0`（URL 无 `/N` 时生效） |
 | `REDIS_KEY_PREFIX` | 否 | Redis key 根前缀，默认 `fambrain`（检索 cache / 限流 / 队列名派生） |
 | `DEV_REDIS_AUTO_START` | 否 | `pnpm dev` 时 Redis 不可达且端口空闲则 `docker compose up redis`，默认 `1` |
-| `RETRIEVAL_CACHE_DISABLED` / `RETRIEVAL_CACHE_TTL_MS` | 否 | 检索结果 cache（D5-2）；Redis 不可用时自动 memory fallback |
+| `RETRIEVAL_CACHE_DISABLED` / `RETRIEVAL_CACHE_TTL_MS` | 否 | L2 检索结果 cache（D5-2）；Redis 不可用时自动 memory fallback；L1 同问短路见 `intake-repeat-guard.ts` |
 | `PIPELINE_QUEUE_ENABLED` | 否 | `1` 时 `pnpm dev` 另起 BullMQ worker（web 入队接好后再开） |
 | `OLLAMA_STREAM_THINK` | 否 | 流式是否请求 thinking；不支持时服务端会自动降级重试 |
 | `FAMBRAIN_CORPUS_USER_ID` | 否 | 强制所有登录用户检索 `data/doc/users/<此 userId>/`；不设则按用户表 `corpusUserId` 或本人 id |
@@ -187,10 +187,11 @@ pnpm run dev
 | `recallSparseRetrieve` | `packages/corpus/src/recall-keyword-retrieve.ts` | BM25 sparse 检索（HY-01） |
 | `hybridRecall` / `fuseRrf` | `knowledge-manager/hybrid-recall.ts`、`fusion-rrf.ts` | 并行 Hybrid + RRF（HY-02～03） |
 | `@fambrain/infra` | `packages/infra/` | Redis 连接、检索 cache、BullMQ 队列、限流 |
-| `verify:retrieval-cache` | `apps/agents/scripts/` | D5-2 cache normalize + memory/Redis |
+| `verify:retrieval-cache` | `apps/agents/scripts/` | D5-2 L2 cache normalize + memory/Redis |
+| `verify:intake-repeat-smoke` | `apps/agents/scripts/` | D5-2 L1 同问短路冒烟（无 Ollama） |
 | `verify:recall-compare` | `apps/agents/scripts/` | HY-07 三问 vector/sparse/RRF（需 Chroma） |
 | `verify:confidence-tier` | `apps/agents/scripts/` | Wave D：assessConfidence 单测 + KM live tier |
-| `verify:intake-coreference` | `apps/agents/scripts/` | Wave C QU-02：Intake 多轮指代 live 抽检 |
+| `verify:intake-coreference` | `apps/agents/scripts/` | Wave C QU-02 + D5-2 repeat guard 单测 |
 | `eval:run` | `apps/agents/scripts/eval/` | Eval MVP：golden.json + 四指标报告（含 G5b 指代） |
 | `golden:regression` | `apps/agents/scripts/` | G1～G5 全链路回归（多遍稳定性） |
 | `indexAllCorpora` | `agentflow/agents/offline/knowledge-indexer/` | 离线 corpus → Chroma |

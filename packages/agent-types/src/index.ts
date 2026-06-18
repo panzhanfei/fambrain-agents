@@ -55,6 +55,8 @@ export type AgentStreamEvent = {
 };
 export type AgentPipelineResult = {
     answer: string;
+    /** D5-2：同会话字面重复问，复用 history 答 */
+    repeatQuestionHit?: boolean;
     retrievalCacheHit?: boolean;
     timing?: PipelineTiming;
 };

@@ -5,4 +5,5 @@ export {
     hasCoreferenceContext,
     isVagueReferentialQuestion,
 } from "./intake-coreference-guard";
+export { findRepeatAnswerInHistory } from "./intake-repeat-guard";
 export { intakeRoutingDecisionSchema, parseIntakeRoutingDecision, } from "./schema";

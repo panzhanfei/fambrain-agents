@@ -307,8 +307,8 @@
 | **Intake** | 编号「1～4」可能被当成**新检索任务**，未绑定为**同一 composite profile**；`searchQuery` / `queryType` 与首轮不一致 | 子问 2 仅触发「公司」子集检索，未继承首轮 `subTasks` |
 | **KM** | 与 §2.3 相同：`MAX_HITS` + 向量 topK → **列举型/多公司**仍只拉回 2 个 experience chunk | 子问形态下 Intake 的 `topics` 可能偏 `project` 而非 `enumeration` |
 | **Analyst** | 当轮 hits 仅含奥卡云、奖多多相关 chunk 时，**正确但保守**地只答 2 家；**未读**本会话首轮 assistant 已 grounded 的 4 家列表 | 与 R6-2 类似：缺「同会话 grounded 不可降级」 |
-| **D5-2 / cache** | 第 3 轮未命中「同 composite 问」cache（问法已变）；仍全量 KM+FC | 重复综合问（轮 2）略简化为「近两年」焦点，属预期外部分裁剪 |
-| **可观测** | 本轮 `latencyMs≈42600`，非 Intake 重复问快路径 | 说明消坑 D5-2（Intake 同句复用）**未覆盖「换形子问」** |
+| **D5-2 / cache** | 第 3 轮未命中「同 composite 问」cache（问法已变）；仍全量 KM+FC | **L1 同问短路（2026-06-18）** 已覆盖「字面相同综合问重复」；换形子问仍走全链路 |
+| **可观测** | 本轮 `latencyMs≈42600`，非 Intake 重复问快路径 | L1 命中时仅 `intake` step、`repeatQuestionHit=true`、~ms 级 |
 
 **链路（通俗）：** 第一轮问得宽，检索凑齐 4 段经历 → 答对 → 用户改成四条小题 → 系统每题重新找书 → 第二题「哪些公司」只找到 2 本书 → 分析师只念 2 家，**忘了第一轮已经列过 4 家**。
 
@@ -338,14 +338,14 @@
 
 **同轮第二次 FactChecker：** 仅当第一次 `passed=false` 且 `retryCount < 1` → 改写 `searchQuery` 再检索 → **必须再审新一轮 hits**（不是 bug）。
 
-**新一轮用户消息（即使用户字面上重复上一问）：** 整图重跑；`history` 只帮 Intake 理解指代，**不会**跳过 KM / FactChecker。
+**新一轮用户消息（即使用户字面上重复上一问）：** 默认整图重跑；**L1 repeat guard**（`stream.ts` 入口）若 `normalize(userQuestion)` 与本会话 history 中某轮 user 相同且其后有 assistant 答 → **短路**，只 emit `intake` step 并流式复用上轮答案（`repeatQuestionHit`）。否则若 Intake 产出相同 `searchQuery` + `queryType` → **L2 检索 cache** 跳过 KM 向量检索，仍走 FC / Analyst。
 
 #### 典型误解 vs 实际
 
 | 误解 | 实际 |
 |------|------|
 | 第一次 FactChecker 后问题应被「解决」 | 同轮只决定**本轮**证据够不够；打回 = 再检索，不是写入会话记忆 |
-| 同句再问应跳过核查 | P0 无 query cache / 重复问识别 → 每轮检索类问题仍会核查 |
+| 同句再问应跳过核查 | **L1** 同问短路直接复用答案；**L2** 检索 cache 命中时 FC 规则快检（`cache_hit_skip_llm`） |
 | FactChecker 应避免重复读原文 | 审的是**当轮** `hits`；跨轮重复靠 cache，不靠 FactChecker |
 
 #### 推荐对策组合（后续集中实现 · 优先级）
@@ -353,8 +353,8 @@
 | 优先级 | 对策 | 解决哪类「第二次」 | 改动面 |
 |--------|------|-------------------|--------|
 | P0 必留 | 检索后 FactChecker + 最多 1 次打回再检索 | 同轮证据不足 | 已实现 |
-| **+1** | **检索结果缓存** `corpusUserId + normalizedSearchQuery`，TTL 5～30min；cache hit 时 FactChecker 规则快检或跳过 LLM | 跨轮同句/同义再问 | `retrieveKnowledge` / `retrievalNode` |
-| **+2** | **Intake 重复问识别**：归一化后与本会话上一轮 user 相同 + 上轮为检索回答 → `needsRetrieval: false`，Analyst 复用 history 简答（附「与上次一致」） | 跨轮 verbatim 重复 | `intake-coordinator` prompt + `routeAfterIntake` |
+| **+1** | **检索结果缓存（L2）** `corpusUserId + queryType + normalizedSearchQuery`，TTL 可配；cache hit 时 FactChecker 规则快检 | 跨轮同义再问（Intake searchQuery 稳定） | `retrievalNode` / `@fambrain/infra` ✅ |
+| **+2** | **Intake 同问短路（L1）**：`normalize(userQuestion)` 与本会话 history 相同 → 复用上轮 assistant 答，跳过 KM/FC/Analyst | 跨轮 verbatim 重复 | `intake-repeat-guard.ts` + `stream.ts` ✅ |
 | +3 | 生成后 citation 规则校验（answer vs hits） | 幻觉终稿 | Analyst 后节点 / pitfalls #9 |
 | +4 | 向量 rerank，降低 FactChecker 打回率 | 同轮少出现 2 次 FactChecker | KM |
 
@@ -365,13 +365,13 @@
 | ID | 环节 | 现象 | 根因 | 对策（计划） | 状态 |
 |----|------|------|------|--------------|------|
 | D5-1 | FactChecker | 证据无命中时 UI 出现两次「核查证据…」+ 两次检索 | `routeAfterFactChecker` 打回逻辑 | 保留；用 D3-2 提高首轮命中率，减少打回 | 🔄 预期行为 |
-| D5-2 | 编排 / UX | 聊天记录里**同一句再问**，仍走检索+核查 | 每轮 `runPipelineStream` 状态重置；Intake 未识别重复问 | 检索 cache ✅（`@fambrain/infra` + Redis）；Intake 重复问 ⬜ | 🔄 **部分**（cache 2026-06-18） |
+| D5-2 | 编排 / UX | 聊天记录里**同一句再问**，仍走检索+核查 | 每轮 `runPipelineStream` 状态重置；Intake 非确定性改 searchQuery | **L1** 同问短路 ✅ + **L2** 检索 cache ✅（`@fambrain/infra` + Redis） | ✅ **已解决**（L1 2026-06-18；L2 2026-06-18） |
 | D5-3 | 职责 | 期望 FactChecker 校验**终稿** vs hits | P0 仅在生成前审证据包 | D6 后或 +3 增加生成后 groundedness | ⬜ 路线图 |
 | D5-4 | SSE | 重复问时 step 闪过快，用户只注意到「整理回答」 | `fact_checker` 与 `analyst` 连续 | 可选：重复问跳过 fact_checker step 展示 | ⬜ 低优 |
 | D5-5 | Analyst + FC | **路径 B：** 同轮 FC 二次 force_pass 后 KM 仍空/弱 hits，Analyst LLM 编造终稿（**P0-12**，待验证） | FC `force_pass_after_retry` 只写 notes；Analyst 无空 hits 硬兜底 | 见 §2.2.1；验证后再改 `stream.ts` | ⬜ 待复现 |
 | D5-6 | FC + 编排 | **路径 A：** KM₁ 有 hits，FC meta `refinedSearchQuery` 导致 KM₂ 变差（**P0-17**） | LLM refined + 编排无条件覆盖 searchQuery | 见 §2.2.2：`refined-search-query.ts` + `personal_skip_llm` + `mergeRetrySearchQuery` | ✅ **已解决**（2026-06） |
 
-**验证脚本：** `pnpm run verify:fact-checker`、`pnpm run golden:regression`（`apps/agents/package.json`）。
+**验证脚本：** `pnpm run verify:fact-checker`、`pnpm run verify:intake-repeat-smoke`、`pnpm run verify:retrieval-cache`、`pnpm run golden:regression`（`apps/agents/package.json`）。
 
 #### 2.2.1 路径 B — Analyst 空 hits 幻觉（P0-12 · 待复现验证）
 
@@ -603,7 +603,7 @@ pnpm run verify:fact-checker
 - [x] D3-2 **KM 规则兜底**（`ensureNonEmptyHits`：12 candidates → hits 必 ≥1）← 2026-06
 - [x] 踩坑表 **P0-4 / D3-3 / D3-5 / P0-17 / D5-6** 已标 ✅（§2.1.1、§2.2.2）
 - [ ] P0-6 Analyst 有 hits 仍 insufficient ← 待回归
-- [ ] D5-2：同会话连续两问 G4 原文，第二次不再全量向量检索（cache 或 Intake 复用）← §2.2
+- [x] D5-2：同会话连续两问 G4 原文，第二次 L2 cache 或 L1 同问短路 ← §2.2（2026-06-18）
 - [ ] **P0-12 / D5-5**：FC 二次放行且 `hits=[]` 时，Analyst 不得编造（须 fallback 或 `insufficientEvidence`）← §2.2.1
 - [ ] **P0-13～P0-15**（Golden Day 2 实录）：无乱称呼、无赵一/陈明、corpus/Mem0 不矛盾 ← §2.5
 - [ ] **P0-16**（Web 联调）：对话 A 记 QQ → 对话 B 问 QQ 可召回 ← §2.6
@@ -616,7 +616,7 @@ pnpm run verify:fact-checker
 ## 四、调试 checklist（每轮对话 · P0 + D3 + D5）
 
 - [ ] 若出现**两次** `fact_checker` step：查 FactChecker 第一次是否 `passed=false`、是否打回再检索（D5-1，常伴 `retryCount: 1`）← §2.2
-- [ ] 若**新一条消息**与上轮同句仍全链路：属 D5-2 未消坑，非 FactChecker 失效
+- [ ] 若**新一条消息**与上轮同句仍全链路：查 L1 `repeatQuestionHit` 是否为 false（history 未含上轮 assistant 答，或 normalize 不一致）← §2.2
 
 - [ ] Intake 原始 JSON 是否合理（`intent` / `searchQuery` / `needsRetrieval`）
 - [ ] KM 预扫 `paths` 是否有内容；**`hits` 是否非空（若 `candidateCount > 0`）** ← D3-2

@@ -7,6 +7,7 @@ import type { DbChatTurn } from "@fambrain/agent-types";
 import {
     applyIntakeCoreferenceGuard,
     completeIntakeCoordinator,
+    findRepeatAnswerInHistory,
     hasCoreferenceContext,
     isVagueReferentialQuestion,
     type IntakeRoutingDecision,
@@ -73,6 +74,41 @@ assertSync("guard：有上文实体 → 保留 retrieve", () => {
     if (!out.needsRetrieval) {
         throw new Error("有上文应保留 needsRetrieval");
     }
+});
+
+console.log("\n— repeat guard 单测 —");
+
+assertSync("repeat：同句再问命中 history 答", () => {
+    const q = "我叫什么，我做过什么项目？";
+    const history: DbChatTurn[] = [
+        { role: "user", content: q },
+        { role: "assistant", content: "你是潘展飞，做过城管平台等项目。" },
+        { role: "user", content: q },
+    ];
+    const hit = findRepeatAnswerInHistory(history, q);
+    if (!hit?.includes("潘展飞")) {
+        throw new Error(`应命中上轮答: ${hit ?? "null"}`);
+    }
+});
+
+assertSync("repeat：标点差异仍命中", () => {
+    const history: DbChatTurn[] = [
+        { role: "user", content: "城管平台用了什么技术" },
+        { role: "assistant", content: "React + TypeScript" },
+        { role: "user", content: "城管平台用了什么技术？" },
+    ];
+    const hit = findRepeatAnswerInHistory(history, "城管平台用了什么技术？");
+    if (!hit?.includes("React")) {
+        throw new Error(`标点归一化应命中: ${hit ?? "null"}`);
+    }
+});
+
+assertSync("repeat：首次提问不命中", () => {
+    const hit = findRepeatAnswerInHistory(
+        [{ role: "user", content: "你好" }],
+        "你好"
+    );
+    if (hit) throw new Error("首次问不应命中");
 });
 
 await bootstrapAgentsRuntime();

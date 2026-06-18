@@ -5,6 +5,7 @@ import { buildSummarizeSourceText, formatSummaryAsAnswer, summarizeContent, } fr
 import { completeFactCheck } from "@/agentflow/agents/online/fact-checker";
 import { completeIntakeCoordinator } from "@/agentflow/agents/online/intake-coordinator";
 import { applyIntakeCoreferenceGuard } from "@/agentflow/agents/online/intake-coordinator/intake-coreference-guard";
+import { findRepeatAnswerInHistory } from "@/agentflow/agents/online/intake-coordinator/intake-repeat-guard";
 import { streamAnalyzeInformation } from "@/agentflow/agents/online/information-analyst";
 import { retrieveKnowledge } from "@/agentflow/agents/online/knowledge-manager";
 import {
@@ -51,6 +52,17 @@ const routeAfterFactChecker = (state: PipelineGraphState): "retrieval" | "conten
     return "contentOrganizer";
 };
 const intakeNode = async (state: PipelineGraphState): Promise<Partial<PipelineGraphState>> => {
+    const repeatAnswer = findRepeatAnswerInHistory(
+        state.intakeHistory,
+        state.userQuestion
+    );
+    if (repeatAnswer) {
+        return {
+            answer: repeatAnswer,
+            exitEarly: true,
+            repeatQuestionHit: true,
+        };
+    }
     try {
         const intakeRaw = await completeIntakeCoordinator(state.intakeHistory, {
             memoryBlock: state.memoryBlock,

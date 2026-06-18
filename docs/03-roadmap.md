@@ -148,10 +148,10 @@ pnpm run golden:regression   # G1～G5 全链路标准回归
 | 交付 | 改动面 | 通过标准 |
 |------|--------|----------|
 | **检索结果 cache** | `@fambrain/infra` `retrievalNode`；key = `{REDIS_KEY_PREFIX}:retrieval:v1:{corpusUserId}:{queryType}:{query}`；TTL 可配 | 同会话连续两问 G4 原文，第二次不全量走向量检索 |
-| **Intake 重复问识别** | `intake-coordinator` prompt + `routeAfterIntake` | 归一化后与上一轮 user 相同 + 上轮为检索回答 → 复用或简答 |
+| **Intake 重复问识别** | `intake-repeat-guard.ts`；`stream.ts` 入口 + `intakeNode` 开头 | 归一化 user 问与本会话 history 相同 → 复用上轮 assistant 答，跳过 KM/FC/Analyst |
 | **FactChecker cache hit** | cache hit 时规则快检（`cache_hit_skip_llm`） | 日志 / SSE 可见 `retrievalCacheHit` |
 
-**状态（2026-06-18）：** ✅ 检索 cache 已接入 pipeline（Redis db=`REDIS_DB` 或 URL `/N`；未配 Redis 时 memory fallback）；✅ FC cache hit 快检；✅ `verify:retrieval-cache` + eval `CACHE-G4-repeat` **1/1**；⬜ Intake 同句复用待做
+**状态（2026-06-18）：** ✅ 检索 cache（L2）已接入 pipeline（Redis db=`REDIS_DB` 或 URL `/N`；未配 Redis 时 memory fallback）；✅ FC cache hit 快检；✅ `verify:retrieval-cache` + eval `CACHE-G4-repeat` **1/1**；✅ **Intake 同问短路（L1）** — `findRepeatAnswerInHistory` + `repeatQuestionHit`；✅ `verify:intake-repeat-smoke` / `verify:intake-coreference` repeat 单测
 
 **本地开发（同日）：** ✅ `scripts/dev-all.sh` — `pnpm dev` 自动起/等 Chroma、Redis（`DEV_REDIS_AUTO_START=1` → `docker compose up redis`）、Web、Agents；`REDIS_DB` / `REDIS_KEY_PREFIX` 环境变量化
 
@@ -235,12 +235,12 @@ EVAL_WRITE_REPORT=1 pnpm --filter @fambrain/agents run eval:run  # 写入 data/e
 - [ ] 离线 Agent 复盘笔记（KnowledgeIndexer + DocParser + corpus 包）
 - [ ] Golden **G1～G5 ≥4 条稳定通过**（脚本可重复跑）
 - [ ] **D3-2 不可复现**（12 candidates → hits ≥1）
-- [ ] **D5-2**：同会话 G4 连续两问，第二次命中 cache 或 Intake 复用（cache 层 ✅；Intake 复用 ⬜）
+- [x] **D5-2**：同会话 G4 连续两问，第二次命中 L2 cache 或 L1 Intake 复用（两层 ✅ 2026-06-18）
 - [ ] **R6-1**：列举型「哪几家公司」→ 4 家且同句再问一致
 - [x] **eval MVP**：`run-eval` 输出报告（通过率 + 指标 4 项）— 2026-06-17 12/12
 - [ ] **SLO 日志**：每轮至少含 step 耗时；可选 token（**step 耗时 + UI 展示 2026-06-18** ✅ 部分）
-- [ ] **R6-3**：同会话综合履历问 → 编号子问，公司数不得从 4 降为 2 ← [坑点 §2.7](./04-pitfalls.md#27-同会话综合履历问-vs-编号子问--答案退化2026-06-18--web-联调)
-- [ ] 坑点表与路线图状态已更新（D5-2 cache / dev 一键 / **R6-3** / SLO 耗时 **2026-06-18** 已同步）
+- [ ] **R6-3**：同会话综合履历问 → **换形**编号子问，公司数不得从 4 降为 2（**同句重复综合问**已由 L1 消坑 ← [坑点 §2.7](./04-pitfalls.md#27-同会话综合履历问-vs-编号子问--答案退化2026-06-18--web-联调)）
+- [x] 坑点表与路线图状态已更新（D5-2 L1+L2 / dev 一键 / **R6-3 部分** / SLO 耗时 **2026-06-18**）
 - [ ] 第 11 天总复盘文档或会话纪要归档
 
 ### 每日建议节奏

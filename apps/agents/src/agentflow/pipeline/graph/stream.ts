@@ -5,6 +5,7 @@ import type { AgentPipelineContext, AgentPipelineResult, AgentStreamEvent, DbCha
 import { getCompiledPipelineGraph } from "./compile";
 import { PipelineTimingTracker } from "./pipeline-timing.ts";
 import type { PipelineGraphState } from "./state";
+import { findRepeatAnswerInHistory } from "@/agentflow/agents/online/intake-coordinator/intake-repeat-guard";
 import {
   persistPipelineMemory,
   preparePipelineMemory,
@@ -43,6 +44,7 @@ const buildInitialState = (history: DbChatTurn[], context: AgentPipelineContext,
         memoryBlock,
         intakeHistory,
         confidenceTier: null,
+        repeatQuestionHit: false,
         retrievalCacheHit: false,
     };
 };
@@ -70,6 +72,7 @@ const summarizePipelineOut = (state: PipelineGraphState, answer: string, timing:
     checkerPassed: state.checkerPassed,
     retryCount: state.retryCount,
     confidenceTier: state.confidenceTier,
+    repeatQuestionHit: state.repeatQuestionHit,
     retrievalCacheHit: state.retrievalCacheHit,
     error: state.error,
     hitPaths: state.hits.map((h) => h.path),
@@ -100,6 +103,36 @@ export async function* runPipelineStream(history: DbChatTurn[], context: AgentPi
         displayName: context.displayName,
         conversationId: context.conversationId,
     });
+
+    const repeatAnswer = findRepeatAnswerInHistory(history, userQuestion);
+    if (repeatAnswer) {
+        timing.markNodeStart("intake");
+        yield { type: "step", name: "intake", status: "running" };
+        timing.markFirstToken();
+        const intakeMs = timing.markNodeEnd("intake");
+        yield {
+            type: "step",
+            name: "intake",
+            status: "done",
+            ...(intakeMs !== undefined ? { durationMs: intakeMs } : {}),
+        };
+        const pipelineTiming = yield* finishPipeline(timing);
+        const repeatState: PipelineGraphState = {
+            ...buildInitialState(history, context, userQuestion, null, history),
+            answer: repeatAnswer,
+            exitEarly: true,
+            repeatQuestionHit: true,
+        };
+        logAgentOut("Pipeline", "出去", summarizePipelineOut(repeatState, repeatAnswer, pipelineTiming));
+        yield* emitAssistant(repeatAnswer);
+        return {
+            answer: repeatAnswer,
+            repeatQuestionHit: true,
+            retrievalCacheHit: false,
+            timing: pipelineTiming,
+        };
+    }
+
     const memory = await preparePipelineMemory({
         context,
         history,
@@ -175,6 +208,7 @@ export async function* runPipelineStream(history: DbChatTurn[], context: AgentPi
                 yield* emitAssistant(answer);
                 return {
                     answer,
+                    repeatQuestionHit: finalState.repeatQuestionHit,
                     retrievalCacheHit: finalState.retrievalCacheHit,
                     timing: pipelineTiming,
                 };
@@ -258,14 +292,17 @@ export async function* runPipelineStream(history: DbChatTurn[], context: AgentPi
         const pipelineTiming = yield* finishPipeline(timing);
         logAgentOut("Pipeline", "出去", summarizePipelineOut(finalState, finalState.answer, pipelineTiming));
         yield* emitAssistant(finalState.answer);
-        await persistPipelineMemory({
-            context,
-            history,
-            userQuestion,
-            answer: finalState.answer,
-        }).catch(() => undefined);
+        if (!finalState.repeatQuestionHit) {
+            await persistPipelineMemory({
+                context,
+                history,
+                userQuestion,
+                answer: finalState.answer,
+            }).catch(() => undefined);
+        }
         return {
             answer: finalState.answer,
+            repeatQuestionHit: finalState.repeatQuestionHit,
             retrievalCacheHit: finalState.retrievalCacheHit,
             timing: pipelineTiming,
         };
@@ -286,6 +323,7 @@ export async function* runPipelineStream(history: DbChatTurn[], context: AgentPi
     logAgentOut("Pipeline", "出去", summarizePipelineOut(finalState, answer, pipelineTiming));
     return {
         answer,
+        repeatQuestionHit: finalState.repeatQuestionHit,
         retrievalCacheHit: finalState.retrievalCacheHit,
         timing: pipelineTiming,
     };

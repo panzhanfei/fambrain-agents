@@ -38,7 +38,9 @@ export const PipelineGraphAnnotation = Annotation.Root({
     memoryBlock: Annotation<string | null>,
     /** Intake 使用的截断历史（LangMem 保留最近 N 轮） */
     intakeHistory: Annotation<DbChatTurn[]>,
-    /** D5-2：本轮 retrieval 是否命中 cache */
+    /** D5-2：同会话字面重复问，Intake 入口复用 history 答 */
+    repeatQuestionHit: Annotation<boolean>,
+    /** D5-2：本轮 retrieval 是否命中 KM cache */
     retrievalCacheHit: Annotation<boolean>,
 });
 export type PipelineGraphState = typeof PipelineGraphAnnotation.State;

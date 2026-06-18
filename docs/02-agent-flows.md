@@ -14,7 +14,7 @@
 | `ContentOrganizer` | 内容整理师 | **核查通过后**对 `hits` 做 Zod 规范化与 path 去重，再交给分析师 |
 | `InformationAnalyst` | 信息分析师 | 对整理后的检索结果分析、归纳并回答 |
 
-**里程碑：** 用户提问 → 意图识别 → 检索 → **证据核查** → **内容整理** → 分析 → 回答。（LangGraph 编排 **已实现**；KM：**向量 + 关键词 fallback**；FactChecker / ContentOrganizer：**D5/D6 已接入**；**Mem0/LangMem** 在 Intake/Analyst 前注入记忆块；跨轮 **检索 cache** 见 [坑点 §2.2](./04-pitfalls.md)。）
+**里程碑：** 用户提问 → 意图识别 → 检索 → **证据核查** → **内容整理** → 分析 → 回答。（LangGraph 编排 **已实现**；KM：**向量 + 关键词 fallback**；FactChecker / ContentOrganizer：**D5/D6 已接入**；**Mem0/LangMem** 在 Intake/Analyst 前注入记忆块；跨轮 **两层 cache**（L1 同问短路 + L2 检索 cache）见 [坑点 §2.2](./04-pitfalls.md)。）
 
 ## 全链路总览（离线入库 + 在线对话）
 
@@ -39,11 +39,13 @@ flowchart TB
   end
 
   subgraph online ["在线：用户聊天 POST .../messages"]
-    U[用户消息] --> MEM["preparePipelineMemory<br/>Mem0 + LangMem"]
+    U[用户消息] --> REP{L1 同问短路<br/>repeat guard}
+    REP -->|history 命中| OUT[assistant 流式输出]
+    REP -->|miss| MEM["preparePipelineMemory<br/>Mem0 + LangMem"]
     MEM --> IC[IntakeCoordinator<br/>入口接线员]
     IC --> P{parseIntakeDecision<br/>LangGraph 路由}
     P -->|clarify / chitchat| R1[briefReply / 澄清]
-    P -->|needsRetrieval| KM[KnowledgeManager<br/>知识管理员]
+    P -->|needsRetrieval| KM[KnowledgeManager<br/>L2 检索 cache]
     KM --> FC[FactChecker<br/>事实核查员]
     FC -->|passed 或已重试| CO[ContentOrganizer<br/>内容整理师]
     FC -->|未通过且 retry&lt;1| KM
@@ -63,6 +65,15 @@ flowchart TB
 入口接线员只输出 **JSON 路由决策**；**进哪个节点由 LangGraph 查表决定**（`IntakeRoutingDecision` 见 `agentflow/agents/online/intake-coordinator/prompt.ts`），不是模型在回复里写「下一个 Agent 名字」。
 
 实现：`apps/agents/src/agentflow/pipeline/graph/compile.ts` · 流式入口 `pipeline/graph/stream.ts` → `runPipelineStream()`。
+
+**D5-2 两层 cache（2026-06-18）：**
+
+| 层 | 位置 | Key | 命中后 |
+|----|------|-----|--------|
+| **L1 同问短路** | `stream.ts` 入口 + `intakeNode` 开头 | `normalize(userQuestion)`，在本会话 `history` 找相同 user 问 + 已有 assistant 答 | 只 emit `intake` step，**直接流式输出上轮答案**（`repeatQuestionHit`） |
+| **L2 检索 cache** | `retrievalNode` | `{prefix}:retrieval:v1:{corpusUserId}:{queryType}:{normalize(searchQuery)}` | 跳过 KM 向量检索；仍走 FC / Organizer / Analyst（`retrievalCacheHit`） |
+
+L1 解决 Intake 非确定性导致「同句再问 searchQuery 变、公司数降级」；L2 解决问法不同但 Intake 产出相同 `searchQuery` 的场景（如 eval `CACHE-G4-repeat`）。
 
 ```mermaid
 flowchart TD
@@ -208,7 +219,7 @@ flowchart TD
 | 4 | 兜底 | LLM 失败走规则；重试后强制 `passed=true` | `check-helpers.ts` | `buildRuleBasedFactCheck()` |
 | 5 | 编排 | `checkerPassed` → contentOrganizer 或 retrieval | `pipeline/graph/compile.ts` | `factCheckerNode()`, `routeAfterFactChecker()` |
 
-**验证：** `pnpm run verify:fact-checker`（规则）、`pnpm run verify:fact-checker:pipeline`（轻量冒烟）、`pnpm run golden:regression`（G1～G5 标准回归）。跨轮重复问仍全量检索见 [坑点 §2.2](./04-pitfalls.md)。
+**验证：** `pnpm run verify:fact-checker`（规则）、`pnpm run verify:fact-checker:pipeline`（轻量冒烟）、`pnpm run golden:regression`（G1～G5 标准回归）。同句再问走 L1 repeat guard 或 L2 检索 cache，见 [坑点 §2.2](./04-pitfalls.md)。
 
 ### 5. InformationAnalyst — 信息分析师 ✅
 
