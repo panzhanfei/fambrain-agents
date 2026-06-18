@@ -2,7 +2,7 @@
 
 基于 **Next.js（App Router）** 的家庭协作型对话应用：注册登录、成员审核、会话持久化，以及 **P0 多 Agent 聊天闭环**（意图路由 → 知识库检索 → 归纳回答，SSE 流式）。
 
-**当前进度：** 离线入库 ✅；在线 LangGraph（Intake → KM → **FactChecker** → **ContentOrganizer** → Analyst；摘要分支 **ContentSummarizer**）✅；**D5-2 检索 cache**（`@fambrain/infra` + Redis env 化）✅；**`pnpm dev` 一键起 Chroma/Redis/Web/Agents** ✅。**下一步：[质量冲刺 10 日计划](docs/03-roadmap.md#质量冲刺--10-日计划2026-06)**（Intake 重复问 → eval → SLO → 总复盘）；消坑见 [坑点 §三](docs/04-pitfalls.md#三集中消坑计划核心-agent-完成后--并入-10-日质量冲刺)。详见 [路线图](docs/03-roadmap.md) · [流程图](docs/02-agent-flows.md) · [实验脚本](experiments/README.md)。
+**当前进度：** 离线入库 ✅；在线 LangGraph ✅；**D5-2 检索 cache** + **`pnpm dev` 一键启动** ✅；**SLO 耗时**（pipeline 各节点 + 聊天 UI 展示）🔄；**R6-3** 综合履历问退化已记入 [坑点 §2.7](docs/04-pitfalls.md#27-同会话综合履历问-vs-编号子问--答案退化2026-06-18--web-联调)。**下一步：** Intake 重复问 / R6 枚举 / token 记录。详见 [路线图](docs/03-roadmap.md) · [坑点](docs/04-pitfalls.md)。
 
 ## 快速开始
 

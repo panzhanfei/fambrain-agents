@@ -211,12 +211,12 @@ EVAL_WRITE_REPORT=1 pnpm --filter @fambrain/agents run eval:run  # 写入 data/e
 
 ### 第 10 天 — SLO + 记录（#18 剩余）
 
-| 项 | 做法 | 优先级 |
-|----|------|--------|
-| **逐步耗时** | Pipeline 每节点记录 `latencyMs`（intake / retrieval / fact_checker / analyst） | P0 |
-| **Token 估算** | Analyst 流式结束后记录 prompt/ completion 长度或 Ollama 返回 | P1 |
-| **结构化日志** | 每轮一条 JSON：`conversationId`、`steps[]`、`cacheHit`、`issueCodes` | P0 |
-| **前端** | 引用列表 UI、完整调试面板 | P2，时间不够只打日志 |
+| 项 | 做法 | 优先级 | 状态 |
+|----|------|--------|------|
+| **逐步耗时** | Pipeline 每节点记录 `latencyMs`（intake / retrieval / fact_checker / analyst） | P0 | 🔄 **2026-06-18** — `pipeline_timing` SSE + `step.done.durationMs` + 聊天 UI |
+| **Token 估算** | Analyst 流式结束后记录 prompt/ completion 长度或 Ollama 返回 | P1 | ⬜ |
+| **结构化日志** | 每轮一条 JSON：`conversationId`、`steps[]`、`cacheHit`、`issueCodes` | P0 | 🔄 `agent-log` Pipeline 出参含 `timing` |
+| **前端** | 引用列表 UI、完整调试面板 | P2 | 🔄 助手消息下「用时 / 首字 / 全链路」 |
 
 **坑点：** [#18 推理黑盒](./04-pitfalls.md) 待做项。
 
@@ -238,8 +238,9 @@ EVAL_WRITE_REPORT=1 pnpm --filter @fambrain/agents run eval:run  # 写入 data/e
 - [ ] **D5-2**：同会话 G4 连续两问，第二次命中 cache 或 Intake 复用（cache 层 ✅；Intake 复用 ⬜）
 - [ ] **R6-1**：列举型「哪几家公司」→ 4 家且同句再问一致
 - [x] **eval MVP**：`run-eval` 输出报告（通过率 + 指标 4 项）— 2026-06-17 12/12
-- [ ] **SLO 日志**：每轮至少含 step 耗时；可选 token
-- [ ] 坑点表与路线图状态已更新（D5-2 cache / dev 一键启动 **2026-06-18** 已同步）
+- [ ] **SLO 日志**：每轮至少含 step 耗时；可选 token（**step 耗时 + UI 展示 2026-06-18** ✅ 部分）
+- [ ] **R6-3**：同会话综合履历问 → 编号子问，公司数不得从 4 降为 2 ← [坑点 §2.7](./04-pitfalls.md#27-同会话综合履历问-vs-编号子问--答案退化2026-06-18--web-联调)
+- [ ] 坑点表与路线图状态已更新（D5-2 cache / dev 一键 / **R6-3** / SLO 耗时 **2026-06-18** 已同步）
 - [ ] 第 11 天总复盘文档或会话纪要归档
 
 ### 每日建议节奏

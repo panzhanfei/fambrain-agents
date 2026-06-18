@@ -1,14 +1,14 @@
 import { ensureAgentsRuntime } from "@/config";
 import { buildLangGraphRunConfig, } from "@fambrain/agent-config/langsmith";
 import { logAgentIn, logAgentOut } from "@fambrain/agent-shared/agent-log";
-import type { AgentPipelineContext, AgentPipelineResult, AgentStreamEvent, DbChatTurn, } from "@fambrain/agent-types";
+import type { AgentPipelineContext, AgentPipelineResult, AgentStreamEvent, DbChatTurn, PipelineStepName, PipelineTiming, } from "@fambrain/agent-types";
 import { getCompiledPipelineGraph } from "./compile";
+import { PipelineTimingTracker } from "./pipeline-timing.ts";
 import type { PipelineGraphState } from "./state";
 import {
   persistPipelineMemory,
   preparePipelineMemory,
 } from "@fambrain/agent-memory";
-type PipelineStepName = "intake" | "retrieval" | "fact_checker" | "content_summarizer" | "content_organizer" | "analyst";
 type AnalystStreamChunk = {
     type: "thinking";
     text: string;
@@ -60,7 +60,7 @@ const shouldRetryRetrieval = (state: PipelineGraphState): boolean => {
     return !state.checkerPassed && state.retryCount < 1;
 };
 
-const summarizePipelineOut = (state: PipelineGraphState, answer: string) => ({
+const summarizePipelineOut = (state: PipelineGraphState, answer: string, timing: PipelineTiming) => ({
     answerPreview: answer.length > 400 ? `${answer.slice(0, 400)}…` : answer,
     exitEarly: state.exitEarly,
     intent: state.decision?.intent ?? null,
@@ -73,7 +73,17 @@ const summarizePipelineOut = (state: PipelineGraphState, answer: string) => ({
     retrievalCacheHit: state.retrievalCacheHit,
     error: state.error,
     hitPaths: state.hits.map((h) => h.path),
+    timing,
 });
+
+const finishPipeline = function* (
+    timing: PipelineTimingTracker
+): Generator<AgentStreamEvent, PipelineTiming> {
+    const snapshot = timing.snapshot();
+    yield { type: "pipeline_timing", timing: snapshot };
+    return snapshot;
+};
+
 /**
  * LangGraph 流式编排：全链路在 graph 内（含 Analyst）；
  * custom 流转发 thinking / assistant，由 pipeline 映射为 AgentStreamEvent。
@@ -81,6 +91,7 @@ const summarizePipelineOut = (state: PipelineGraphState, answer: string) => ({
 export async function* runPipelineStream(history: DbChatTurn[], context: AgentPipelineContext): AsyncGenerator<AgentStreamEvent, AgentPipelineResult> {
     ensureAgentsRuntime();
     const userQuestion = lastUserQuestion(history);
+    const timing = new PipelineTimingTracker();
     logAgentIn("Pipeline", "进入", {
         userQuestion,
         historyTurns: history.length,
@@ -98,6 +109,7 @@ export async function* runPipelineStream(history: DbChatTurn[], context: AgentPi
     const input = buildInitialState(history, context, userQuestion, memory.promptBlock, memory.intakeHistory);
     let finalState: PipelineGraphState = input;
     let activeStep: PipelineStepName | null = "intake";
+    timing.markNodeStart("intake");
     yield { type: "step", name: "intake", status: "running" };
     const stream = await graph.stream(input as Parameters<typeof graph.stream>[0], {
         streamMode: ["updates", "values", "custom"],
@@ -110,12 +122,19 @@ export async function* runPipelineStream(history: DbChatTurn[], context: AgentPi
     });
     const finishStep = function* (name: PipelineStepName) {
         if (activeStep === name) {
-            yield { type: "step", name, status: "done" } as const;
+            const durationMs = timing.markNodeEnd(name);
+            yield {
+                type: "step",
+                name,
+                status: "done",
+                ...(durationMs !== undefined ? { durationMs } : {}),
+            } as const;
             activeStep = null;
         }
     };
     const startStep = function* (name: PipelineStepName) {
         if (activeStep !== name) {
+            timing.markNodeStart(name);
             yield { type: "step", name, status: "running" } as const;
             activeStep = name;
         }
@@ -131,6 +150,7 @@ export async function* runPipelineStream(history: DbChatTurn[], context: AgentPi
         }
         if (mode === "custom") {
             if (isAnalystStreamChunk(payload)) {
+                timing.markFirstToken();
                 yield payload;
             }
             continue;
@@ -149,11 +169,14 @@ export async function* runPipelineStream(history: DbChatTurn[], context: AgentPi
                 yield { type: "error", message: finalState.error };
                 const answer = finalState.answer ??
                     "（模型调用失败：请确认本地 Ollama 已启动且模型已拉取）";
-                logAgentOut("Pipeline", "出去", summarizePipelineOut(finalState, answer));
+                timing.markFirstToken();
+                const pipelineTiming = yield* finishPipeline(timing);
+                logAgentOut("Pipeline", "出去", summarizePipelineOut(finalState, answer, pipelineTiming));
                 yield* emitAssistant(answer);
                 return {
                     answer,
                     retrievalCacheHit: finalState.retrievalCacheHit,
+                    timing: pipelineTiming,
                 };
             }
             if (finalState.decision?.needsRetrieval) {
@@ -210,20 +233,30 @@ export async function* runPipelineStream(history: DbChatTurn[], context: AgentPi
         }
         if (nodeName === "respondEarly") {
             if (activeStep) {
+                const durationMs = timing.markNodeEnd(activeStep);
                 yield {
                     type: "step",
                     name: activeStep,
                     status: "done",
+                    ...(durationMs !== undefined ? { durationMs } : {}),
                 };
                 activeStep = null;
             }
         }
     }
     if (activeStep) {
-        yield { type: "step", name: activeStep, status: "done" };
+        const durationMs = timing.markNodeEnd(activeStep);
+        yield {
+            type: "step",
+            name: activeStep,
+            status: "done",
+            ...(durationMs !== undefined ? { durationMs } : {}),
+        };
     }
     if (finalState.exitEarly && finalState.answer) {
-        logAgentOut("Pipeline", "出去", summarizePipelineOut(finalState, finalState.answer));
+        timing.markFirstToken();
+        const pipelineTiming = yield* finishPipeline(timing);
+        logAgentOut("Pipeline", "出去", summarizePipelineOut(finalState, finalState.answer, pipelineTiming));
         yield* emitAssistant(finalState.answer);
         await persistPipelineMemory({
             context,
@@ -234,11 +267,13 @@ export async function* runPipelineStream(history: DbChatTurn[], context: AgentPi
         return {
             answer: finalState.answer,
             retrievalCacheHit: finalState.retrievalCacheHit,
+            timing: pipelineTiming,
         };
     }
     const answer = finalState.answer ??
         "（未能生成回复，请稍后重试）";
     if (!finalState.answer) {
+        timing.markFirstToken();
         yield* emitAssistant(answer);
     }
     await persistPipelineMemory({
@@ -247,9 +282,11 @@ export async function* runPipelineStream(history: DbChatTurn[], context: AgentPi
         userQuestion,
         answer,
     }).catch(() => undefined);
-    logAgentOut("Pipeline", "出去", summarizePipelineOut(finalState, answer));
+    const pipelineTiming = yield* finishPipeline(timing);
+    logAgentOut("Pipeline", "出去", summarizePipelineOut(finalState, answer, pipelineTiming));
     return {
         answer,
         retrievalCacheHit: finalState.retrievalCacheHit,
+        timing: pipelineTiming,
     };
 }

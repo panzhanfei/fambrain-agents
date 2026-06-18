@@ -1,5 +1,6 @@
 "use client";
 import type { ConversationListItem } from "@fambrain/db";
+import type { PipelineStepName, PipelineTiming } from "@fambrain/agent-types";
 import Link from "next/link";
 import {
   useCallback,
@@ -10,10 +11,65 @@ import {
 } from "react";
 import { flushSync } from "react-dom";
 import { useSpeechInput } from "@/components/chat/use-speech-input";
+
+type MessageTiming = PipelineTiming & {
+  clientTotalMs?: number;
+};
+
 type ChatMessage = {
   id: string;
   role: "user" | "assistant";
   content: string;
+  timing?: MessageTiming;
+};
+
+const STEP_TIMING_LABELS: Record<PipelineStepName, string> = {
+  intake: "理解问题",
+  retrieval: "检索知识库",
+  fact_checker: "核查证据",
+  content_summarizer: "生成摘要",
+  content_organizer: "整理证据",
+  analyst: "生成回答",
+};
+
+const formatDuration = (ms: number): string => {
+  if (ms >= 1000) return `${(ms / 1000).toFixed(1)}s`;
+  return `${ms}ms`;
+};
+
+const MessageTimingLine = ({ timing }: { timing: MessageTiming }) => {
+  const [expanded, setExpanded] = useState(false);
+  const nodeEntries = (
+    Object.entries(timing.nodes ?? {}) as [PipelineStepName, number][]
+  ).filter(([, ms]) => ms > 0);
+
+  return (
+    <div className="mt-1.5 text-[11px] leading-snug text-[#9ca3af]">
+      <button
+        type="button"
+        onClick={() => setExpanded((v) => !v)}
+        className="text-left hover:text-[#6b7280]"
+      >
+        用时 {formatDuration(timing.totalMs)}
+        {timing.ttftMs != null
+          ? ` · 首字 ${formatDuration(timing.ttftMs)}`
+          : ""}
+        {timing.clientTotalMs != null
+          ? ` · 全链路 ${formatDuration(timing.clientTotalMs)}`
+          : ""}
+        {nodeEntries.length > 0 ? (expanded ? " ▴" : " ▾") : ""}
+      </button>
+      {expanded && nodeEntries.length > 0 ? (
+        <ul className="mt-1 space-y-0.5 pl-2">
+          {nodeEntries.map(([name, ms]) => (
+            <li key={name}>
+              {STEP_TIMING_LABELS[name] ?? name} {formatDuration(ms)}
+            </li>
+          ))}
+        </ul>
+      ) : null}
+    </div>
+  );
 };
 type PatchConversationOk = {
   id: string;
@@ -359,6 +415,7 @@ export const ChatShell = ({ initialConversations, viewer }: ChatShellProps) => {
   /** 最近一次发送出错（文案已入库但助手失败时为模型错误提示） */
   const [sendError, setSendError] = useState<string | null>(null);
   const [sendBusy, setSendBusy] = useState(false);
+  const sendBusyRef = useRef(false);
   const pendingUserTempIdRef = useRef<string | null>(null);
   const isComposingRef = useRef(false);
   const messagesScrollRef = useRef<HTMLDivElement | null>(null);
@@ -387,6 +444,17 @@ export const ChatShell = ({ initialConversations, viewer }: ChatShellProps) => {
     onInterim: appendInterimSpeechToDraft,
     lang: "zh-CN",
   });
+  useEffect(() => {
+    sendBusyRef.current = sendBusy;
+  }, [sendBusy]);
+  /** 模型已出稿即可解锁输入；落库 done 可能更晚 */
+  const releaseSendLock = useCallback(() => {
+    flushSync(() => {
+      setSendBusy(false);
+      setThinkingPanelVisible(false);
+      setStreamThinking("");
+    });
+  }, []);
   const loadConversations = useCallback(async () => {
     await Promise.resolve();
     setListLoading(true);
@@ -571,7 +639,17 @@ export const ChatShell = ({ initialConversations, viewer }: ChatShellProps) => {
       if (cancelled) return;
       setMessagesLoading(false);
       if (result.ok) {
-        setMessages(result.data);
+        setMessages((prev) => {
+          const timingById = new Map(
+            prev
+              .filter((m) => m.timing)
+              .map((m) => [m.id, m.timing] as const)
+          );
+          return result.data.map((m) => ({
+            ...m,
+            timing: timingById.get(m.id),
+          }));
+        });
       } else {
         setMessages([]);
         setMessagesError(result.error);
@@ -655,6 +733,13 @@ export const ChatShell = ({ initialConversations, viewer }: ChatShellProps) => {
       type MetaPayload = {
         userMessage: ChatMessage;
       };
+      type DonePayload = {
+        userMessage?: ChatMessage;
+        assistantMessage?: ChatMessage;
+        timing?: PipelineTiming;
+      };
+      const clientStartedAt = performance.now();
+      let latestTiming: PipelineTiming | undefined;
       const res = await fetch(`/api/conversations/${convId}/messages`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -702,6 +787,36 @@ export const ChatShell = ({ initialConversations, viewer }: ChatShellProps) => {
           }
         }
         if (
+          event === "ready" &&
+          payload &&
+          typeof payload === "object" &&
+          payload !== null
+        ) {
+          const p = payload as {
+            answer?: string;
+            timing?: PipelineTiming;
+          };
+          if (p.timing && typeof p.timing.totalMs === "number") {
+            latestTiming = p.timing;
+          }
+          if (typeof p.answer === "string" && p.answer.trim()) {
+            setStreamAnswerPreview(p.answer);
+          }
+          releaseSendLock();
+        }
+        if (
+          event === "pipeline_timing" &&
+          payload &&
+          typeof payload === "object" &&
+          payload !== null
+        ) {
+          const t = (payload as { timing?: PipelineTiming }).timing;
+          if (t && typeof t.totalMs === "number") {
+            latestTiming = t;
+          }
+          releaseSendLock();
+        }
+        if (
           event === "step" &&
           payload &&
           typeof payload === "object" &&
@@ -722,6 +837,9 @@ export const ChatShell = ({ initialConversations, viewer }: ChatShellProps) => {
             };
             setThinkingPanelVisible(true);
             setStreamThinking(labels[p.name] ?? "处理中…");
+          }
+          if (p.status === "done" && p.name === "analyst") {
+            releaseSendLock();
           }
         }
         if (
@@ -755,6 +873,9 @@ export const ChatShell = ({ initialConversations, viewer }: ChatShellProps) => {
             setThinkingPanelVisible(false);
             setStreamThinking("");
             setStreamAnswerPreview(t);
+            if (t.trim()) {
+              releaseSendLock();
+            }
           }
         }
         if (
@@ -763,10 +884,35 @@ export const ChatShell = ({ initialConversations, viewer }: ChatShellProps) => {
           typeof payload === "object" &&
           payload !== null
         ) {
+          const p = payload as DonePayload;
+          const clientTotalMs = Math.round(performance.now() - clientStartedAt);
+          const serverTiming = p.timing ?? latestTiming;
+          const timing: MessageTiming | undefined = serverTiming
+            ? { ...serverTiming, clientTotalMs }
+            : undefined;
           pendingUserTempIdRef.current = null;
-          setThinkingPanelVisible(false);
-          setStreamThinking("");
-          setStreamAnswerPreview("");
+          releaseSendLock();
+          if (
+            p.assistantMessage &&
+            typeof p.assistantMessage.id === "string" &&
+            typeof p.assistantMessage.content === "string"
+          ) {
+            const assistant: ChatMessage = {
+              id: p.assistantMessage.id,
+              role: "assistant",
+              content: p.assistantMessage.content,
+              timing,
+            };
+            flushSync(() => {
+              setMessages((prev) => {
+                const rest = prev.filter((m) => m.id !== assistant.id);
+                return [...rest, assistant];
+              });
+              setStreamAnswerPreview("");
+            });
+          } else {
+            setStreamAnswerPreview("");
+          }
         }
         if (
           event === "error" &&
@@ -777,15 +923,17 @@ export const ChatShell = ({ initialConversations, viewer }: ChatShellProps) => {
           const e = (
             payload as {
               error?: string;
+              message?: string;
             }
-          ).error;
+          ).error ?? (payload as { message?: string }).message;
           streamFatal = typeof e === "string" ? e : "模型出错";
+          releaseSendLock();
         }
       });
       if (streamFatal) {
         setSendError(streamFatal);
       }
-      await loadConversations();
+      void loadConversations();
       setMessagesRetryTick((n) => n + 1);
     } catch {
       setSendError("网络错误");
@@ -794,13 +942,13 @@ export const ChatShell = ({ initialConversations, viewer }: ChatShellProps) => {
       await loadConversations();
       setMessagesRetryTick((n) => n + 1);
     } finally {
-      setSendBusy(false);
-      setThinkingPanelVisible(false);
-      setStreamThinking("");
+      if (sendBusyRef.current) {
+        releaseSendLock();
+      }
       setStreamAnswerPreview("");
       pendingUserTempIdRef.current = null;
     }
-  }, [activeConversationId, draft, loadConversations, sendBusy]);
+  }, [activeConversationId, draft, loadConversations, releaseSendLock]);
   const applySuggestion = (text: string) => {
     setDraft(text);
     setSendError(null);
@@ -810,7 +958,16 @@ export const ChatShell = ({ initialConversations, viewer }: ChatShellProps) => {
   /** 新开对话且尚未选定会话时的欢迎区 */
   const showingEmptyLanding = isFreshNewChatUi && !sendBusy;
   /** 首条消息已发出、会话尚在创建或模型推理中 */
-  const sendingFirstOnNewChat = isFreshNewChatUi && sendBusy;
+  const sendingFirstOnNewChat =
+    activeConversationId == null && sendBusy && messages.length === 0;
+  const showAssistantPending =
+    sendBusy &&
+    !streamThinking.trim() &&
+    !streamAnswerPreview.trim() &&
+    !(
+      messages.length > 0 &&
+      messages[messages.length - 1]?.role === "assistant"
+    );
   return (
     <div className="flex h-dvh bg-[#f3f4f6] text-[#1f2937]">
       <aside
@@ -1146,13 +1303,16 @@ export const ChatShell = ({ initialConversations, viewer }: ChatShellProps) => {
                       ].join(" ")}
                     >
                       {m.content}
+                      {m.role === "assistant" && m.timing ? (
+                        <MessageTimingLine timing={m.timing} />
+                      ) : null}
                     </div>
                   </li>
                 ))}
-                {sendBusy && !streamThinking.trim() && !streamAnswerPreview ? (
+                {showAssistantPending ? (
                   <AssistantPendingRow />
                 ) : null}
-                {thinkingPanelVisible && streamThinking.trim() ? (
+                {sendBusy && thinkingPanelVisible && streamThinking.trim() ? (
                   <li className="flex justify-start">
                     <div className="max-w-[90%] rounded-2xl border border-amber-200/90 bg-amber-50 px-4 py-3 text-[15px] leading-relaxed shadow-sm">
                       <div className="text-[11px] font-semibold uppercase tracking-wide text-amber-800">
@@ -1164,7 +1324,7 @@ export const ChatShell = ({ initialConversations, viewer }: ChatShellProps) => {
                     </div>
                   </li>
                 ) : null}
-                {sendBusy && streamAnswerPreview ? (
+                {streamAnswerPreview ? (
                   <li className="flex justify-start">
                     <div className="max-w-[85%] rounded-2xl border border-[#e5e7eb] bg-[#f9fafb] px-4 py-2.5 text-[15px] leading-relaxed text-[#374151] whitespace-pre-wrap">
                       {streamAnswerPreview}

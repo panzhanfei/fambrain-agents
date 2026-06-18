@@ -1,4 +1,4 @@
-import type { AgentPipelineContext, DbChatTurn } from "@fambrain/agent-types";
+import type { AgentPipelineContext, AgentPipelineResult, DbChatTurn, } from "@fambrain/agent-types";
 import { encodeSseEvent, sseResponse } from "@/lib/chat/sse";
 import { appendAssistantMessage, appendUserMessage, maybeUpdateConversationTitle, } from "@fambrain/db";
 import { streamAgentPipeline } from "./agents-client";
@@ -40,9 +40,7 @@ export const createPostMessageStreamResponse = (options: {
                     { role: "user", content: options.userContent },
                 ];
                 const gen = streamAgentPipeline(historyWithUser, options.pipelineContext, options.authToken);
-                let pipelineResult: {
-                    answer: string;
-                } | undefined;
+                let pipelineResult: AgentPipelineResult | undefined;
                 while (true) {
                     const next = await gen.next();
                     if (next.done) {
@@ -54,6 +52,10 @@ export const createPostMessageStreamResponse = (options: {
                 }
                 const finalContent = pipelineResult?.answer?.trim() ||
                     "（模型未返回助手文本：请确认 Ollama 已启动且模型已拉取）";
+                send("ready", {
+                    answer: finalContent,
+                    timing: pipelineResult?.timing,
+                });
                 const assistantRow = await appendAssistantMessage(options.conversationId, finalContent);
                 send("done", {
                     userMessage: {
@@ -66,6 +68,7 @@ export const createPostMessageStreamResponse = (options: {
                         role: mapRole(assistantRow.role),
                         content: assistantRow.content,
                     },
+                    timing: pipelineResult?.timing,
                 });
             }
             catch (e) {

@@ -74,13 +74,15 @@ export const handlePipelineStream = async (req: IncomingMessage, res: ServerResp
         }
         writeSse(res, "pipeline_done", {
             answer: pipelineResult?.answer ?? "",
+            retrievalCacheHit: pipelineResult?.retrievalCacheHit,
+            timing: pipelineResult?.timing,
         });
     }
     catch (e) {
         console.error(e);
         const msg = e instanceof Error ? e.message : "Agent pipeline failed";
         writeSse(res, "error", { message: msg });
-        writeSse(res, "pipeline_done", { answer: "" });
+        writeSse(res, "pipeline_done", { answer: "", timing: undefined });
     }
     finally {
         res.end();

@@ -399,8 +399,10 @@ flowchart TD
 | `event` | 含义 |
 |---------|------|
 | `meta` | 用户消息已落库（含真实 `id`） |
-| `step` | 编排进度：`intake` / `retrieval` / `fact_checker` / **`content_summarizer`** / **`content_organizer`** / `analyst`，`status` 为 `running` \| `done` |
+| `step` | 编排进度：`intake` / `retrieval` / `fact_checker` / **`content_summarizer`** / **`content_organizer`** / `analyst`，`status` 为 `running` \| `done`；`done` 时可带 `durationMs` |
+| `pipeline_timing` | SLO：本轮 `totalMs`、`ttftMs`、各节点 `nodes`（Agents → BFF 转发） |
+| `ready` | Pipeline 已出终稿、即将落库（BFF）；前端可提前解锁输入 |
 | `thinking` | 信息分析师推理流（若模型/Ollama 支持） |
 | `assistant` | 面向用户的正文增量（流结束后以 `answer` 写入 DB） |
-| `done` | 流结束，含 user/assistant 消息 id 与终稿 `content` |
+| `done` | 流结束，含 user/assistant 消息 id、终稿 `content`、可选 `timing` |
 | `error` | 模型或编排失败 |
