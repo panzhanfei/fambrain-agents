@@ -53,6 +53,12 @@ type CacheTurn = {
     expectCacheHit?: boolean;
 };
 
+type ProfileTurn = {
+    question: string;
+    assert: JsonAssert;
+    expectRepeatHit?: boolean;
+};
+
 type GoldenFile = {
     version: number;
     cases: GoldenCase[];
@@ -61,6 +67,13 @@ type GoldenFile = {
         label: string;
         conversationIdPrefix: string;
         turns: CacheTurn[];
+    };
+    profileProbe?: {
+        id: string;
+        label: string;
+        conversationIdPrefix: string;
+        companies?: string[];
+        turns: ProfileTurn[];
     };
 };
 
@@ -74,6 +87,8 @@ type CaseResult = {
     coalesceViolation?: boolean;
     cacheHit?: boolean | null;
     cacheExpected?: boolean;
+    repeatHit?: boolean | null;
+    repeatExpected?: boolean;
 };
 
 type EvalMetrics = {
@@ -102,6 +117,7 @@ type EvalReport = {
     metrics: EvalMetrics;
     results: CaseResult[];
     cacheProbe?: CaseResult[];
+    profileProbe?: CaseResult[];
 };
 
 const chromaUrl = (): string => {
@@ -155,12 +171,14 @@ const runPipelineCase = async (
         conversationId,
     };
     let cacheHit = false;
+    let repeatHit = false;
     const gen = runPipelineStream(history, context);
     while (true) {
         const next = await gen.next();
         if (next.done) {
             answer = next.value.answer;
             if (next.value.retrievalCacheHit) cacheHit = true;
+            if (next.value.repeatQuestionHit) repeatHit = true;
             break;
         }
         const ev = next.value;
@@ -176,6 +194,7 @@ const runPipelineCase = async (
         coverage,
         latencyMs: Date.now() - started,
         cacheHit,
+        repeatHit,
     };
 };
 
@@ -311,6 +330,49 @@ const runCacheProbe = async (
     return out;
 };
 
+const runProfileProbe = async (
+    probe: NonNullable<GoldenFile["profileProbe"]>,
+    corpusUserId: string
+): Promise<CaseResult[]> => {
+    const conversationId = `${probe.conversationIdPrefix}-${Date.now()}`;
+    const out: CaseResult[] = [];
+    let priorHistory: DbChatTurn[] = [];
+    for (const [i, turn] of probe.turns.entries()) {
+        const snap = await runPipelineCase(
+            corpusUserId,
+            turn.question,
+            conversationId,
+            priorHistory
+        );
+        const issues = assertPipeline(snap, turn.assert);
+        const repeatHit = snap.repeatHit ?? false;
+        if (turn.expectRepeatHit && !repeatHit) {
+            issues.push("repeatQuestionHit 期望 true");
+        }
+        out.push({
+            id: `${probe.id}-t${i + 1}`,
+            tier: "pipeline",
+            label: `${probe.label} · turn${i + 1}`,
+            pass: issues.length === 0,
+            reason:
+                issues.length === 0
+                    ? turn.expectRepeatHit
+                        ? `ok（L1 repeat：${repeatHit ? "hit" : "miss"}）`
+                        : "ok"
+                    : issues.join("; "),
+            latencyMs: snap.latencyMs,
+            repeatHit,
+            repeatExpected: turn.expectRepeatHit ?? false,
+        });
+        priorHistory = [
+            ...priorHistory,
+            { role: "user", content: turn.question },
+            { role: "assistant", content: snap.answer },
+        ];
+    }
+    return out;
+};
+
 const percentile = (values: number[], p: number): number => {
     if (values.length === 0) return 0;
     const sorted = [...values].sort((a, b) => a - b);
@@ -405,10 +467,19 @@ const formatMarkdown = (report: EvalReport): string => {
             );
         }
     }
+    if (report.profileProbe?.length) {
+        lines.push(``, `## Profile 探测（R6-3）`, ``);
+        for (const r of report.profileProbe) {
+            lines.push(
+                `- ${r.id}: ${r.pass ? "✅" : "❌"} ${r.reason} (${r.latencyMs}ms)`
+            );
+        }
+    }
     return lines.join("\n");
 };
 
 const jsonOnly = process.argv.includes("--json-only");
+const profileOnly = process.argv.includes("--profile-only");
 
 const main = async (): Promise<void> => {
     bootstrapAgentsRuntime();
@@ -417,7 +488,28 @@ const main = async (): Promise<void> => {
     const corpusUserId = await resolveCorpusUserId();
     const chromaUp = await chromaReady();
 
-    console.log(`eval:run — ${golden.cases.length} cases + cache probe`);
+    if (profileOnly) {
+        if (!golden.profileProbe) {
+            throw new Error("golden.json 缺少 profileProbe");
+        }
+        console.log(`eval:run — profile probe only (${golden.profileProbe.id})`);
+        console.log(`corpusUserId=${corpusUserId} chroma=${chromaUp ? "up" : "down"}\n`);
+        const profileProbe = await runProfileProbe(
+            golden.profileProbe,
+            corpusUserId
+        );
+        for (const r of profileProbe) {
+            console.log(`  ${r.id}: ${r.pass ? "PASS" : "FAIL"} — ${r.reason} (${r.latencyMs}ms)`);
+        }
+        const failed = profileProbe.filter((r) => !r.pass);
+        if (failed.length > 0) process.exit(1);
+        console.log("\nProfile probe 通过。");
+        return;
+    }
+
+    console.log(
+        `eval:run — ${golden.cases.length} cases + probes`
+    );
     console.log(`corpusUserId=${corpusUserId} chroma=${chromaUp ? "up" : "down"}\n`);
 
     const results: CaseResult[] = [];
@@ -432,6 +524,10 @@ const main = async (): Promise<void> => {
         ? await runCacheProbe(golden.cacheProbe, corpusUserId)
         : [];
 
+    const profileProbe = golden.profileProbe
+        ? await runProfileProbe(golden.profileProbe, corpusUserId)
+        : [];
+
     const report: EvalReport = {
         generatedAt: new Date().toISOString(),
         corpusUserId,
@@ -439,6 +535,7 @@ const main = async (): Promise<void> => {
         metrics: buildMetrics(results, cacheProbe),
         results,
         cacheProbe: cacheProbe.length ? cacheProbe : undefined,
+        profileProbe: profileProbe.length ? profileProbe : undefined,
     };
 
     if (process.env.EVAL_WRITE_REPORT === "1") {
@@ -460,8 +557,9 @@ const main = async (): Promise<void> => {
     }
 
     const failed = results.filter((r) => !r.pass);
+    const profileFailed = (report.profileProbe ?? []).filter((r) => !r.pass);
     const coalesceBad = report.metrics.coalesceFailures > 0;
-    if (failed.length > 0 || coalesceBad) {
+    if (failed.length > 0 || profileFailed.length > 0 || coalesceBad) {
         process.exit(1);
     }
     console.log("\nEval MVP 通过。");

@@ -209,5 +209,35 @@
         "expectCacheHit": true
       }
     ]
+  },
+  "profileProbe": {
+    "id": "G-履历综合",
+    "label": "R6-3 综合履历三轮（fail-first）",
+    "conversationIdPrefix": "eval-profile",
+    "companies": ["云联智慧", "友谊时光", "奖多多", "奥卡云"],
+    "turns": [
+      {
+        "question": "我叫什么，我做过什么项目，我在那几家公司上过班，近两年在干什么？",
+        "assert": {
+          "mustIncludeSteps": ["retrieval", "analyst"],
+          "answerRe": "潘展飞",
+          "answerMustIncludeAll": ["云联智慧", "友谊时光", "奖多多", "奥卡云"]
+        }
+      },
+      {
+        "question": "我叫什么，我做过什么项目，我在那几家公司上过班，近两年在干什么？",
+        "assert": {
+          "answerMustIncludeAll": ["云联智慧", "友谊时光", "奖多多", "奥卡云"]
+        },
+        "expectRepeatHit": true
+      },
+      {
+        "question": "我在哪几家公司上过班？",
+        "assert": {
+          "mustIncludeSteps": ["retrieval", "analyst"],
+          "answerMustIncludeAll": ["云联智慧", "友谊时光", "奖多多", "奥卡云"]
+        }
+      }
+    ]
   }
 }

@@ -18,6 +18,8 @@ export type JsonAssert = {
     minAnswerLength?: number;
     answerRe?: string;
     answerMustNotRe?: string;
+    /** answer 须同时包含这些子串（R6-3 公司枚举等） */
+    answerMustIncludeAll?: string[];
 };
 
 export type KmEvalSnapshot = {
@@ -40,6 +42,7 @@ export type PipelineEvalSnapshot = {
     coverage: string;
     latencyMs: number;
     cacheHit?: boolean;
+    repeatHit?: boolean;
 };
 
 const re = (pattern: string): RegExp => new RegExp(pattern, "i");
@@ -134,6 +137,11 @@ export const assertPipeline = (
         re(assert.answerMustNotRe).test(snap.answer)
     ) {
         issues.push(`answer 不应匹配 /${assert.answerMustNotRe}/`);
+    }
+    for (const needle of assert.answerMustIncludeAll ?? []) {
+        if (!snap.answer.includes(needle)) {
+            issues.push(`answer 缺少「${needle}」`);
+        }
     }
     return issues;
 };
