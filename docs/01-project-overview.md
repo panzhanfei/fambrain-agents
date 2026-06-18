@@ -192,7 +192,7 @@ pnpm run dev
 | `verify:recall-compare` | `apps/agents/scripts/` | HY-07 三问 vector/sparse/RRF（需 Chroma） |
 | `verify:confidence-tier` | `apps/agents/scripts/` | Wave D：assessConfidence 单测 + KM live tier |
 | `verify:intake-coreference` | `apps/agents/scripts/` | Wave C QU-02 + D5-2 repeat guard 单测 |
-| `eval:run` | `apps/agents/scripts/eval/` | Eval MVP：golden.json + 四指标报告（含 G5b 指代） |
+| `eval:run` | `apps/agents/scripts/eval/` | Eval MVP：golden + cache/profile 探测；`--profile-only` → **G-履历综合** 4 轮 |
 | `golden:regression` | `apps/agents/scripts/` | G1～G5 全链路回归（多遍稳定性） |
 | `indexAllCorpora` | `agentflow/agents/offline/knowledge-indexer/` | 离线 corpus → Chroma |
 | `logAgentIn` / `logAgentOut` | `packages/agent-shared/src/agent-log.ts` | 调试：含 FactChecker 🔍、ContentOrganizer 📋 |

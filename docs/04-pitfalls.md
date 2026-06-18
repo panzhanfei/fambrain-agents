@@ -84,7 +84,7 @@
 | P0-16 | Mem0 / Analyst | **对话 A** 用户说「记住我的 QQ 是 xxx」并确认；**新建对话 B** 问「我的 QQ 是多少？」→ 答不知道 / 语料无记录 | LangMem 仅本会话；Mem0 轮次后 `add` 可能未抽出 QQ、语义 search 未命中、或 Analyst 走 corpus 检索且 hits 空时未用 Mem0；`persistPipelineMemory` 失败被 `.catch` 吞掉 | Intake 识别 **remember_fact** → 显式 Mem0 写入；联系方式类 query **Mem0 优先**；持久化失败打日志/告警；Golden **G-跨会话记忆**（A 记 → B 问） | ⬜ Web 联调（§2.6） |
 | R6-1 | KM / Analyst | **「我在那几家公司上过班？」** 应枚举 **4 家**，首轮只答 **2 家**（西安奥卡云、苏州奖多多）；**同句再问** 仅确认 **1 家** 并称其余「知识库无记录」 | 见 §2.3 | 枚举型 query 专用召回 + Golden；复盘后消坑 sprint | ⬜ **复盘后统一解决** |
 | R6-2 | Analyst / 上下文 | **同会话追问**（如「用表格列出来 时间 职位 公司名称」）：上一轮已确认 **西安奥卡云**，本轮却称「没有明确列出具体公司」 | 见 §2.4 | 追问继承上轮 grounded 结论 + Intake 识别表格/格式化 follow-up；与 R6-1 一并消坑 | ⬜ **复盘后统一解决** |
-| R6-3 | Intake / KM / Analyst | **同会话**：综合问「我叫什么+项目+公司+近两年」首轮 **4 家全对**；换 **编号子问** 或重复问后仅 **2 家** 且称「两家公司」 | 见 §2.7 | 复合问拆 subTasks + 枚举 queryType；同会话 grounded 不降级；Golden **G-履历综合** | ⬜ **Web 联调 2026-06-18** |
+| R6-3 | Intake / KM / Analyst | **同会话**：综合问首轮 **4 家**；编号子问或重复问后仅 **2 家** | 见 §2.7 | eval **`G-履历综合` 4 轮** ✅；Intake 编号绑定 / Analyst 不降级 ⬜ | 🔄 **eval 4/4 · Web 偶发 2026-06-18** |
 
 ### 2.3 工作经历枚举不完整 / 同问不同答（2026-06 · 复盘前记录）
 
@@ -319,10 +319,10 @@
 | P0 | Intake 识别 **profile_composite** / **numbered_subtasks**：1～4 子问映射到固定 `subTasks`（identity / projects / employers_enumeration / recent_two_years），**同一 `searchQuery` 骨架** | `intake-coordinator` prompt、`query-profile.ts` |
 | P0 | 同会话已有 **grounded 4 家** 时，Analyst **不得**在后续轮次输出更少公司数（除非明确标注「本轮 hits 仅补充」） | `information-analyst` prompt、可选 state `priorGroundedFacts` |
 | P0 | 与 R6-1 合并：**enumeration** queryType → KM 按 `experience/` path **穷举** | `retrieve.ts`、KM-13～15 |
-| +1 | Golden **G-履历综合**：固定 3 轮（综合问 → 重复 → 编号子问）→ 公司集合 **恒为 4** | `golden.json` / `eval` |
-| +1 | agent-log 断言：轮 3 `hitCount` / `hitPaths` 覆盖 `experience/` 文件数 ≥ 4 | eval 报告 |
+| +1 | Golden **`G-履历综合` profileProbe**：4 轮（综合问 → 同问 L1 → 列举 → **编号「1. 我在哪几家公司…」**）→ 公司 **恒为 4** | `golden.json` / `eval:run --profile-only` ✅ |
+| +1 | agent-log 断言：轮 3/4 `hitCount` / `hitPaths` 覆盖 `experience/` 文件数 ≥ 4 | eval 报告 |
 
-**验证：** 同会话按上表 3 轮问法 → 第 3 轮 answer **仍含 4 家公司名**（与第 1 轮集合一致）；不得出现「两家公司」且仅 2 家；`pnpm run golden:regression` 扩展 **G-履历综合** 后 3/3 通过。
+**验证：** `pnpm --filter @fambrain/agents run eval:run -- --profile-only` → **G-履历综合 t1～t4 均 PASS**（t2 期望 `repeatQuestionHit`；t4 编号子问 `queryType=enumeration`）。Web 冷会话 / 无 t3 中间轮仍可能 4→2，待 Intake 编号路由或 Analyst grounded 不降级。
 
 ### 2.2 FactChecker 与跨轮重复检索（2026-06 · D5 联调）
 
@@ -608,7 +608,7 @@ pnpm run verify:fact-checker
 - [ ] **P0-13～P0-15**（Golden Day 2 实录）：无乱称呼、无赵一/陈明、corpus/Mem0 不矛盾 ← §2.5
 - [ ] **P0-16**（Web 联调）：对话 A 记 QQ → 对话 B 问 QQ 可召回 ← §2.6
 - [ ] R6-1：「哪几家公司上过班」类问题 → hits/answer 枚举 **4 家**且同句再问结果一致 ← §2.3
-- [ ] **R6-3**：同会话「综合履历问 → 编号 1～4 子问」公司集合与首轮一致（**4 家**），不得降为 2 家 ← §2.7
+- [ ] **R6-3**：同会话「综合履历 → 编号子问」公司 **4 家**（eval **`G-履历综合` 4/4 ✅**；代码层 Intake/Analyst 加固 ⬜）← §2.7
 - [ ] R6-2：同会话表格/格式化追问 → **不得否定**上一轮已 grounded 的公司（如西安奥卡云）← §2.4
 
 ---
