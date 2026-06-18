@@ -8,6 +8,7 @@
     "dev": "bash scripts/dev-all.sh",
     "dev:web": "pnpm --filter @fambrain/web dev",
     "dev:agents": "pnpm --filter @fambrain/agents dev",
+    "dev:agents-worker": "pnpm --filter @fambrain/agents dev:worker",
     "build": "pnpm --filter @fambrain/db generate && pnpm --filter @fambrain/web build",
     "start": "pnpm --filter @fambrain/web start",
     "lint": "pnpm --filter @fambrain/web lint",

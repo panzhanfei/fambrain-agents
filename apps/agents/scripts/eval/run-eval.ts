@@ -154,18 +154,20 @@ const runPipelineCase = async (
         displayName: "Eval",
         conversationId,
     };
+    let cacheHit = false;
     const gen = runPipelineStream(history, context);
     while (true) {
         const next = await gen.next();
         if (next.done) {
             answer = next.value.answer;
+            if (next.value.retrievalCacheHit) cacheHit = true;
             break;
         }
         const ev = next.value;
         if (ev.type === "step" && ev.status === "running") steps.push(ev.name);
         if (ev.type === "error") error = ev.message;
+        if (ev.type === "retrieval_meta" && ev.cacheHit) cacheHit = true;
     }
-    // 终态 hit/coverage 无法从 stream 直接取；用 answer 长度等断言即可
     return {
         steps,
         answer,
@@ -173,7 +175,7 @@ const runPipelineCase = async (
         hitCount,
         coverage,
         latencyMs: Date.now() - started,
-        cacheHit: false,
+        cacheHit,
     };
 };
 

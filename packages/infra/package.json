@@ -1,0 +1,21 @@
+{
+  "name": "@fambrain/infra",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./config": "./src/config.ts",
+    "./redis": "./src/redis/client.ts",
+    "./retrieval-cache": "./src/cache/retrieval-cache.ts",
+    "./queue": "./src/queue/index.ts"
+  },
+  "dependencies": {
+    "bullmq": "^5.49.2",
+    "ioredis": "^5.6.1"
+  },
+  "devDependencies": {
+    "@types/node": "^20.19.41",
+    "typescript": "^5"
+  }
+}

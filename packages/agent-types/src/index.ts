@@ -27,7 +27,12 @@ export type AgentStreamEvent = {
 } | {
     type: "error";
     message: string;
+} | {
+    /** D5-2：检索 cache 命中（供 eval / 调试） */
+    type: "retrieval_meta";
+    cacheHit: boolean;
 };
 export type AgentPipelineResult = {
     answer: string;
+    retrievalCacheHit?: boolean;
 };

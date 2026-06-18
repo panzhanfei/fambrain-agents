@@ -20,6 +20,7 @@ services:
       - fambrain-db:/app/packages/db/prisma
     depends_on:
       - agents
+      - redis
     restart: unless-stopped
 
   agents:
@@ -33,11 +34,14 @@ services:
       AGENTS_PORT: ${AGENTS_PORT:-3001}
       JWT_SECRET: ${JWT_SECRET:-fambrain-docker-dev-secret-change-me!!}
       CHROMA_SERVER_URL: http://chroma:8000
+      REDIS_URL: redis://redis:6379
+      REDIS_ENABLED: "1"
     volumes:
       - fambrain-doc:/app/data/doc
       - fambrain-chroma:/app/data/chroma
     depends_on:
       - chroma
+      - redis
     restart: unless-stopped
 
   chroma:
@@ -50,6 +54,14 @@ services:
       PERSIST_DIRECTORY: /chroma/chroma
     volumes:
       - fambrain-chroma:/chroma/chroma
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    env_file: .env
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
     restart: unless-stopped
 
 volumes:

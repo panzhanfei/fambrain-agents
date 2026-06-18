@@ -196,7 +196,7 @@ pnpm run golden:regression   # G1～G5 全链路标准回归
 | `scripts/eval/run-eval.ts` | 调 `runPipelineStream` 或 KM 单测，输出 JSON/Markdown 报告 |
 | **最少 4 项指标** | Golden 通过率；candidates>0 但 hits=0 率（→0）；cache 命中率；端到端 `latencyMs` |
 
-**状态：** ✅ 2026-06-17 — `pnpm run eval:run` 12/12 通过；Chroma hybrid KM；cache 占位 0/1
+**状态：** ✅ 2026-06-18 — cache 接入 `@fambrain/infra`（Redis 或 memory fallback）；eval cache **1/1**
 
 ```bash
 pnpm --filter @fambrain/agents run eval:run

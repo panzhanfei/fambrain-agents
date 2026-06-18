@@ -53,6 +53,8 @@ export type FactCheckerInput = {
     retryCount: number;
     /** EV-04/06：KM 置信分档（可选） */
     confidenceTier?: ConfidenceTier | null;
+    /** D5-2：检索 cache 命中 */
+    retrievalCacheHit?: boolean;
 };
 export const prompt = `你是 FamBrain 系统中的「事实核查员」（FactChecker）。
 

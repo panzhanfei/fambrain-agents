@@ -7,6 +7,10 @@ import { completeIntakeCoordinator } from "@/agentflow/agents/online/intake-coor
 import { applyIntakeCoreferenceGuard } from "@/agentflow/agents/online/intake-coordinator/intake-coreference-guard";
 import { streamAnalyzeInformation } from "@/agentflow/agents/online/information-analyst";
 import { retrieveKnowledge } from "@/agentflow/agents/online/knowledge-manager";
+import {
+    getRetrievalFromCache,
+    setRetrievalCache,
+} from "@fambrain/infra";
 import { defaultIntakeDecision, parseIntakeDecision } from "../parse-intake";
 import { PipelineGraphAnnotation, type PipelineGraphState } from "./state";
 const routeAfterIntake = (state: PipelineGraphState): "respondEarly" | "retrieval" | "factChecker" | "contentSummarizer" => {
@@ -75,20 +79,46 @@ const retrievalNode = async (state: PipelineGraphState): Promise<Partial<Pipelin
         return { error: "缺少入口路由决策" };
     }
     const fromRetry = !state.checkerPassed && state.retryCount < 1;
+    const searchQuery = decision.searchQuery || state.userQuestion;
+    const queryType = decision.queryType ?? "default";
+    const cacheKey = {
+        corpusUserId: state.context.corpusUserId,
+        searchQuery,
+        queryType,
+    };
     try {
+        const cached = await getRetrievalFromCache(cacheKey);
+        if (cached) {
+            return {
+                hits: cached.hits,
+                coverage: cached.coverage,
+                notes: cached.notes,
+                confidenceTier: cached.confidenceTier ?? null,
+                retrievalCacheHit: true,
+                retryCount: fromRetry ? state.retryCount + 1 : state.retryCount,
+            };
+        }
         const retrieval = await retrieveKnowledge({
             corpusUserId: state.context.corpusUserId,
-            searchQuery: decision.searchQuery || state.userQuestion,
+            searchQuery,
             topics: decision.topics,
             subTasks: decision.subTasks,
             queryType: decision.queryType,
             candidates: [],
+        });
+        await setRetrievalCache(cacheKey, {
+            hits: retrieval.hits,
+            coverage: retrieval.coverage,
+            notes: retrieval.notes,
+            confidenceTier: retrieval.confidenceTier,
+            confidenceScore: retrieval.confidenceScore,
         });
         return {
             hits: retrieval.hits,
             coverage: retrieval.coverage,
             notes: retrieval.notes,
             confidenceTier: retrieval.confidenceTier ?? null,
+            retrievalCacheHit: false,
             retryCount: fromRetry ? state.retryCount + 1 : state.retryCount,
         };
     }
@@ -123,6 +153,7 @@ const factCheckerNode = async (state: PipelineGraphState): Promise<Partial<Pipel
             notes: state.notes,
             retryCount: state.retryCount,
             confidenceTier: state.confidenceTier,
+            retrievalCacheHit: state.retrievalCacheHit,
         });
         const patch: Partial<PipelineGraphState> = {
             checkerPassed: result.passed,

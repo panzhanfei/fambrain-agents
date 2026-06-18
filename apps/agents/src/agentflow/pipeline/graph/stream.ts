@@ -43,6 +43,7 @@ const buildInitialState = (history: DbChatTurn[], context: AgentPipelineContext,
         memoryBlock,
         intakeHistory,
         confidenceTier: null,
+        retrievalCacheHit: false,
     };
 };
 const isAnalystStreamChunk = (value: unknown): value is AnalystStreamChunk => {
@@ -69,6 +70,7 @@ const summarizePipelineOut = (state: PipelineGraphState, answer: string) => ({
     checkerPassed: state.checkerPassed,
     retryCount: state.retryCount,
     confidenceTier: state.confidenceTier,
+    retrievalCacheHit: state.retrievalCacheHit,
     error: state.error,
     hitPaths: state.hits.map((h) => h.path),
 });
@@ -149,7 +151,10 @@ export async function* runPipelineStream(history: DbChatTurn[], context: AgentPi
                     "（模型调用失败：请确认本地 Ollama 已启动且模型已拉取）";
                 logAgentOut("Pipeline", "出去", summarizePipelineOut(finalState, answer));
                 yield* emitAssistant(answer);
-                return { answer };
+                return {
+                    answer,
+                    retrievalCacheHit: finalState.retrievalCacheHit,
+                };
             }
             if (finalState.decision?.needsRetrieval) {
                 yield* startStep("retrieval");
@@ -161,6 +166,10 @@ export async function* runPipelineStream(history: DbChatTurn[], context: AgentPi
         }
         if (nodeName === "retrieval") {
             yield* finishStep("retrieval");
+            yield {
+                type: "retrieval_meta",
+                cacheHit: Boolean(finalState.retrievalCacheHit),
+            };
             if (finalState.decision?.intent === "summarize_content") {
                 yield* startStep("content_summarizer");
             }
@@ -222,7 +231,10 @@ export async function* runPipelineStream(history: DbChatTurn[], context: AgentPi
             userQuestion,
             answer: finalState.answer,
         }).catch(() => undefined);
-        return { answer: finalState.answer };
+        return {
+            answer: finalState.answer,
+            retrievalCacheHit: finalState.retrievalCacheHit,
+        };
     }
     const answer = finalState.answer ??
         "（未能生成回复，请稍后重试）";
@@ -236,5 +248,8 @@ export async function* runPipelineStream(history: DbChatTurn[], context: AgentPi
         answer,
     }).catch(() => undefined);
     logAgentOut("Pipeline", "出去", summarizePipelineOut(finalState, answer));
-    return { answer };
+    return {
+        answer,
+        retrievalCacheHit: finalState.retrievalCacheHit,
+    };
 }

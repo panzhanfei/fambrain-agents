@@ -1,5 +1,10 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { getLangSmithStatus } from "@fambrain/agent-config/langsmith";
+import {
+    getRetrievalCacheBackend,
+    isRedisConfigured,
+    pingRedis,
+} from "@fambrain/infra";
 import type { AgentStreamEvent } from "@fambrain/agent-types";
 import { runAgentStream } from "@/agentflow";
 import { requireAuth } from "@/server/auth-middleware";
@@ -81,12 +86,18 @@ export const handlePipelineStream = async (req: IncomingMessage, res: ServerResp
         res.end();
     }
 };
-export const handleHealth = (_req: IncomingMessage, res: ServerResponse): void => {
+export const handleHealth = async (_req: IncomingMessage, res: ServerResponse): Promise<void> => {
     const langSmith = getLangSmithStatus();
+    const redisOk = await pingRedis();
     res.writeHead(200, { "Content-Type": "application/json" });
     res.end(JSON.stringify({
         ok: true,
         service: "fambrain-agents",
+        redis: {
+            configured: isRedisConfigured(),
+            ping: redisOk,
+            retrievalCacheBackend: getRetrievalCacheBackend(),
+        },
         langSmith: {
             enabled: langSmith.enabled,
             project: langSmith.project,

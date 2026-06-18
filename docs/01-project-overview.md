@@ -33,6 +33,7 @@
 | Zod | 注册/会话 + 入库 metadata；**在线 Agent JSON schema**（Intake / KM / FactChecker / Analyst / Organizer） |
 | Pino | 知识入库师结构化日志 |
 | p-limit | 入库 embed 并发控制；**DocParser** 批量解析并发（`DOC_PARSE_CONCURRENCY`） |
+| Redis + BullMQ | `@fambrain/infra`：检索 cache（D5-2）、pipeline 异步队列（可选 `PIPELINE_QUEUE_ENABLED`） |
 | Mem0 | 跨会话语义记忆检索，注入 Intake / Analyst prompt |
 | LangMem | 单会话摘要压缩（`data/memory/sessions/`），配合 DB 历史裁剪 Intake 上下文 |
 | MCP SDK | 实验：`experiment:mcp-vault` 只读列 vault |
@@ -173,6 +174,8 @@ pnpm run dev
 | `listVaultFiles` | `agentflow/knowledge/list-vault-files.ts` | vault 只读列举（MCP 共用） |
 | `recallSparseRetrieve` | `packages/corpus/src/recall-keyword-retrieve.ts` | BM25 sparse 检索（HY-01） |
 | `hybridRecall` / `fuseRrf` | `knowledge-manager/hybrid-recall.ts`、`fusion-rrf.ts` | 并行 Hybrid + RRF（HY-02～03） |
+| `@fambrain/infra` | `packages/infra/` | Redis 连接、检索 cache、BullMQ 队列、限流 |
+| `verify:retrieval-cache` | `apps/agents/scripts/` | D5-2 cache normalize + memory/Redis |
 | `verify:recall-compare` | `apps/agents/scripts/` | HY-07 三问 vector/sparse/RRF（需 Chroma） |
 | `verify:confidence-tier` | `apps/agents/scripts/` | Wave D：assessConfidence 单测 + KM live tier |
 | `verify:intake-coreference` | `apps/agents/scripts/` | Wave C QU-02：Intake 多轮指代 live 抽检 |
