@@ -30,7 +30,26 @@ export const intakeRoutingDecisionSchema = z.object({
     clarifyingQuestion: nullableTrimmedString,
     briefReply: nullableTrimmedString,
 });
+const pickIntakeField = (
+    raw: Record<string, unknown>,
+    camel: string,
+    snake: string
+): unknown => (camel in raw ? raw[camel] : raw[snake]);
+
+const normalizeIntakeRaw = (raw: Record<string, unknown>): Record<string, unknown> => ({
+    ...raw,
+    needsRetrieval: pickIntakeField(raw, "needsRetrieval", "needs_retrieval"),
+    searchQuery: pickIntakeField(raw, "searchQuery", "search_query"),
+    subTasks: pickIntakeField(raw, "subTasks", "sub_tasks"),
+    queryType: pickIntakeField(raw, "queryType", "query_type"),
+    clarifyingQuestion: pickIntakeField(raw, "clarifyingQuestion", "clarifying_question"),
+    briefReply: pickIntakeField(raw, "briefReply", "brief_reply"),
+});
 export const parseIntakeRoutingDecision = (raw: unknown): IntakeRoutingDecision | null => {
-    const parsed = intakeRoutingDecisionSchema.safeParse(raw);
+    const normalized =
+        raw && typeof raw === "object" && !Array.isArray(raw)
+            ? normalizeIntakeRaw(raw as Record<string, unknown>)
+            : raw;
+    const parsed = intakeRoutingDecisionSchema.safeParse(normalized);
     return parsed.success ? parsed.data : null;
 };

@@ -4,6 +4,7 @@ import { organizeKnowledge } from "@/agentflow/agents/online/content-organizer";
 import { buildSummarizeSourceText, formatSummaryAsAnswer, summarizeContent, } from "@/agentflow/agents/online/content-summarizer";
 import { completeFactCheck } from "@/agentflow/agents/online/fact-checker";
 import { completeIntakeCoordinator } from "@/agentflow/agents/online/intake-coordinator";
+import { applyIntakeChitchatGuard } from "@/agentflow/agents/online/intake-coordinator/intake-chitchat-guard";
 import { applyIntakeCoreferenceGuard } from "@/agentflow/agents/online/intake-coordinator/intake-coreference-guard";
 import { findRepeatAnswerInHistory } from "@/agentflow/agents/online/intake-coordinator/intake-repeat-guard";
 import { streamAnalyzeInformation } from "@/agentflow/agents/online/information-analyst";
@@ -70,9 +71,8 @@ const intakeNode = async (state: PipelineGraphState): Promise<Partial<PipelineGr
         });
         const parsed = parseIntakeDecision(intakeRaw) ??
             defaultIntakeDecision(state.userQuestion);
-        const decision = applyIntakeCoreferenceGuard(
-            parsed,
-            state.intakeHistory
+        const decision = applyIntakeChitchatGuard(
+            applyIntakeCoreferenceGuard(parsed, state.intakeHistory)
         );
         return { decision };
     }

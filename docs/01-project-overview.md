@@ -193,6 +193,7 @@ pnpm run dev
 | `verify:confidence-tier` | `apps/agents/scripts/` | Wave D：assessConfidence 单测 + KM live tier |
 | `verify:analyst-empty-hits` | `apps/agents/scripts/` | P0-12 / D5-5：空 hits skip LLM + insufficientEvidence |
 | `verify:intake-coreference` | `apps/agents/scripts/` | Wave C QU-02 + D5-2 repeat guard 单测 |
+| `verify:intake-chitchat` | `apps/agents/scripts/` | P0-13：chitchat briefReply 模板兜底 + live ×10 |
 | `eval:run` | `apps/agents/scripts/eval/` | Eval MVP：golden + cache/profile 探测；`--profile-only` → **G-履历综合** 4 轮 |
 | `golden:regression` | `apps/agents/scripts/` | G1～G5 全链路回归（多遍稳定性） |
 | `indexAllCorpora` | `agentflow/agents/offline/knowledge-indexer/` | 离线 corpus → Chroma |
