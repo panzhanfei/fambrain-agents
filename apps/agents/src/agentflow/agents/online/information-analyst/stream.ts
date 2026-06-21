@@ -3,10 +3,17 @@ import { logAgentIn, logAgentOut } from "@fambrain/agent-shared/agent-log";
 import { streamOllamaNative } from "@fambrain/agent-shared/ollama-native-stream";
 import { parseJsonObject } from "@/agentflow/utils";
 import {
+    maxAnalystHitsForProfile,
+    prefersPlainTextAnalystStream,
+    resolveAnalystQueryProfile,
+} from "./analyst-recall-limits";
+import {
     buildFallbackAnswer,
     normalizeAnalystResult,
     shouldSkipAnalystLlm,
+    toSubQuestionInput,
 } from "./analyze-helpers";
+import { streamAnalyzeSubQuestion } from "./complete-analyze";
 import {
     prompt,
     type InformationAnalystInput,
@@ -39,7 +46,39 @@ const resolveSingleSlotCachedAnswer = (
     return cachedFacetToAnalystResult(slot.cachedAnswer);
 };
 
-/** 单问 / 单槽：流式 Analyst（含 thinking） */
+/** 单问 plain-text 流式（与 composite 子问同路径，避免 JSON 解析失败 → excerpt 体） */
+async function* streamSinglePlainAnalyze(
+    input: InformationAnalystInput,
+    profile: ReturnType<typeof resolveAnalystQueryProfile>
+): AsyncGenerator<AnalystStreamChunk, InformationAnalystResult> {
+    const limit = maxAnalystHitsForProfile(profile);
+    const hits = input.hits.slice(0, limit);
+    const subInput = toSubQuestionInput(input, profile, hits);
+    const gen = streamAnalyzeSubQuestion(subInput);
+    let result: InformationAnalystResult | undefined;
+    while (true) {
+        const next = await gen.next();
+        if (next.done) {
+            result = next.value;
+            break;
+        }
+        yield { type: "assistant", text: next.value.text };
+    }
+    logAgentOut("InformationAnalyst", "出去", {
+        source: "plain_text_stream",
+        queryType: profile,
+        insufficientEvidence: result!.insufficientEvidence,
+        confidence: result!.confidence,
+        citationCount: result!.citations.length,
+        answerPreview:
+            result!.answer.length > 400
+                ? `${result!.answer.slice(0, 400)}…`
+                : result!.answer,
+    });
+    return result!;
+}
+
+/** 单问 / 单槽：流式 Analyst（tech 等仍走 JSON） */
 async function* streamSingleAnalyze(
     input: InformationAnalystInput
 ): AsyncGenerator<AnalystStreamChunk, InformationAnalystResult> {
@@ -59,6 +98,12 @@ async function* streamSingleAnalyze(
         return l3Cached;
     }
 
+    const profile = resolveAnalystQueryProfile({
+        userQuestion: input.userQuestion,
+        subTasks: input.subTasks,
+        queryType: input.queryType,
+        searchQuery: input.searchQuery,
+    });
     const fallback = buildFallbackAnswer(input);
     const { ollama } = getAgentsConfig();
 
@@ -77,6 +122,10 @@ async function* streamSingleAnalyze(
         return fallback;
     }
 
+    if (prefersPlainTextAnalystStream(profile)) {
+        return yield* streamSinglePlainAnalyze(input, profile);
+    }
+
     try {
         const messages = [
             { role: "system", content: prompt },
@@ -85,7 +134,7 @@ async function* streamSingleAnalyze(
         let fullContent = "";
         for await (const chunk of streamOllamaNative({
             messages,
-            think: ollama.streamThink,
+            think: false,
             model: ollama.models.intakeCoordinator,
         })) {
             if (chunk.kind === "thinking") {
@@ -101,7 +150,8 @@ async function* streamSingleAnalyze(
             yield { type: "assistant", text: result.answer };
         }
         logAgentOut("InformationAnalyst", "出去", {
-            source: "llm",
+            source: parsed ? "llm_json" : "fallback_parse",
+            queryType: profile,
             insufficientEvidence: result.insufficientEvidence,
             confidence: result.confidence,
             citationCount: result.citations.length,
@@ -134,6 +184,13 @@ async function* streamSingleAnalyze(
 export async function* streamAnalyzeInformation(
     input: InformationAnalystInput
 ): AsyncGenerator<AnalystStreamChunk, InformationAnalystResult> {
+    const profile = resolveAnalystQueryProfile({
+        userQuestion: input.userQuestion,
+        subTasks: input.subTasks,
+        queryType: input.queryType,
+        searchQuery: input.searchQuery,
+    });
+
     logAgentIn("InformationAnalyst", "进入", {
         userQuestion: input.userQuestion,
         language: input.language,
@@ -142,12 +199,15 @@ export async function* streamAnalyzeInformation(
         notes: input.notes,
         hasMemoryBlock: Boolean(input.memoryBlock),
         subTasks: input.subTasks,
+        queryType: input.queryType ?? profile,
         routeMode: input.routeMode ?? "single",
         compositeSlotCount: input.compositeSubResults?.length ?? 0,
         hitPaths: input.hits.map((h) => h.path),
         analyzeMode: useCompositeParallelAnalyze(input)
             ? "composite_sequential_stream"
-            : "single",
+            : prefersPlainTextAnalystStream(profile)
+              ? "single_plain_stream"
+              : "single_json",
     });
 
     if (useCompositeParallelAnalyze(input)) {

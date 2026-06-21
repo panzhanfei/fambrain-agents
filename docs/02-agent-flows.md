@@ -180,8 +180,11 @@ flowchart TD
   HY --> RRF["fuseRrf + merge by path"]
   RRF --> RAW[candidates + recallChannel]
   RAW --> IDINJ["identity: 补注入 personal 简历"]
-  IDINJ --> ENUMINJ["enumeration: 注入 experience/ 全量"]
-  ENUMINJ --> CAND[candidates 就绪]
+  IDINJ --> ENUMINJ{"enumeration target?"}
+  ENUMINJ -->|experience| EXINJ["注入 experience/ 全量 + fill"]
+  ENUMINJ -->|project| PRINJ["注入 projects/ 全量 + fill"]
+  EXINJ --> CAND[candidates 就绪]
+  PRINJ --> CAND
   CAND --> RULE["rankCandidates: token+vector/sparse+pathBoost"]
   RULE --> GUARD["identityGuard / enumerationFill"]
   GUARD --> TIER["assessConfidence → confidenceTier"]
@@ -194,7 +197,7 @@ flowchart TD
 | 1 | Hybrid 召回 | 向量 + BM25 **并行**；RRF 融合；topK 按 profile | `hybrid-recall.ts`、`fusion-rrf.ts` | `hybridRecall()` |
 | 2 | 关键词扫盘 | ~~向量空或低置信时扫三目录~~ **已移除**（由 BM25 sparse 替代） | — | — |
 | 3 | 规则精排 | **token + vector + pathBoost**；`pickExcerpt`（表格行优先） | `retrieve-helpers.ts` | `rankCandidates()`、`pickTableExcerpt()` |
-| 4 | identity / 列举保底 | identity 补注入 personal + Top1；enumeration 注入 experience + fill | `retrieve.ts`、`retrieve-helpers.ts` | `ensureIdentityPersonalCandidate()`、`applyIdentityGuard()`、`ensureEnumerationExperienceCandidates()`、`applyEnumerationFill()` |
+| 4 | identity / 列举保底 | identity 补注入 personal + Top1；**enumeration 按 target**：`experience` → experience fill；`project` → projects fill（`resolveEnumerationTarget`） | `retrieve.ts`、`enumeration-target.ts`、`retrieve-helpers.ts` | `ensureIdentityPersonalCandidate()`、`ensureEnumerationExperienceCandidates()`、`ensureEnumerationProjectCandidates()`、`applyEnumerationFill(..., target)` |
 | 5 | 兜底 | **低置信**才 `ensureNonEmptyHits`；高/中置信不硬塞 Top1 | `retrieve.ts`、`score-candidate.ts` | `shouldCoalesceEmptyHits()`、`ensureNonEmptyHits()` |
 | 6 | 置信分档 | 融合分 + gap + path 权威 → `high` / `mid` / `low` | `score-candidate.ts` | `assessConfidence()`、`deriveCoverageFromTier()` |
 | 7 | 输出 | **maxHits 按 profile**；列举型 notes 标明覆盖段数；可选 `confidenceTier` | `types.ts` | `KnowledgeRetrievalResult` |
@@ -234,37 +237,43 @@ flowchart TD
 
 **P0-15 composite（2026-06）：** `routeMode=composite` 且 ≥2 槽 → **`stream-composite.ts`** 顺序分问 token 流式；L3 facet cache 命中 instant 回放；新 facet 写回 `composite-answer-cache`。composite ≥2 槽跳过 FactChecker LLM。
 
-**技术：** Ollama 流式（thinking + assistant）；终稿 JSON **Zod**（单问）或分问 plain-text + merge（composite）。
+**P0-19 / P0-20（2026-06）：** 单问 `identity` / `enumeration` / `default` 走 **plain-text 流式**（与 composite 子问同路径，`think: false`），避免 JSON 解析失败退回「根据知识库摘录」体；hits 上限与 KM **queryProfile** 对齐（`analyst-recall-limits.ts`）；ContentOrganizer 按 profile 设 `maxHits`。详见 [坑点 §2.5.5](./04-pitfalls.md#255-analyst-纯文本流--enumeration-项目公司分流-p0-19--p0-20--2026-06)。
+
+**技术：** composite / 单问列举 → **plain-text 流式**；`tech` 单问仍 JSON **Zod**；fallback 为紧凑列表（非 raw excerpt 粘贴）。
 
 ```mermaid
 flowchart TD
-  IN["userQuestion + hits + coverage"] --> STREAM["streamAnalyzeInformation()"]
-  STREAM --> THINK[thinking 流]
-  STREAM --> ASST[assistant 流]
-  STREAM --> PARSE[解析终稿 JSON]
-  PARSE -->|失败| FB["buildFallbackAnswer()"]
-  PARSE --> ANS[answer + citations]
+  IN["userQuestion + hits + queryType + topics"] --> MODE{"analyzeMode"}
+  MODE -->|composite ≥2 槽| COMP["streamCompositeAnalyze()<br/>子问 plain-text"]
+  MODE -->|single plain| PLAIN["streamAnalyzeSubQuestion()<br/>identity/enumeration/default"]
+  MODE -->|single tech| JSON["streamSingleAnalyze JSON + Zod"]
+  COMP --> MERGE["mergeSubQuestionAnswers()"]
+  PLAIN --> ANS[answer + citations]
+  JSON -->|parse 失败| FB["buildFallbackAnswer 紧凑列表"]
+  JSON --> ANS
+  MERGE --> ANS
   FB --> ANS
 ```
 
 | 步骤 | 做什么 | 规则 | 文件 | 方法 |
 |------|--------|------|------|------|
-| 1 | 输入 | 只认上游 hits；不自己检索 | `InformationAnalyst/prompt.ts` | `InformationAnalystInput` |
+| 1 | 输入 | hits + **queryType** / **topics**（来自 Intake） | `InformationAnalyst/prompt.ts` | `InformationAnalystInput` |
 | 2 | 空 hits 短路 | **P0-12** 不调 LLM | `analyze-helpers.ts` | `shouldSkipAnalystLlm()` |
-| 3 | 流式 | thinking + assistant SSE | `InformationAnalyst/stream.ts` | `streamAnalyzeInformation()` |
-| 4 | 终稿 JSON | answer / citations / insufficientEvidence；**Zod parse** | `analyze-helpers.ts`, `schema.ts` | `normalizeAnalystResult()` |
-| 5 | 兜底 | 解析失败用 hits 拼可读回答 | `analyze-helpers.ts` | `buildFallbackAnswer()` |
-| 6 | 落库 | LangGraph `analyst` 节点 + SSE custom 流 | `pipeline/graph/compile.ts`, `stream.ts` | `analystNode()`, `streamAnalyzeInformation()` |
+| 3 | profile 上限 | enumeration **8** / identity **4**（非固定 4） | `analyst-recall-limits.ts` | `maxAnalystHitsForProfile()` |
+| 4 | 流式 | composite + 单问列举 → plain-text；tech → JSON | `stream.ts`, `complete-analyze.ts` | `streamAnalyzeInformation()`, `streamAnalyzeSubQuestion()` |
+| 5 | 子问 prompt | **project** topics：只列 projects/ 项目名，禁止答公司 | `sub-question-prompt.ts` | `buildSubQuestionStreamPrompt(profile, topics)` |
+| 6 | fallback | 紧凑 bullet 列表，非「根据知识库摘录」 | `analyze-helpers.ts` | `buildFallbackAnswer()`, `formatHitsAsAnswerList()` |
+| 7 | 落库 | LangGraph `analyst` 节点 + SSE custom 流 | `pipeline/graph/compile.ts`, `stream.ts` | `analystNode()`, `streamAnalyzeInformation()` |
 
 ### 6. ContentOrganizer — 内容整理师（D6）✅
 
 **职责：** 在 FactChecker 放行后、Analyst 生成前，对 `hits` 做 **Zod 规范化**、**同 path 去重**、excerpt 合并；空 hits 时将 `coverage` 降为 `none`。**不调 LLM**。
 
-**技术：** Zod（`knowledgeHitsSchema`）；规则合并（`organizeHits` / `dedupeCitations`）。
+**技术：** Zod（`knowledgeHitsSchema`）；规则合并（`organizeHits` / `dedupeCitations`）；**maxHits 随 queryProfile**（enumeration **8**，default **5**）。
 
 ```mermaid
 flowchart TD
-  IN["hits + coverage + notes"] --> ZOD["parseKnowledgeHits()"]
+  IN["hits + coverage + queryProfile?"] --> ZOD["parseKnowledgeHits()"]
   ZOD --> DEDUP["organizeHits()<br/>path 去重 + excerpt 合并"]
   DEDUP --> COV{coverage 调整}
   COV -->|hits 为空| NONE[coverage = none]

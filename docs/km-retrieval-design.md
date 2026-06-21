@@ -59,6 +59,7 @@ Intake（L1）→ KM（L2～L5）→ FactChecker → ContentOrganizer → Analys
 | **P0-8** | KM-11 | L4 | KM | 增 | **identityGuard**：有 personal 简历则强制 Top1；扫盘未命中时 **补注入** personal 简历 | `retrieve.ts`、`retrieve-helpers.ts` | — | KM-08 | ✅ | 裸问「我的名字」Top1 为 personal |
 | **P0-9** | KM-13 | L2 | KM | 改 | 列举 profile **主动扫 experience/** 全目录 | `retrieve.ts` | — | KM-08 | ✅ | 「哪几家公司」覆盖多文件 |
 | **P0-10** | KM-14 | L5 | KM | 增 | **enumerationFill**：每 experience/*.md ≥1 hit | `retrieve-helpers.ts` | — | KM-13 | ✅ | hits 覆盖全部经历文件 |
+| **P0-10b** | KM-13b | L2 | KM | 增 | 列举 **project** target：扫 **projects/** + fill（`resolveEnumerationTarget`） | `retrieve.ts`、`enumeration-target.ts` | — | KM-08 | ✅ | 「项目名称」槽 hits 为 projects/ |
 | **P0-11** | KM-15 | L3 | KM | 改 | 列举型 **coverage / notes** 文案 | `retrieve-helpers.ts` | — | KM-14 | ✅ | notes 标明是否补全 |
 | **P0-12** | KM-12 | L3 | KM | 改 | 日志增加 `queryProfile`、`vectorTopK`、`maxHits`、`topRank`、`guardApplied` | `retrieve.ts` | 建议 agent-log | KM-08 | ✅ | KM 📤 可见 guardApplied |
 | **P0-13** | KM-16 | L4 | KM | 改 | 同 path 多 chunk **merge body** 再摘抄 | `retrieve-helpers.ts` | — | KM-02 | ✅ | 同文件 excerpt 更完整 |
@@ -208,7 +209,8 @@ flowchart TD
 | queryProfile | 典型问法 | vectorTopK | maxHits | 召回 | 专项 guard |
 |--------------|----------|------------|---------|------|------------|
 | identity | 我叫什么、姓名 | 12 | 4 | 低置信三目录 / Wave B 后 sparse 并行 | personal 简历 Top1 |
-| enumeration | 哪几家公司 | 24 | 8 | **experience 全量** | 每经历文件 ≥1 hit |
+| enumeration（**experience**） | 哪几家公司 | 24 | 8 | **experience/** 全量 + fill | 每经历文件 ≥1 hit；剔除 projects |
+| enumeration（**project**） | 哪些项目、项目名称 | 24 | 8 | **projects/** 全量 + fill | 每项目 md ≥1 hit；剔除 experience（KM-13b） |
 | tech | 技术栈、框架 | 16 | 6 | 低置信三目录 | — |
 | default | 其余 | 12 | 5 | 低置信三目录 | — |
 

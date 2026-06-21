@@ -98,6 +98,38 @@ assertSync("空 hits → insufficientEvidence", () => {
   }
 });
 
+assertSync("enumeration 有 hits → 紧凑列表，非 excerpt 体", () => {
+  const r = buildFallbackAnswer({
+    userQuestion: "我在哪几家公司上过班？",
+    language: "zh",
+    subTasks: [],
+    queryType: "enumeration",
+    hits: [
+      {
+        path: "experience/a.md",
+        title: "苏州云联智慧",
+        excerpt: "> **时间段**：2016.07 - 2018.04 · **角色**：全栈开发",
+        relevance: 0.9,
+      },
+      {
+        path: "experience/b.md",
+        title: "西安奥卡云",
+        excerpt: "> **时间段**：2021.06 - 2024.09 · **角色**：前端组长",
+        relevance: 0.85,
+      },
+    ],
+    coverage: "sufficient",
+    notes: null,
+    memoryBlock: null,
+  });
+  if (/根据知识库摘录/.test(r.answer)) {
+    throw new Error("enumeration fallback 不应为 raw excerpt 体");
+  }
+  if (!r.answer.includes("苏州云联智慧") || !r.answer.includes("西安奥卡云")) {
+    throw new Error("应列出全部 hit 标题");
+  }
+});
+
 await bootstrapAgentsRuntime();
 
 console.log("\n— streamAnalyzeInformation（无 Ollama 调用）—");

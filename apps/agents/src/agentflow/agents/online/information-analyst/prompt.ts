@@ -3,6 +3,7 @@ import type {
   KnowledgeRetrievalResult,
 } from "@/agentflow/agents/online/knowledge-manager";
 import type { IntakeRouteMode } from "@/agentflow/agents/online/intake-coordinator/composite-route-guard";
+import type { QueryProfile } from "@/agentflow/agents/online/knowledge-manager/query-profile";
 import type { CompositeSlotPlan } from "@/agentflow/agents/online/intake-coordinator/composite-incremental";
 import type { CompositeSlotId } from "@/agentflow/agents/online/intake-coordinator/composite-slot-queries";
 import type { CompositeSessionKey } from "@fambrain/infra";
@@ -53,6 +54,7 @@ export type InformationAnalystInput = {
     label: string;
     hits: KnowledgeHit[];
     coverage: KnowledgeRetrievalResult["coverage"];
+    notes?: string | null;
     facetAnswerCacheHit?: boolean;
   }>;
   /** L4 增量 plan（含 L3 facet cache 命中标记） */
@@ -62,6 +64,12 @@ export type InformationAnalystInput = {
   };
   /** L3 会话 cache 写入键 */
   sessionKey?: CompositeSessionKey;
+  /** Intake queryType（QU-05/06 单一意图来源） */
+  queryType?: QueryProfile | null;
+  /** 检索用 searchQuery（profile 解析兜底） */
+  searchQuery?: string;
+  /** Intake topics（项目/经历列举分流） */
+  topics?: string[];
 };
 export const prompt = `你是 FamBrain 系统中的「信息分析师」（InformationAnalyst）。
 

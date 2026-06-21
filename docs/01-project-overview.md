@@ -6,7 +6,7 @@
 
 基于 **Next.js（App Router）** 的家庭协作型对话应用：注册登录、成员审核、会话与消息持久化，以及 **P0 多 Agent 聊天闭环**（意图路由 → 知识库检索 → 归纳回答，SSE 流式）。
 
-**当前进度（2026-06）：** 在线 LangGraph 多 Agent 闭环 ✅；`@fambrain/corpus` / `@fambrain/agent-memory` / `@fambrain/infra` 已抽包；**`pnpm dev` 一键起 Chroma + Redis + Web + Agents** ✅；**P0-15 composite 分槽 + L3/L4 会话 facet cache** ✅；**P0-18 单问年龄 + 多轮 cache** ✅；**R6-1 / R6-2 / R6-3 枚举与追问一致** ✅（`verify:r6-no-cache`）；**SLO 耗时**（`pipeline_timing` + 聊天 UI）🔄 部分。详见 [路线图](./03-roadmap.md) · [流程图](./02-agent-flows.md) · [坑点 §2.3～§2.7](./04-pitfalls.md#23-工作经历枚举不完整--同问不同答-2026-06--verifyr6-no-cache)。
+**当前进度（2026-06）：** 在线 LangGraph 多 Agent 闭环 ✅；`@fambrain/corpus` / `@fambrain/agent-memory` / `@fambrain/infra` 已抽包；**`pnpm dev` 一键起 Chroma + Redis + Web + Agents** ✅；**P0-15 composite 分槽 + L3/L4** ✅；**P0-18 年龄 + 多轮 cache** ✅；**R6 枚举/追问** ✅（`verify:r6-no-cache`）；**P0-19 / P0-20 Analyst 纯文本流 + 项目/公司 enumeration 分流** ✅（`verify:composite-route` · `verify:analyst-empty-hits`）；**SLO 耗时** 🔄 部分。详见 [路线图](./03-roadmap.md) · [流程图](./02-agent-flows.md) · [坑点 §2.5.3～§2.5.5](./04-pitfalls.md#253-p0-15--r6-3--composite-分槽检索-2026-06)。
 
 ## 应用层技术栈
 
@@ -198,7 +198,8 @@ pnpm run dev
 | `verify:intake-chitchat` | `apps/agents/scripts/` | P0-13：chitchat briefReply 模板兜底 + live ×10 |
 | `verify:composite-route` | `apps/agents/scripts/` | P0-15/R6-3：composite 路由 guard + merge + 单问年龄 slot 单测 |
 | `verify:composite-incremental` | `apps/agents/scripts/` | P0-15：L3 facet 终稿 cache + L4 增量 composite 单测 |
-| `verify:r6-no-cache` | `apps/agents/scripts/` | P0-15 + R6-1/2/3 全链路验收（L1/L2/L3 全关，11 项；需 Ollama + Chroma） |
+| `resolveEnumerationTarget` | `intake-coordinator/enumeration-target.ts` | plan label/topics → project \| experience 列举分流（P0-21） |
+| `maxAnalystHitsForProfile` | `information-analyst/analyst-recall-limits.ts` | Analyst hits 上限与 KM profile 对齐（P0-20） |
 | `clear-pipeline-cache.ts` | `apps/agents/scripts/` | 清空 L2/L3 Redis + 进程 memory；见 `.env.example` 三层 cache 开关 |
 | `diagnose-age-query.ts` | `apps/agents/scripts/` | 年龄单问：路由 + KM 检索 + 语料字段诊断（需 Chroma） |
 | `eval:run` | `apps/agents/scripts/eval/` | Eval MVP：golden + cache/profile 探测；`--profile-only` → **G-履历综合** 4 轮 |

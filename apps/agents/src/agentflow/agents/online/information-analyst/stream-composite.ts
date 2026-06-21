@@ -1,6 +1,7 @@
 import { logAgentIn, logAgentOut } from "@fambrain/agent-shared/agent-log";
 import { upsertFacetAnswers } from "@fambrain/infra";
 import { organizeKnowledge } from "@/agentflow/agents/online/content-organizer";
+import { resolveQueryProfile } from "@/agentflow/agents/online/knowledge-manager/query-profile";
 import type { CompositeSlotPlan } from "@/agentflow/agents/online/intake-coordinator/composite-incremental";
 import {
     analystResultToCachedFacet,
@@ -10,10 +11,7 @@ import {
     mergeSubQuestionAnswers,
     type SubQuestionAnalyzeInput,
 } from "./analyze-helpers";
-import {
-    MAX_SUB_QUESTION_HITS,
-    streamAnalyzeSubQuestion,
-} from "./complete-analyze";
+import { streamAnalyzeSubQuestion } from "./complete-analyze";
 import type { InformationAnalystInput, InformationAnalystResult } from "./prompt";
 
 type AnalystStreamChunk =
@@ -33,17 +31,25 @@ const buildSubInput = (
     plan: CompositeSlotPlan,
     sub: NonNullable<InformationAnalystInput["compositeSubResults"]>[number]
 ): SubQuestionAnalyzeInput => {
+    const queryType = resolveQueryProfile(
+        plan.searchQuery,
+        plan.subTasks,
+        plan.queryType
+    );
     const organized = organizeKnowledge({
         hits: sub.hits,
         coverage: sub.coverage,
-        notes: sub.notes,
+        notes: sub.notes ?? null,
+        queryProfile: queryType,
     });
     return {
         userQuestion: plan.label,
         language: input.language,
-        hits: organized.hits.slice(0, MAX_SUB_QUESTION_HITS),
+        hits: organized.hits,
         coverage: sub.coverage,
-        notes: sub.notes,
+        notes: sub.notes ?? null,
+        queryType,
+        topics: [...plan.topics],
     };
 };
 

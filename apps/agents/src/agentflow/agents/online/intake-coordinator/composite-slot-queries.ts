@@ -4,6 +4,10 @@
  */
 import type { IntakeRetrievalPlanItem } from "./prompt";
 import type { IntakeRoutingDecision } from "./prompt";
+import {
+    isProjectEnumeration,
+    resolveEnumerationTarget,
+} from "./enumeration-target";
 
 export const COMPOSITE_FACET_IDS = [
     "identity",
@@ -56,9 +60,9 @@ export const EMPLOYERS_SLOT: CompositeRetrievalSlot = {
 export const RECENT_SLOT: CompositeRetrievalSlot = {
     id: "recent",
     label: "近两年",
-    searchQuery: "近两年 最近 工作 在干什么",
-    queryType: "default",
-    topics: ["experience", "resume"],
+    searchQuery: "个人简介 简历 最近 工作经历 时间线 阶段 在干什么",
+    queryType: "identity",
+    topics: ["personal", "resume", "experience"],
     subTasks: [],
 };
 
@@ -81,15 +85,25 @@ export const getCompositeSlot = (
 const topicHas = (topics: string[], re: RegExp): boolean =>
     topics.some((t) => re.test(t));
 
-/** queryType + topics 映射 canonical 模板（单问兜底，不看用户原句） */
+/** queryType + topics/label 映射 canonical 模板 */
 export const facetTemplateForQueryType = (
     queryType: IntakeRoutingDecision["queryType"],
-    topics: string[]
+    topics: string[],
+    planItem?: Pick<
+        IntakeRetrievalPlanItem,
+        "label" | "searchQuery" | "topics"
+    >
 ): CompositeRetrievalSlot | null => {
     if (!queryType || queryType === "tech") return null;
     if (queryType === "identity") return { ...IDENTITY_SLOT };
     if (queryType === "enumeration") {
-        if (topicHas(topics, /^project|tech-stack$/)) {
+        const targetInput = planItem ?? { label: "", searchQuery: "", topics };
+        if (
+            isProjectEnumeration({
+                ...targetInput,
+                topics: planItem?.topics ?? topics,
+            })
+        ) {
             return { ...PROJECTS_SLOT };
         }
         return { ...EMPLOYERS_SLOT };
@@ -101,10 +115,15 @@ export const facetTemplateForQueryType = (
 export const canonicalizePlanItem = (
     item: IntakeRetrievalPlanItem
 ): IntakeRetrievalPlanItem => {
-    const template = facetTemplateForQueryType(item.queryType, item.topics);
+    const template = facetTemplateForQueryType(
+        item.queryType,
+        item.topics,
+        item
+    );
     if (!template) return item;
     return {
         ...item,
+        label: item.label,
         searchQuery: template.searchQuery,
         queryType: template.queryType,
         topics: [...template.topics],
@@ -118,7 +137,8 @@ export const planItemToSlot = (
     const canonical = canonicalizePlanItem(item);
     const template = facetTemplateForQueryType(
         canonical.queryType,
-        canonical.topics
+        canonical.topics,
+        canonical
     );
     return {
         id: template?.id ?? `plan-${index}`,

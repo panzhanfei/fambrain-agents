@@ -51,6 +51,12 @@ export {
     type CompositeSlotId,
 } from "./composite-slot-queries";
 export {
+    isExperienceEnumeration,
+    isProjectEnumeration,
+    resolveEnumerationTarget,
+    type EnumerationTarget,
+} from "./enumeration-target";
+export {
     buildFacetKey,
     detectCompositeRefreshIntent,
     attachFacetKey,

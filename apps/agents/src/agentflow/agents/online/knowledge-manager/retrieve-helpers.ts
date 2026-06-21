@@ -316,7 +316,16 @@ export const isExperienceEntryPath = (repoPath: string): boolean => {
     return /\.md$/i.test(p);
 };
 
-/** KM-14：列举型补全 — 每段经历至少 1 hit，优先 experience、剔除 projects。 */
+/** KM-13b：projects/ 下项目 md（不含模板/resume）。 */
+export const isProjectEntryPath = (repoPath: string): boolean => {
+    const p = repoPath.replace(/\\/g, "/").toLowerCase();
+    if (!p.includes("/projects/")) return false;
+    if (p.includes("readme") || p.includes("_template")) return false;
+    if (p.endsWith("/projects/resume.md")) return false;
+    return /\.md$/i.test(p);
+};
+
+/** KM-14：列举型补全 — experience 或 project 专扫路径。 */
 export const applyEnumerationFill = (
     hits: KnowledgeHit[],
     candidates: VectorChunkRow[],
@@ -324,11 +333,17 @@ export const applyEnumerationFill = (
     queryProfile: QueryProfile,
     maxHits: number,
     expectedPaths: string[],
-    tokens: string[]
+    tokens: string[],
+    target: "experience" | "project" = "experience"
 ): { hits: KnowledgeHit[]; fillApplied: boolean; filledCount: number } => {
     if (queryProfile !== "enumeration" || expectedPaths.length === 0) {
         return { hits, fillApplied: false, filledCount: 0 };
     }
+
+    const isTargetPath = (p: string) =>
+        target === "project"
+            ? isProjectEntryPath(p)
+            : isExperienceEntryPath(p);
 
     const byPath = new Map<string, KnowledgeHit>();
     for (const h of hits) {
@@ -361,30 +376,26 @@ export const applyEnumerationFill = (
         }
     }
 
-    const experienceHits: KnowledgeHit[] = [];
+    const primaryHits: KnowledgeHit[] = [];
     for (const p of expectedPaths) {
         const h = byPath.get(p);
-        if (h) experienceHits.push(h);
+        if (h) primaryHits.push(h);
     }
-    experienceHits.sort((a, b) => b.relevance - a.relevance);
+    primaryHits.sort((a, b) => b.relevance - a.relevance);
 
     const others = [...byPath.values()]
         .filter(
             (h) =>
                 !expectedPaths.includes(h.path) &&
-                !h.path.replace(/\\/g, "/").toLowerCase().includes("/projects/")
+                isTargetPath(h.path) &&
+                (target === "project"
+                    ? !h.path.replace(/\\/g, "/").toLowerCase().includes("/experience/")
+                    : !h.path.replace(/\\/g, "/").toLowerCase().includes("/projects/"))
         )
         .sort((a, b) => b.relevance - a.relevance);
 
-    const newHits = [...experienceHits, ...others].slice(0, maxHits);
+    const newHits = [...primaryHits, ...others].slice(0, maxHits);
 
-    const hadProjects = hits.some((h) =>
-        h.path.replace(/\\/g, "/").toLowerCase().includes("/projects/")
-    );
-    const hasProjects = newHits.some((h) =>
-        h.path.replace(/\\/g, "/").toLowerCase().includes("/projects/")
-    );
-    if (hadProjects && !hasProjects) fillApplied = true;
     if (
         newHits.length !== hits.length ||
         newHits.some((h, i) => h.path !== hits[i]?.path)
@@ -395,7 +406,7 @@ export const applyEnumerationFill = (
     return {
         hits: newHits,
         fillApplied,
-        filledCount: experienceHits.length,
+        filledCount: primaryHits.length,
     };
 };
 
@@ -403,7 +414,8 @@ export const applyEnumerationFill = (
 export const buildEnumerationCoverage = (
     hits: KnowledgeHit[],
     expectedCount: number,
-    filledCount: number
+    filledCount: number,
+    entityLabel: "经历" | "项目" = "经历"
 ): { coverage: "sufficient" | "partial" | "none"; notes: string | null } => {
     if (expectedCount === 0) {
         const top = hits[0]?.relevance ?? 0;
@@ -415,8 +427,8 @@ export const buildEnumerationCoverage = (
 
     const notes =
         filledCount >= expectedCount
-            ? `列举已覆盖 ${filledCount}/${expectedCount} 段经历。`
-            : `列举覆盖 ${filledCount}/${expectedCount} 段经历，部分任职文档未进入 hits。`;
+            ? `列举已覆盖 ${filledCount}/${expectedCount} 个${entityLabel}。`
+            : `列举覆盖 ${filledCount}/${expectedCount} 个${entityLabel}，部分文档未进入 hits。`;
 
     const top = hits[0]?.relevance ?? 0;
     const coverage =

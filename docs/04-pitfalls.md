@@ -86,6 +86,9 @@
 | R6-1 | KM / Analyst | **「我在那几家公司上过班？」** 应枚举 **4 家**，首轮只答 **2 家**（西安奥卡云、苏州奖多多）；**同句再问** 仅确认 **1 家** 并称其余「知识库无记录」 | 见 §2.3 | composite 分槽 + enumeration KM；`verify:r6-no-cache` 验收 | ✅ **已解决**（2026-06 · cache 全关 4 家×2 轮）← §2.3 |
 | R6-2 | Analyst / 上下文 | **同会话追问**（如「用表格列出来 时间 职位 公司名称」）：上一轮已确认 **西安奥卡云**，本轮却称「没有明确列出具体公司」 | 见 §2.4 | 全链路重检 + 表格追问保留 grounded 公司 | ✅ **已解决**（2026-06 · `verify:r6-no-cache`）← §2.4 |
 | R6-3 | Intake / KM / Analyst | **同会话**：综合问首轮 **4 家**；编号子问或重复问后仅 **2 家** | 见 §2.7 | composite 分槽 + eval **`G-履历综合`** + `verify:r6-no-cache` | ✅ **已解决**（2026-06 · eval 4/4 + 无 cache 11/11）← §2.7 |
+| P0-19 | Analyst | 单问列举/档案走 **JSON+think** 解析失败 → 终稿变「**根据知识库摘录**」+ 整段 excerpt（像内部检索结果） | 单问与 composite 子问路径不一致；JSON parse 失败静默 `buildFallbackAnswer` 旧格式 | **plain-text 流式**（`prefersPlainTextAnalystStream`）；fallback 改 **紧凑列表** | ✅ **已解决**（2026-06）← §2.5.5 |
+| P0-20 | Analyst / KM / composite | **综合问**公司段只列 2 家；子问「2～8 句」压缩；Organizer 固定 cap **5** | `MAX_SUB_QUESTION_HITS=4`；子问 prompt 句数限制；CO 未跟 profile | **`maxAnalystHitsForProfile`** + CO **`queryProfile` maxHits**；enumeration 子问 prompt「须列全 hits」 | ✅ **已解决**（2026-06）← §2.5.5 |
+| P0-21 | Intake / KM / Analyst | composite 槽 label「**具体项目名称**」→ 答 **云联智慧/友谊时光** 等公司 | 所有 enumeration 共用 **experience fill**；Intake 误标 `topics:experience` → canonical 到 employers | **`resolveEnumerationTarget`**（label 优先）+ KM **projects/** 专扫 + Analyst project prompt | ✅ **已解决**（2026-06）← §2.5.5 |
 
 ### 2.3 工作经历枚举不完整 / 同问不同答（✅ 2026-06 · `verify:r6-no-cache`）
 
@@ -254,11 +257,12 @@ pnpm --filter @fambrain/agents run verify:r6-no-cache   # R6-1：同句再问 4 
 | **L0 入口 guard 链** | `intake-retrieval-plan-guard.ts` 等 | coreference → chitchat → **retrievalPlan 补全/ canonicalize** → composite 路由（**不靠问句 regex 词表**） |
 | **L1 Intake retrievalPlan** | `prompt.ts` + `schema.ts` | 多问并列时 LLM 输出每项 `{ label, searchQuery, queryType, topics }`；编排**优先**据此定槽 |
 | **L2 结构 / subTasks 兜底** | `composite-routing.ts` | 无 plan 时：`subTasks≥2` 或 **多问结构**（≥2 问号等）→ 按子句拆 plan；单问 → **Intake `queryType` + canonical 模板**（`identity` / `enumeration`） |
-| **KM 分槽** | `composite-slot-queries.ts` + `retrieve-slots-parallel.ts` | **按需子集**槽（非固定 4 槽全开）；**L2 检索 cache** key 仍为 `searchQuery+queryType`；merge → composite ≥2 槽跳过 FC LLM → Analyst 按 label 分段 |
+| **enumeration 分流** | `enumeration-target.ts` + `composite-slot-queries.ts` | plan 项 label/topics → **`project` \| `experience`**；canonical → `PROJECTS_SLOT` / `EMPLOYERS_SLOT`（label 优先纠正误标 topics） |
+| **KM 分槽** | `composite-slot-queries.ts` + `retrieve-slots-parallel.ts` | **按需子集**槽；experience 列举 vs **projects 列举** 分路检索 + fill；L2 cache key 仍为 `searchQuery+queryType` |
 
 **路由结论：** plan/槽 ≥2 → `composite`；1 槽 → `slot`；tech 单问 / 无槽 → `single`。`routeReason` / `routePlanSource` 可观测。
 
-**Analyst：** composite ≥2 子问 → **顺序分问 token 流式**（`stream-composite.ts`，KM 仍并行）；非一次性大 JSON。单问年龄/姓名空 hits → `buildFallbackAnswer` 字段化提示（非通用「补充公司/项目」）。
+**Analyst：** composite ≥2 子问 → **顺序 plain-text 流式**（`stream-composite.ts`）；单问 identity/enumeration/default 同路径（**P0-19**）；`tech` 仍 JSON。子问 **topics=project** 时只列 projects/ 文档（**P0-21**）。hits 上限见 `analyst-recall-limits.ts`（**P0-20**）。
 
 **会话 cache（D5-2 扩展 · facet L3/L4 · 2026-06）：**
 
@@ -304,6 +308,44 @@ pnpm --filter @fambrain/agents run verify:composite-incremental
 ```
 
 Web：「我今年多大了」→ `routeMode=slot`，KM hits 含 `出生日期 | 1993.03`，Analyst 据 excerpt 作答（非 clarify、非兜底文案）。
+
+#### 2.5.5 Analyst 纯文本流 + enumeration 项目/公司分流（✅ P0-19 / P0-20 / P0-21 · 2026-06）
+
+**背景（Web 综合履历联调）：**
+
+| 现象 | 用户体感 | 坑 ID |
+|------|----------|-------|
+| 单问「在哪几家公司…」答成「根据知识库摘录」+ Markdown 表格粘贴 | 像 thinking/内部结果，非正式回答 | **P0-19** |
+| 综合问「4. 具体项目名称」列出 **云联智慧、友谊时光**（公司+职位） | 问项目答公司 | **P0-21** |
+| 综合问公司段只列 2/4 家；子问再问格式正常 | 一问多答时 enumeration 被压缩 | **P0-20** |
+
+**根因（架构）：**
+
+| 层 | 问题 | 说明 |
+|----|------|------|
+| **Analyst 双路径** | composite 子问 plain-text；单问 JSON+think | JSON 解析失败 → 旧 `buildFallbackAnswer` 粘贴 excerpt |
+| **hits 上限不一致** | 子问 cap **4**、Organizer cap **5**；KM enumeration **8** | 上游召回够、下游 Analyst 只见 subset |
+| **enumeration 未二分** | KM 凡 enumeration 即 **experience fill** | plan label「项目名称」+ 误标 topics 仍走 employers 槽 |
+
+**对策（已实现 · 不靠整句 userQuestion regex guard）：**
+
+| 模块 | 改动 |
+|------|------|
+| `analyst-recall-limits.ts` | `maxAnalystHitsForProfile()`；`prefersPlainTextAnalystStream()` |
+| `stream.ts` | 单问 identity/enumeration/default → `streamAnalyzeSubQuestion`；tech 仍 JSON |
+| `analyze-helpers.ts` | `formatHitsAsAnswerList`；fallback 无「根据知识库摘录」 |
+| `organize-knowledge.ts` | `queryProfile` → `organizeHits(maxHits)` |
+| `enumeration-target.ts` | `resolveEnumerationTarget`：**plan label 优先于 topics** |
+| `retrieve.ts` | `ensureEnumerationProjectCandidates` + `applyEnumerationFill(..., target)` |
+| `sub-question-prompt.ts` | project topics：禁止把 experience 公司当项目名 |
+
+**验证：**
+
+```bash
+pnpm --filter @fambrain/agents run verify:analyst-empty-hits   # P0-19 fallback 形态
+pnpm --filter @fambrain/agents run verify:composite-route      # P0-21 label「具体项目名称」→ projects 槽
+pnpm --filter @fambrain/agents run verify:r6-no-cache          # 回归 R6 / P0-15
+```
 
 ### 2.6 跨会话用户自述事实未召回（2026-06 · Web 联调）
 
@@ -670,6 +712,9 @@ pnpm run verify:fact-checker
 | P0-16 | #16 关键信息遗忘（跨 conversationId；用户自述 fact） |
 | R6-1 | #3 过早终止（枚举未穷尽）；#16 跨轮不一致；P0-11 / D5-2 |
 | R6-3 | #16 跨轮不一致；#12 重复输出（同会话结论自相矛盾）；R6-1 枚举未穷尽 |
+| P0-21 | #9 信息捏造（项目/公司槽混淆）；enumeration 设计 |
+| P0-20 | #3 过早终止（列举压缩）；#16 跨轮不一致（子集 hits） |
+| P0-19 | #9 幻觉路径；UX 层「内部 excerpt 外露」 |
 | R6-2 | #16 关键信息遗忘；#17 上下文污染（当轮空 hits 否定 history）；D3-9 Analyst 不读全量历史 |
 
 ---
@@ -702,6 +747,7 @@ pnpm run verify:fact-checker
 - [x] **P0-13**（Golden Day 2）：chitchat 无乱称呼 ← `verify:intake-chitchat` ✅ 2026-06-18
 - [x] **P0-14**（Golden Day 2）：corpus/Mem0 不矛盾 ← KM 优化 ✅ 2026-06
 - [x] **P0-15**（Golden Day 2 实录）：无赵一/陈明、复合问法稳定 ← `verify:r6-no-cache` ✅ 2026-06
+- [x] **P0-19 / P0-20 / P0-21**（Analyst + enumeration 分流）← §2.5.5 · `verify:analyst-empty-hits` + `verify:composite-route` ✅ 2026-06
 - [ ] **P0-16**（Web 联调）：对话 A 记 QQ → 对话 B 问 QQ 可召回 ← §2.6
 - [x] R6-1：「哪几家公司上过班」类问题 → answer 枚举 **4 家**且同句再问一致 ← `verify:r6-no-cache` ✅ 2026-06
 - [x] **R6-3**：同会话「综合履历 → 编号子问」公司 **4 家** ← eval **`G-履历综合` 4/4** + `verify:r6-no-cache` ✅ 2026-06

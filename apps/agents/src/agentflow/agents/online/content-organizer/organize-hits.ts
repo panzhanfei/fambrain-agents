@@ -32,7 +32,7 @@ const pickTitle = (a: string, b: string): string => {
         return left;
     return left.length >= right.length ? left : right;
 };
-export const organizeHits = (hits: KnowledgeHit[]): KnowledgeHit[] => {
+export const organizeHits = (hits: KnowledgeHit[], maxHits = MAX_HITS): KnowledgeHit[] => {
     const byPath = new Map<string, KnowledgeHit>();
     for (const hit of hits) {
         const path = normalizeDocPath(hit.path);

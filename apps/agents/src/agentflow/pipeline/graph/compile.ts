@@ -1,6 +1,7 @@
 import { END, START, StateGraph, getWriter } from "@langchain/langgraph";
 import type { LangGraphRunnableConfig } from "@langchain/langgraph";
 import { organizeKnowledge } from "@/agentflow/agents/online/content-organizer";
+import { resolveQueryProfile } from "@/agentflow/agents/online/knowledge-manager/query-profile";
 import { buildSummarizeSourceText, formatSummaryAsAnswer, summarizeContent, } from "@/agentflow/agents/online/content-summarizer";
 import { completeFactCheck } from "@/agentflow/agents/online/fact-checker";
 import { completeIntakeCoordinator } from "@/agentflow/agents/online/intake-coordinator";
@@ -296,10 +297,19 @@ const contentSummarizerNode = async (state: PipelineGraphState): Promise<Partial
     }
 };
 const contentOrganizerNode = async (state: PipelineGraphState): Promise<Partial<PipelineGraphState>> => {
+    const decision = state.decision;
+    const queryProfile = decision
+        ? resolveQueryProfile(
+              decision.searchQuery || state.userQuestion,
+              decision.subTasks,
+              decision.queryType
+          )
+        : undefined;
     const organized = organizeKnowledge({
         hits: state.hits,
         coverage: state.coverage,
         notes: state.notes,
+        queryProfile,
     });
     return {
         hits: organized.hits,
@@ -323,6 +333,9 @@ const analystNode = async (state: PipelineGraphState, config: LangGraphRunnableC
             notes: state.notes,
             memoryBlock: state.memoryBlock,
             routeMode: decision.routeMode ?? "single",
+            queryType: decision.queryType,
+            searchQuery: decision.searchQuery,
+            topics: decision.topics,
             compositeSubResults: state.compositeSubResults ?? undefined,
             compositeIncrementalPlan:
                 state.compositeIncrementalPlan ?? undefined,

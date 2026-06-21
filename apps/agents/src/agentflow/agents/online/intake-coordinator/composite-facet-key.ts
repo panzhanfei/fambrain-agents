@@ -4,6 +4,7 @@
 import { normalizeSearchQuery } from "@fambrain/infra";
 import { inferQueryProfile } from "@/agentflow/agents/online/knowledge-manager/query-profile";
 import { canonicalizePlanItem } from "./composite-slot-queries";
+import { resolveEnumerationTarget } from "./enumeration-target";
 import type { CompositeRetrievalSlot } from "./composite-slot-queries";
 import type { IntakeRetrievalPlanItem } from "./prompt";
 
@@ -51,9 +52,12 @@ export const buildFacetKey = (source: FacetSource): string => {
     const ln = labelNorm(item.label);
 
     if (canonical.queryType === "enumeration") {
-        if (topicHas(canonical.topics, /^project|tech-stack$/)) {
-            return "enum:projects";
-        }
+        const target = resolveEnumerationTarget({
+            label: item.label,
+            searchQuery: canonical.searchQuery,
+            topics: canonical.topics,
+        });
+        if (target === "project") return "enum:projects";
         if (/职位|角色|担任|岗位|干什么/.test(ln)) {
             return "enum:employers:roles";
         }

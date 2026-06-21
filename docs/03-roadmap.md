@@ -241,7 +241,8 @@ EVAL_WRITE_REPORT=1 pnpm --filter @fambrain/agents run eval:run  # 写入 data/e
 - [x] **eval MVP**：`run-eval` 输出报告（通过率 + 指标 4 项）— 2026-06-17 12/12
 - [ ] **SLO 日志**：每轮至少含 step 耗时；可选 token（**step 耗时 + UI 展示 2026-06-18** ✅ 部分）
 - [x] **R6-3**：同会话综合履历 → **编号子问**公司数不得 4→2 ← eval **`G-履历综合` 4/4** + `verify:r6-no-cache` ✅ 2026-06
-- [x] 坑点表与路线图状态已更新（D5-2 L1+L2 / dev 一键 / **R6 全项** / SLO 耗时 **2026-06**）
+- [x] **P0-19～21**：Analyst plain-text + 项目/公司 enumeration 分流 ← `verify:analyst-empty-hits` · `verify:composite-route` ✅ 2026-06
+- [x] 坑点表与路线图状态已更新（D5-2 L1+L2 / dev 一键 / **R6 全项** / **P0-19～21** / SLO 耗时 **2026-06**）
 - [ ] 第 11 天总复盘文档或会话纪要归档
 
 ### 每日建议节奏

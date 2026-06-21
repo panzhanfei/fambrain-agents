@@ -11,6 +11,7 @@ import {
     PROJECTS_SLOT,
     EMPLOYERS_SLOT,
 } from "./composite-slot-queries";
+import { resolveEnumerationTarget } from "./enumeration-target";
 import type {
     IntakeRetrievalPlanItem,
     IntakeRoutingDecision,
@@ -67,9 +68,24 @@ const inferTopics = (
     baseTopics: string[]
 ): string[] => {
     if (baseTopics.length > 0) return baseTopics;
+    if (queryType === "enumeration") {
+        return resolveEnumerationTarget({
+            label: segment,
+            searchQuery: segment,
+            topics: [],
+        }) === "project"
+            ? ["project"]
+            : ["experience"];
+    }
     const profile = inferQueryProfile(segment, []);
     if (profile === "enumeration") {
-        return /项目/.test(segment) ? ["project"] : ["experience"];
+        return resolveEnumerationTarget({
+            label: segment,
+            searchQuery: segment,
+            topics: [],
+        }) === "project"
+            ? ["project"]
+            : ["experience"];
     }
     return defaultTopicsForQueryType(queryType);
 };
@@ -83,9 +99,11 @@ const buildSegmentPlanItem = (
 ): IntakeRetrievalPlanItem => {
     const profile = inferQueryProfile(label, []);
     const resolvedType =
-        profile === "tech" && !/技术|框架|栈/.test(label)
-            ? (decision.queryType ?? "default")
-            : profile;
+        profile !== "default"
+            ? profile
+            : decision.queryType && decision.queryType !== "default"
+              ? decision.queryType
+              : "default";
     const base = decision.searchQuery.trim();
     const searchQuery = base ? `${label} ${base}` : label;
     return {
@@ -275,7 +293,12 @@ export const resolveCompositeRoute = (
 
     const template = facetTemplateForQueryType(
         decision.queryType,
-        decision.topics
+        decision.topics,
+        {
+            label: userQuestion,
+            searchQuery: decision.searchQuery,
+            topics: decision.topics,
+        }
     );
     if (template) {
         return { slots: [template], source: "query_type_template" };
@@ -286,7 +309,12 @@ export const resolveCompositeRoute = (
         effectiveType === "default" ? null : effectiveType,
         effectiveType === "enumeration" && /项目/.test(userQuestion)
             ? ["project"]
-            : decision.topics
+            : decision.topics,
+        {
+            label: userQuestion,
+            searchQuery: decision.searchQuery,
+            topics: decision.topics,
+        }
     );
     if (inferredTemplate) {
         return { slots: [inferredTemplate], source: "query_type_template" };

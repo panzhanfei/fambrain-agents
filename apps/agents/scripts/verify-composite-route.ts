@@ -7,9 +7,11 @@ import {
   applyCompositeRouteGuard,
   applyIntakeRetrievalPlanGuard,
   buildFallbackRetrievalPlan,
+  canonicalizePlanItem,
   EMPLOYERS_SLOT,
   isCompositeProfileQuestion,
   looksLikeMultiPartQuestion,
+  PROJECTS_SLOT,
   resolveCompositeRoute,
   splitQuestionUnits,
 } from "../src/agentflow/agents/online/intake-coordinator/index";
@@ -99,6 +101,27 @@ assertSync("P0-15 五连问（无 plan）→ 结构兜底 composite", () => {
   );
   if (!projectsSlot || projectsSlot.queryType !== "enumeration") {
     throw new Error("项目子问应为 enumeration 检索");
+  }
+  if (projectsSlot.topics[0] !== "project") {
+    throw new Error(`项目槽 topics 应为 project，实际 ${projectsSlot.topics.join(",")}`);
+  }
+});
+
+assertSync("plan label「具体项目名称」→ canonical 为 projects 槽", () => {
+  const item = canonicalizePlanItem({
+    label: "具体项目名称",
+    searchQuery: "用户口语",
+    queryType: "enumeration",
+    topics: ["experience"],
+  });
+  if (item.searchQuery !== PROJECTS_SLOT.searchQuery) {
+    throw new Error(`应 canonical 到 projects searchQuery，实际 ${item.searchQuery}`);
+  }
+  if (!item.topics.includes("project")) {
+    throw new Error(`topics 应含 project，实际 ${item.topics.join(",")}`);
+  }
+  if (item.searchQuery === EMPLOYERS_SLOT.searchQuery) {
+    throw new Error("不应 canonical 到 employers");
   }
 });
 

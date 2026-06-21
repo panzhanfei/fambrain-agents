@@ -4,7 +4,12 @@ import { getAgentsConfig } from "@fambrain/agent-config";
 import { logAgentOut } from "@fambrain/agent-shared/agent-log";
 import { streamOllamaNative } from "@fambrain/agent-shared/ollama-native-stream";
 import { dedupeCitations } from "@/agentflow/agents/online/content-organizer";
+import type { KnowledgeHit } from "@/agentflow/agents/online/knowledge-manager";
 import { parseJsonObject, textFromResponse } from "@/agentflow/utils";
+import {
+    maxAnalystHitsForProfile,
+    resolveAnalystQueryProfile,
+} from "./analyst-recall-limits";
 import {
     buildSubQuestionFallbackAnswer,
     normalizeAnalystResult,
@@ -12,12 +17,10 @@ import {
     type SubQuestionAnalyzeInput,
 } from "./analyze-helpers";
 import {
+    buildSubQuestionStreamPrompt,
     subQuestionPrompt,
-    subQuestionStreamPrompt,
 } from "./sub-question-prompt";
 import type { InformationAnalystResult } from "./prompt";
-
-export const MAX_SUB_QUESTION_HITS = 4;
 
 type SubQuestionStreamChunk = { type: "assistant"; text: string };
 
@@ -27,16 +30,25 @@ const llm = new ChatOllama({
     model: ollama.models.intakeCoordinator,
 });
 
+const sliceHitsForAnalyst = (input: SubQuestionAnalyzeInput): KnowledgeHit[] => {
+    const profile = resolveAnalystQueryProfile({
+        userQuestion: input.userQuestion,
+        queryType: input.queryType,
+    });
+    const limit = maxAnalystHitsForProfile(profile);
+    return input.hits.slice(0, limit);
+};
+
 const buildSubQuestionResult = (
     input: SubQuestionAnalyzeInput,
     answer: string,
     insufficientEvidence: boolean
 ): InformationAnalystResult => {
-    const hits = input.hits.slice(0, MAX_SUB_QUESTION_HITS);
+    const hits = sliceHitsForAnalyst(input);
     const citations = insufficientEvidence
         ? []
         : dedupeCitations(
-              hits.slice(0, 2).map((h) => ({
+              hits.slice(0, 3).map((h) => ({
                   path: h.path,
                   excerpt: h.excerpt,
               }))
@@ -49,12 +61,16 @@ const buildSubQuestionResult = (
     };
 };
 
-/** 单个子问题流式 Analyst（composite 顺序段内 token 输出） */
+/** 单个子问题流式 Analyst（composite 顺序段 / 单问 plain-text 共用） */
 export async function* streamAnalyzeSubQuestion(
     input: SubQuestionAnalyzeInput
 ): AsyncGenerator<SubQuestionStreamChunk, InformationAnalystResult> {
-    const hits = input.hits.slice(0, MAX_SUB_QUESTION_HITS);
-    const payload = { ...input, hits };
+    const profile = resolveAnalystQueryProfile({
+        userQuestion: input.userQuestion,
+        queryType: input.queryType,
+    });
+    const hits = sliceHitsForAnalyst(input);
+    const payload = { ...input, hits, queryType: profile, topics: input.topics ?? [] };
     const fallback = buildSubQuestionFallbackAnswer(payload);
 
     if (shouldSkipSubQuestionLlm(payload)) {
@@ -66,7 +82,13 @@ export async function* streamAnalyzeSubQuestion(
     try {
         for await (const chunk of streamOllamaNative({
             messages: [
-                { role: "system", content: subQuestionStreamPrompt },
+                {
+                    role: "system",
+                    content: buildSubQuestionStreamPrompt(
+                        profile,
+                        payload.topics
+                    ),
+                },
                 { role: "user", content: JSON.stringify(payload) },
             ],
             think: false,
@@ -86,6 +108,7 @@ export async function* streamAnalyzeSubQuestion(
         );
         logAgentOut("InformationAnalyst", "子问流式出去", {
             label: input.userQuestion,
+            queryType: profile,
             hitCount: hits.length,
             answerPreview:
                 result.answer.length > 120
@@ -108,8 +131,12 @@ export async function* streamAnalyzeSubQuestion(
 export const completeAnalyzeSubQuestion = async (
     input: SubQuestionAnalyzeInput
 ): Promise<InformationAnalystResult> => {
-    const hits = input.hits.slice(0, MAX_SUB_QUESTION_HITS);
-    const payload = { ...input, hits };
+    const profile = resolveAnalystQueryProfile({
+        userQuestion: input.userQuestion,
+        queryType: input.queryType,
+    });
+    const hits = sliceHitsForAnalyst(input);
+    const payload = { ...input, hits, queryType: profile };
     const fallback = buildSubQuestionFallbackAnswer(payload);
 
     if (shouldSkipSubQuestionLlm(payload)) {
@@ -148,3 +175,8 @@ export const completeAnalyzeSubQuestion = async (
         return fallback;
     }
 };
+
+export {
+    maxAnalystHitsForProfile,
+    MAX_SUB_QUESTION_HITS,
+} from "./analyst-recall-limits";
