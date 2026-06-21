@@ -145,8 +145,7 @@ const topicHas = (topics: string[], re: RegExp): boolean =>
     topics.some((t) => re.test(t));
 
 /**
- * 单问 identity/enumeration：Intake 未给 retrievalPlan / queryType 为 default 时，
- * 按用户句语义生成 1 项 plan（含 canonical searchQuery）。
+ * 单问 identity/enumeration：脚本/诊断用；主路由依赖 Intake retrievalPlan + queryType 模板。
  */
 export const buildSingleQuestionPlanItem = (
     userQuestion: string,
@@ -280,14 +279,6 @@ export const resolveCompositeRoute = (
     );
     if (template) {
         return { slots: [template], source: "query_type_template" };
-    }
-
-    const singlePlan = buildSingleQuestionPlanItem(userQuestion, decision);
-    if (singlePlan) {
-        return {
-            slots: [planItemToSlot(singlePlan, 0)],
-            source: "query_type_template",
-        };
     }
 
     const effectiveType = resolveEffectiveQueryType(userQuestion, decision);

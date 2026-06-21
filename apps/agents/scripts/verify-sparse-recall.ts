@@ -5,7 +5,7 @@
  */
 import { buildBm25Index } from "@fambrain/corpus";
 import { recallSparseRetrieve } from "@fambrain/corpus";
-import { listCorpusUserIds } from "../src/agentflow/agents/offline/knowledge-indexer/list-corpus-users.ts";
+import { listCorpusUserIds } from "../src/agentflow/agents/offline/knowledge-indexer/list-corpus-users";
 
 const assert = (name: string, fn: () => void) => {
     try {

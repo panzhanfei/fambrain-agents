@@ -1,4 +1,4 @@
-import { getInfraConfig } from "../config.ts";
+import { getInfraConfig } from "../config";
 
 /** 检索 cache key 组成部分 */
 export type RetrievalCacheKeyParts = {

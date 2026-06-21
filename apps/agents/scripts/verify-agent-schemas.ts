@@ -4,12 +4,12 @@
  *   pnpm run verify:agent-schemas
  */
 import assert from "node:assert/strict";
-import { parseIntakeRoutingDecision } from "../src/agentflow/agents/online/intake-coordinator/schema.ts";
-import { parseFactCheckerResult } from "../src/agentflow/agents/online/fact-checker/schema.ts";
-import { parseKnowledgeRetrievalResult } from "../src/agentflow/agents/online/knowledge-manager/schema.ts";
-import { parseAnalystResult } from "../src/agentflow/agents/online/information-analyst/schema.ts";
-import { buildRuleBasedFactCheck } from "../src/agentflow/agents/online/fact-checker/check-helpers.ts";
-import { buildFallbackAnswer } from "../src/agentflow/agents/online/information-analyst/analyze-helpers.ts";
+import { parseIntakeRoutingDecision } from "../src/agentflow/agents/online/intake-coordinator/schema";
+import { parseFactCheckerResult } from "../src/agentflow/agents/online/fact-checker/schema";
+import { parseKnowledgeRetrievalResult } from "../src/agentflow/agents/online/knowledge-manager/schema";
+import { parseAnalystResult } from "../src/agentflow/agents/online/information-analyst/schema";
+import { buildRuleBasedFactCheck } from "../src/agentflow/agents/online/fact-checker/check-helpers";
+import { buildFallbackAnswer } from "../src/agentflow/agents/online/information-analyst/analyze-helpers";
 const testIntake = () => {
     const ok = parseIntakeRoutingDecision({
         intent: "retrieve_and_answer",

@@ -12,6 +12,7 @@ import {
     type InformationAnalystInput,
     type InformationAnalystResult,
 } from "./prompt";
+import { cachedFacetToAnalystResult } from "@/agentflow/agents/online/intake-coordinator/composite-incremental";
 import { streamCompositeAnalyze } from "./stream-composite";
 
 type AnalystStreamChunk =
@@ -28,10 +29,36 @@ const useCompositeParallelAnalyze = (
     input.routeMode === "composite" &&
     (input.compositeSubResults?.length ?? 0) >= 2;
 
+const resolveSingleSlotCachedAnswer = (
+    input: InformationAnalystInput
+): InformationAnalystResult | null => {
+    const plan = input.compositeIncrementalPlan;
+    if (!plan || plan.slots.length !== 1) return null;
+    const slot = plan.slots[0]!;
+    if (!slot.useCachedAnswer || !slot.cachedAnswer) return null;
+    return cachedFacetToAnalystResult(slot.cachedAnswer);
+};
+
 /** 单问 / 单槽：流式 Analyst（含 thinking） */
 async function* streamSingleAnalyze(
     input: InformationAnalystInput
 ): AsyncGenerator<AnalystStreamChunk, InformationAnalystResult> {
+    const l3Cached = resolveSingleSlotCachedAnswer(input);
+    if (l3Cached) {
+        logAgentOut("InformationAnalyst", "出去", {
+            source: "facet_cache_l3",
+            insufficientEvidence: l3Cached.insufficientEvidence,
+            confidence: l3Cached.confidence,
+            citationCount: l3Cached.citations.length,
+            answerPreview:
+                l3Cached.answer.length > 400
+                    ? `${l3Cached.answer.slice(0, 400)}…`
+                    : l3Cached.answer,
+        });
+        yield { type: "assistant", text: l3Cached.answer };
+        return l3Cached;
+    }
+
     const fallback = buildFallbackAnswer(input);
     const { ollama } = getAgentsConfig();
 

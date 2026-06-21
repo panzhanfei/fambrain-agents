@@ -3,13 +3,13 @@
  *
  *   FAMBRAIN_CORPUS_USER_ID=xxx pnpm --filter @fambrain/agents run verify:km-retrieve:live
  */
-import { listCorpusUserIds } from "../src/agentflow/agents/offline/knowledge-indexer/list-corpus-users.ts";
-import { getProfileRecallParams } from "../src/agentflow/agents/online/knowledge-manager/km-config.ts";
+import { listCorpusUserIds } from "../src/agentflow/agents/offline/knowledge-indexer/list-corpus-users";
+import { getProfileRecallParams } from "../src/agentflow/agents/online/knowledge-manager/km-config";
 import {
     inferQueryProfile,
     resolveQueryProfile,
-} from "../src/agentflow/agents/online/knowledge-manager/query-profile.ts";
-import { retrieveKnowledge } from "../src/agentflow/agents/online/knowledge-manager/retrieve.ts";
+} from "../src/agentflow/agents/online/knowledge-manager/query-profile";
+import { retrieveKnowledge } from "../src/agentflow/agents/online/knowledge-manager/retrieve";
 
 type Case = {
     q: string;

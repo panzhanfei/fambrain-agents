@@ -1,5 +1,5 @@
 import Redis from "ioredis";
-import { getInfraConfig } from "../config.ts";
+import { getInfraConfig } from "../config";
 
 let client: Redis | null = null;
 let clientUrl: string | null = null;

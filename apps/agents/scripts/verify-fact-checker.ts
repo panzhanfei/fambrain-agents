@@ -7,8 +7,8 @@
  *
  * --llm  额外调用 Ollama 跑 completeFactCheck（需本地 Ollama 已启动）
  */
-import { applyFactCheckGuards, buildRuleBasedFactCheck, completeFactCheck, type FactCheckerInput, type FactCheckerResult, } from "../src/agentflow/agents/online/fact-checker/index.ts";
-import { mergeRetrySearchQuery } from "../src/agentflow/agents/online/fact-checker/refined-search-query.ts";
+import { applyFactCheckGuards, buildRuleBasedFactCheck, completeFactCheck, type FactCheckerInput, type FactCheckerResult, } from "../src/agentflow/agents/online/fact-checker/index";
+import { mergeRetrySearchQuery } from "../src/agentflow/agents/online/fact-checker/refined-search-query";
 const runLlm = process.argv.includes("--llm");
 type Case = {
     name: string;

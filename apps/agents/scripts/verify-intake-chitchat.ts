@@ -11,9 +11,9 @@ import {
     DEFAULT_CHITCHAT_BRIEF_REPLY,
     isAcceptableChitchatBriefReply,
     type IntakeRoutingDecision,
-} from "../src/agentflow/agents/online/intake-coordinator/index.ts";
-import { parseIntakeDecision } from "../src/agentflow/pipeline/parse-intake.ts";
-import { bootstrapAgentsRuntime } from "../src/config/index.ts";
+} from "../src/agentflow/agents/online/intake-coordinator/index";
+import { parseIntakeDecision } from "../src/agentflow/pipeline/parse-intake";
+import { bootstrapAgentsRuntime } from "../src/config/index";
 
 const DEFAULT_RUNS = 10;
 

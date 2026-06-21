@@ -1,9 +1,10 @@
 /**
  * D5-2：同会话字面重复问 — 复用 history 中已有 assistant 答，跳过 Intake LLM / KM / FC / Analyst。
  * Key = normalize(userQuestion)，与 retrieval cache（searchQuery + queryType）互补。
+ * 开关：REPEAT_QUESTION_CACHE_DISABLED=1 关闭 L1。
  */
 import type { DbChatTurn } from "@fambrain/agent-types";
-import { normalizeSearchQuery } from "@fambrain/infra";
+import { isRepeatQuestionCacheEnabled, normalizeSearchQuery } from "@fambrain/infra";
 
 const assistantAfter = (
     turns: DbChatTurn[],
@@ -27,6 +28,8 @@ export const findRepeatAnswerInHistory = (
     history: DbChatTurn[],
     userQuestion: string
 ): string | null => {
+    if (!isRepeatQuestionCacheEnabled()) return null;
+
     const needle = normalizeSearchQuery(userQuestion);
     if (!needle) return null;
 

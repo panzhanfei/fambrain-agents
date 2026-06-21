@@ -3,7 +3,7 @@ import { buildLangGraphRunConfig, } from "@fambrain/agent-config/langsmith";
 import { logAgentIn, logAgentOut } from "@fambrain/agent-shared/agent-log";
 import type { AgentPipelineContext, AgentPipelineResult, AgentStreamEvent, DbChatTurn, PipelineStepName, PipelineTiming, } from "@fambrain/agent-types";
 import { getCompiledPipelineGraph } from "./compile";
-import { PipelineTimingTracker } from "./pipeline-timing.ts";
+import { PipelineTimingTracker } from "./pipeline-timing";
 import type { PipelineGraphState } from "./state";
 import { findRepeatAnswerInHistory } from "@/agentflow/agents/online/intake-coordinator/intake-repeat-guard";
 import {

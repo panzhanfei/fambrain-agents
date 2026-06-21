@@ -4,7 +4,7 @@
  *   pnpm run verify:content-organizer
  */
 import assert from "node:assert/strict";
-import { dedupeCitations, organizeHits, organizeKnowledge, } from "../src/agentflow/agents/online/content-organizer/index.ts";
+import { dedupeCitations, organizeHits, organizeKnowledge, } from "../src/agentflow/agents/online/content-organizer/index";
 const testOrganizeHits = () => {
     const hits = organizeHits([
         {

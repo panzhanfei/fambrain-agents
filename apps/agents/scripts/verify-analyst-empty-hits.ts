@@ -8,8 +8,8 @@ import {
   shouldSkipAnalystLlm,
   streamAnalyzeInformation,
   type InformationAnalystInput,
-} from "../src/agentflow/agents/online/information-analyst/index.ts";
-import { bootstrapAgentsRuntime } from "../src/config/index.ts";
+} from "../src/agentflow/agents/online/information-analyst/index";
+import { bootstrapAgentsRuntime } from "../src/config/index";
 
 const HALLUCINATION_NAMES = /陈明|Charlie|赵一|潘展飞/;
 

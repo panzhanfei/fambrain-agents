@@ -4,7 +4,7 @@
  *   pnpm run verify:doc-parser
  */
 import assert from "node:assert/strict";
-import { buildCorpusMarkdown, buildOutputPaths, detectDocFormat, getDocParseConcurrency, isSupportedDocFile, slugifyBaseName, } from "../src/agentflow/agents/offline/doc-parser/index.ts";
+import { buildCorpusMarkdown, buildOutputPaths, detectDocFormat, getDocParseConcurrency, isSupportedDocFile, slugifyBaseName, } from "../src/agentflow/agents/offline/doc-parser/index";
 const testFormats = () => {
     assert.equal(detectDocFormat("report.pdf"), "pdf");
     assert.equal(detectDocFormat("notes.docx"), "word");

@@ -66,12 +66,15 @@ flowchart TB
 
 实现：`apps/agents/src/agentflow/pipeline/graph/compile.ts` · 流式入口 `pipeline/graph/stream.ts` → `runPipelineStream()`。
 
-**D5-2 两层 cache（2026-06-18）：**
+**D5-2 / P0-15 三层 cache（2026-06 · env 可关）：**
 
-| 层 | 位置 | Key | 命中后 |
-|----|------|-----|--------|
-| **L1 同问短路** | `stream.ts` 入口 + `intakeNode` 开头 | `normalize(userQuestion)`，在本会话 `history` 找相同 user 问 + 已有 assistant 答 | 只 emit `intake` step，**直接流式输出上轮答案**（`repeatQuestionHit`） |
-| **L2 检索 cache** | `retrievalNode` | `{prefix}:retrieval:v1:{corpusUserId}:{queryType}:{normalize(searchQuery)}` | 跳过 KM 向量检索；仍走 FC / Organizer / Analyst（`retrievalCacheHit`） |
+| 层 | 位置 | Key / 条件 | 命中后 | 关闭 |
+|----|------|------------|--------|------|
+| **L1 同问短路** | `stream.ts` + `intakeNode` | `normalize(userQuestion)` + history 中已有 assistant 答 | 只 emit `intake`，复用上轮答案（`repeatQuestionHit`） | `REPEAT_QUESTION_CACHE_DISABLED=1` |
+| **L2 检索 cache** | `retrievalNode` | `{prefix}:retrieval:v1:{corpusUserId}:{queryType}:{normalize(searchQuery)}` | 跳过 KM；仍走 FC / Analyst（`retrievalCacheHit`） | `RETRIEVAL_CACHE_DISABLED=1` |
+| **L3 facet 终稿** | `composite-answer-cache.ts` | 同会话 `conversationId` + `corpusUserId` + **facetKey** | composite/slot 增量：命中槽跳过 KM；**slot 单槽**时 Analyst 读 L3 或 citations 还原 hits | `COMPOSITE_ANSWER_CACHE_DISABLED=1` |
+
+清空 Redis / memory：`pnpm --filter @fambrain/agents exec tsx --env-file=../../.env scripts/clear-pipeline-cache.ts`（改 env 后须**重启 agents** 清进程内 memory）。
 
 L1 解决 Intake 非确定性导致「同句再问 searchQuery 变、公司数降级」；L2 解决问法不同但 Intake 产出相同 `searchQuery` 的场景（如 eval `CACHE-G4-repeat`）。
 

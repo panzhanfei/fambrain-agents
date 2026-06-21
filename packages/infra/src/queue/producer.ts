@@ -1,7 +1,7 @@
 import { Queue } from "bullmq";
-import { getInfraConfig } from "../config.ts";
-import { createRedisConnection, isRedisConfigured } from "../redis/client.ts";
-import type { PipelineJobPayload } from "./job-types.ts";
+import { getInfraConfig } from "../config";
+import { createRedisConnection, isRedisConfigured } from "../redis/client";
+import type { PipelineJobPayload } from "./job-types";
 
 let queue: Queue<PipelineJobPayload> | null = null;
 

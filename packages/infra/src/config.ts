@@ -89,6 +89,10 @@ export type InfraConfig = {
         maxEntries: number;
         keyPrefix: string;
     };
+    /** L1：同会话字面重复问短路 */
+    repeatQuestionCache: {
+        enabled: boolean;
+    };
     pipelineQueue: {
         enabled: boolean;
         name: string;
@@ -130,6 +134,9 @@ export const getInfraConfig = (): InfraConfig => {
                 16
             ),
             keyPrefix: buildCompositeAnswerCacheKeyPrefix(),
+        },
+        repeatQuestionCache: {
+            enabled: !truthy(process.env.REPEAT_QUESTION_CACHE_DISABLED),
         },
         pipelineQueue: {
             enabled: truthy(process.env.PIPELINE_QUEUE_ENABLED),

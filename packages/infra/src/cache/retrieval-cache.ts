@@ -1,12 +1,12 @@
-import { getInfraConfig } from "../config.ts";
-import { getRedisClient, isRedisConfigured } from "../redis/client.ts";
+import { getInfraConfig } from "../config";
+import { getRedisClient, isRedisConfigured } from "../redis/client";
 import {
     buildRetrievalCacheKey,
     type RetrievalCacheKeyParts,
-} from "./keys.ts";
+} from "./keys";
 
-export { normalizeSearchQuery, buildRetrievalCacheKey } from "./keys.ts";
-export type { RetrievalCacheKeyParts } from "./keys.ts";
+export { normalizeSearchQuery, buildRetrievalCacheKey } from "./keys";
+export type { RetrievalCacheKeyParts } from "./keys";
 
 /** 与 KnowledgeRetrievalResult 对齐的可缓存载荷 */
 export type CachedRetrievalPayload = {

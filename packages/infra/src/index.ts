@@ -1,16 +1,21 @@
+import { getInfraConfig } from "./config";
+
 export {
     getInfraConfig,
     resolveRedisUrl,
     resetInfraConfigForTests,
     type InfraConfig,
-} from "./config.ts";
+} from "./config";
+
+export const isRepeatQuestionCacheEnabled = (): boolean =>
+    getInfraConfig().repeatQuestionCache.enabled;
 export {
     getRedisClient,
     createRedisConnection,
     closeRedisClient,
     pingRedis,
     isRedisConfigured,
-} from "./redis/client.ts";
+} from "./redis/client";
 export {
     getRetrievalFromCache,
     setRetrievalCache,
@@ -21,7 +26,7 @@ export {
     type CachedRetrievalPayload,
     type RetrievalCacheBackend,
     type RetrievalCacheKeyParts,
-} from "./cache/retrieval-cache.ts";
+} from "./cache/retrieval-cache";
 export {
     getCompositeSession,
     setCompositeSession,
@@ -34,6 +39,6 @@ export {
     type CompositeSessionSnapshot,
     type CompositeSessionKey,
     type CompositeAnswerCacheBackend,
-} from "./cache/composite-answer-cache.ts";
-export { tryConsumeRedisRateLimit } from "./rate-limit/redis-rate-limit.ts";
-export * from "./queue/index.ts";
+} from "./cache/composite-answer-cache";
+export { tryConsumeRedisRateLimit } from "./rate-limit/redis-rate-limit";
+export * from "./queue/index";

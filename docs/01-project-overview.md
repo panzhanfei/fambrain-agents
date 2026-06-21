@@ -132,7 +132,9 @@ pnpm run dev
 | `REDIS_DB` | 否 | 逻辑库号，默认 `0`（URL 无 `/N` 时生效） |
 | `REDIS_KEY_PREFIX` | 否 | Redis key 根前缀，默认 `fambrain`（检索 cache / 限流 / 队列名派生） |
 | `DEV_REDIS_AUTO_START` | 否 | `pnpm dev` 时 Redis 不可达且端口空闲则 `docker compose up redis`，默认 `1` |
-| `RETRIEVAL_CACHE_DISABLED` / `RETRIEVAL_CACHE_TTL_MS` | 否 | L2 检索结果 cache（D5-2）；Redis 不可用时自动 memory fallback；L1 同问短路见 `intake-repeat-guard.ts` |
+| `RETRIEVAL_CACHE_DISABLED` / `RETRIEVAL_CACHE_TTL_MS` | 否 | **L2** 检索结果 cache（D5-2）；`=1` 关闭；Redis 不可用时 memory fallback |
+| `REPEAT_QUESTION_CACHE_DISABLED` | 否 | **L1** 同问短路（`intake-repeat-guard.ts`）；`=1` 关闭，同句再问走全链路 |
+| `COMPOSITE_ANSWER_CACHE_DISABLED` / `COMPOSITE_ANSWER_CACHE_TTL_MS` | 否 | **L3** composite facet 终稿 cache（P0-15）；`=1` 关闭 |
 | `PIPELINE_QUEUE_ENABLED` | 否 | `1` 时 `pnpm dev` 另起 BullMQ worker（web 入队接好后再开） |
 | `OLLAMA_STREAM_THINK` | 否 | 流式是否请求 thinking；不支持时服务端会自动降级重试 |
 | `FAMBRAIN_CORPUS_USER_ID` | 否 | 强制所有登录用户检索 `data/doc/users/<此 userId>/`；不设则按用户表 `corpusUserId` 或本人 id |
@@ -186,7 +188,7 @@ pnpm run dev
 | `listVaultFiles` | `agentflow/knowledge/list-vault-files.ts` | vault 只读列举（MCP 共用） |
 | `recallSparseRetrieve` | `packages/corpus/src/recall-keyword-retrieve.ts` | BM25 sparse 检索（HY-01） |
 | `hybridRecall` / `fuseRrf` | `knowledge-manager/hybrid-recall.ts`、`fusion-rrf.ts` | 并行 Hybrid + RRF（HY-02～03） |
-| `@fambrain/infra` | `packages/infra/` | Redis 连接、检索 cache、BullMQ 队列、限流 |
+| `@fambrain/infra` | `packages/infra/` | Redis 连接、L2/L3 cache、BullMQ 队列、限流；相对 import **不带 `.ts` 后缀**（`packages/infra/tsconfig.json`） |
 | `verify:retrieval-cache` | `apps/agents/scripts/` | D5-2 L2 cache normalize + memory/Redis |
 | `verify:intake-repeat-smoke` | `apps/agents/scripts/` | D5-2 L1 同问短路冒烟（无 Ollama） |
 | `verify:recall-compare` | `apps/agents/scripts/` | HY-07 三问 vector/sparse/RRF（需 Chroma） |
@@ -196,6 +198,8 @@ pnpm run dev
 | `verify:intake-chitchat` | `apps/agents/scripts/` | P0-13：chitchat briefReply 模板兜底 + live ×10 |
 | `verify:composite-route` | `apps/agents/scripts/` | P0-15/R6-3：composite 路由 guard + merge + 单问年龄 slot 单测 |
 | `verify:composite-incremental` | `apps/agents/scripts/` | P0-15：L3 facet 终稿 cache + L4 增量 composite 单测 |
+| `clear-pipeline-cache.ts` | `apps/agents/scripts/` | 清空 L2/L3 Redis + 进程 memory；见 `.env.example` 三层 cache 开关 |
+| `diagnose-age-query.ts` | `apps/agents/scripts/` | 年龄单问：路由 + KM 检索 + 语料字段诊断（需 Chroma） |
 | `eval:run` | `apps/agents/scripts/eval/` | Eval MVP：golden + cache/profile 探测；`--profile-only` → **G-履历综合** 4 轮 |
 | `golden:regression` | `apps/agents/scripts/` | G1～G5 全链路回归（多遍稳定性） |
 | `indexAllCorpora` | `agentflow/agents/offline/knowledge-indexer/` | 离线 corpus → Chroma |

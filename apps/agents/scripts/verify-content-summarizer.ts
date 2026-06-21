@@ -4,7 +4,7 @@
  *   pnpm run verify:content-summarizer
  */
 import assert from "node:assert/strict";
-import { buildSummarizeSourceText, contentSummaryResultSchema, formatSummaryAsAnswer, parseContentSummaryResult, } from "../src/agentflow/agents/online/content-summarizer/index.ts";
+import { buildSummarizeSourceText, contentSummaryResultSchema, formatSummaryAsAnswer, parseContentSummaryResult, } from "../src/agentflow/agents/online/content-summarizer/index";
 const testSchema = () => {
     const parsed = contentSummaryResultSchema.safeParse({
         title: "城管平台技术栈",

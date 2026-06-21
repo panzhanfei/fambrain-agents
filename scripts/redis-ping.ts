@@ -5,7 +5,7 @@ import {
     isRedisConfigured,
     pingRedis,
     resetInfraConfigForTests,
-} from "../packages/infra/src/index.ts";
+} from "../packages/infra/src/index";
 
 resetInfraConfigForTests();
 

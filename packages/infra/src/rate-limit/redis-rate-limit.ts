@@ -1,5 +1,5 @@
-import { buildRateLimitKeyPrefix } from "../config.ts";
-import { getRedisClient } from "../redis/client.ts";
+import { buildRateLimitKeyPrefix } from "../config";
+import { getRedisClient } from "../redis/client";
 
 /**
  * 滑动窗口限流（Redis INCR + EXPIRE）。

@@ -4,6 +4,7 @@
  *   pnpm --filter @fambrain/agents run verify:intake-coreference
  */
 import type { DbChatTurn } from "@fambrain/agent-types";
+import { resetInfraConfigForTests } from "@fambrain/infra";
 import {
     applyIntakeCoreferenceGuard,
     completeIntakeCoordinator,
@@ -11,9 +12,9 @@ import {
     hasCoreferenceContext,
     isVagueReferentialQuestion,
     type IntakeRoutingDecision,
-} from "../src/agentflow/agents/online/intake-coordinator/index.ts";
-import { parseIntakeDecision } from "../src/agentflow/pipeline/parse-intake.ts";
-import { bootstrapAgentsRuntime } from "../src/config/index.ts";
+} from "../src/agentflow/agents/online/intake-coordinator/index";
+import { parseIntakeDecision } from "../src/agentflow/pipeline/parse-intake";
+import { bootstrapAgentsRuntime } from "../src/config/index";
 
 const assertSync = (name: string, fn: () => void) => {
     try {
@@ -110,6 +111,21 @@ assertSync("repeat：首次提问不命中", () => {
         "你好"
     );
     if (hit) throw new Error("首次问不应命中");
+});
+
+assertSync("repeat：REPEAT_QUESTION_CACHE_DISABLED=1 时不命中", () => {
+    process.env.REPEAT_QUESTION_CACHE_DISABLED = "1";
+    resetInfraConfigForTests();
+    const q = "我今年多大";
+    const history: DbChatTurn[] = [
+        { role: "user", content: q },
+        { role: "assistant", content: "33 岁" },
+        { role: "user", content: q },
+    ];
+    const hit = findRepeatAnswerInHistory(history, q);
+    delete process.env.REPEAT_QUESTION_CACHE_DISABLED;
+    resetInfraConfigForTests();
+    if (hit) throw new Error("L1 关闭时不应命中");
 });
 
 await bootstrapAgentsRuntime();

@@ -12,13 +12,13 @@ import {
   looksLikeMultiPartQuestion,
   resolveCompositeRoute,
   splitQuestionUnits,
-} from "../src/agentflow/agents/online/intake-coordinator/index.ts";
-import type { IntakeRoutingDecision } from "../src/agentflow/agents/online/intake-coordinator/prompt.ts";
+} from "../src/agentflow/agents/online/intake-coordinator/index";
+import type { IntakeRoutingDecision } from "../src/agentflow/agents/online/intake-coordinator/prompt";
 import {
   mergeCompositeHits,
   mergeCompositeRetrieval,
-} from "../src/agentflow/pipeline/graph/merge-composite-retrieval.ts";
-import { mergeSubQuestionAnswers } from "../src/agentflow/agents/online/information-analyst/analyze-helpers.ts";
+} from "../src/agentflow/pipeline/graph/merge-composite-retrieval";
+import { mergeSubQuestionAnswers } from "../src/agentflow/agents/online/information-analyst/analyze-helpers";
 
 const retrieveStub: IntakeRoutingDecision = {
   intent: "retrieve_and_answer",
@@ -151,10 +151,10 @@ assertSync("闲聊 → single", () => {
   if (out.routeMode !== "single") throw new Error("chitchat 不应 composite");
 });
 
-assertSync("单问年龄（Intake default）→ slot identity + canonical", () => {
+assertSync("单问年龄（Intake identity）→ slot + identity 模板", () => {
   const q = "我今年多大";
   const out = applyCompositeRouteGuard(
-    { ...retrieveStub, queryType: "default", searchQuery: q, subTasks: [] },
+    { ...retrieveStub, queryType: "identity", searchQuery: "个人简介 简历 年龄 出生年份", subTasks: [] },
     q
   );
   if (out.routeMode !== "slot") {
@@ -163,15 +163,15 @@ assertSync("单问年龄（Intake default）→ slot identity + canonical", () =
   if (!out.searchQuery.includes("个人简介") || !out.searchQuery.includes("年龄")) {
     throw new Error(`searchQuery 未 canonicalize: ${out.searchQuery}`);
   }
-  if (out.compositeSlots[0]?.label !== "年龄") {
-    throw new Error(`label=${out.compositeSlots[0]?.label}`);
+  if (out.compositeSlots[0]?.queryType !== "identity") {
+    throw new Error(`queryType=${out.compositeSlots[0]?.queryType}`);
   }
 });
 
-assertSync("年龄多大（Intake default）→ slot", () => {
+assertSync("年龄多大（Intake identity）→ slot", () => {
   const q = "年龄多大";
   const out = applyCompositeRouteGuard(
-    { ...retrieveStub, queryType: null, searchQuery: q },
+    { ...retrieveStub, queryType: "identity", searchQuery: "个人简介 简历 年龄", topics: ["personal", "resume"] },
     q
   );
   if (out.routeMode !== "slot" || out.compositeSlots[0]?.queryType !== "identity") {

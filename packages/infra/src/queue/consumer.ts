@@ -1,12 +1,12 @@
 import { Worker, type Job } from "bullmq";
-import { getInfraConfig } from "../config.ts";
-import { createRedisConnection } from "../redis/client.ts";
-import { publishPipelineEvent } from "./events.ts";
-import type { PipelineJobPayload, PipelineJobResult } from "./job-types.ts";
+import { getInfraConfig } from "../config";
+import { createRedisConnection } from "../redis/client";
+import { publishPipelineEvent } from "./events";
+import type { PipelineJobPayload, PipelineJobResult } from "./job-types";
 
 export type PipelineJobHandler = (
     payload: PipelineJobPayload,
-    emit: (event: import("./job-types.ts").PipelineJobStreamEvent) => Promise<void>
+    emit: (event: import("./job-types").PipelineJobStreamEvent) => Promise<void>
 ) => Promise<PipelineJobResult>;
 
 let worker: Worker<PipelineJobPayload, PipelineJobResult> | null = null;
@@ -25,7 +25,7 @@ export const startPipelineWorker = (
         async (job: Job<PipelineJobPayload>) => {
             const jobId = job.id ?? "unknown";
             const emit = async (
-                event: import("./job-types.ts").PipelineJobStreamEvent
+                event: import("./job-types").PipelineJobStreamEvent
             ) => {
                 await publishPipelineEvent(jobId, event);
             };

@@ -1,6 +1,6 @@
-import { createRedisConnection } from "../redis/client.ts";
-import { getInfraConfig } from "../config.ts";
-import type { PipelineJobStreamEvent } from "./job-types.ts";
+import { createRedisConnection } from "../redis/client";
+import { getInfraConfig } from "../config";
+import type { PipelineJobStreamEvent } from "./job-types";
 
 export const pipelineEventChannel = (jobId: string): string => {
     const { eventChannelPrefix } = getInfraConfig().pipelineQueue;

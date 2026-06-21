@@ -4,7 +4,7 @@
  *   pnpm run verify:embed-batches
  */
 import assert from "node:assert/strict";
-import { getEmbedIndexOptions } from "../src/agentflow/agents/offline/knowledge-indexer/embed-batches.ts";
+import { getEmbedIndexOptions } from "../src/agentflow/agents/offline/knowledge-indexer/embed-batches";
 const testDefaults = () => {
     const prev = {
         c: process.env.INDEX_EMBED_CONCURRENCY,

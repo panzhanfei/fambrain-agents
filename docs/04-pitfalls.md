@@ -241,9 +241,9 @@
 
 | 层 | 模块 | 职责 |
 |----|------|------|
-| **L0 入口 guard 链** | `intake-retrieval-plan-guard.ts` 等 | coreference → chitchat → **retrievalPlan 补全/ canonicalize** → composite 路由 |
+| **L0 入口 guard 链** | `intake-retrieval-plan-guard.ts` 等 | coreference → chitchat → **retrievalPlan 补全/ canonicalize** → composite 路由（**不靠问句 regex 词表**） |
 | **L1 Intake retrievalPlan** | `prompt.ts` + `schema.ts` | 多问并列时 LLM 输出每项 `{ label, searchQuery, queryType, topics }`；编排**优先**据此定槽 |
-| **L2 结构 / subTasks 兜底** | `composite-routing.ts` | 无 plan 时：`subTasks≥2` 或 **多问结构**（≥2 问号等）→ 按子句拆 plan；**单问 identity/enumeration**（含「今年多大」）→ `buildSingleQuestionPlanItem` + canonical 模板 |
+| **L2 结构 / subTasks 兜底** | `composite-routing.ts` | 无 plan 时：`subTasks≥2` 或 **多问结构**（≥2 问号等）→ 按子句拆 plan；单问 → **Intake `queryType` + canonical 模板**（`identity` / `enumeration`） |
 | **KM 分槽** | `composite-slot-queries.ts` + `retrieve-slots-parallel.ts` | **按需子集**槽（非固定 4 槽全开）；**L2 检索 cache** key 仍为 `searchQuery+queryType`；merge → composite ≥2 槽跳过 FC LLM → Analyst 按 label 分段 |
 
 **路由结论：** plan/槽 ≥2 → `composite`；1 槽 → `slot`；tech 单问 / 无槽 → `single`。`routeReason` / `routePlanSource` 可观测。
@@ -254,21 +254,33 @@
 
 | 层 | 模块 | 职责 |
 |----|------|------|
-| **L1 同问短路** | `intake-repeat-guard.ts` | 同会话**字面相同**问 → 复用 history 整答 |
-| **L2 检索 cache** | `retrieval-cache.ts` | 单槽 KM 结果 cache（`searchQuery+queryType`） |
-| **L3 facet 终稿** | `composite-answer-cache.ts` + `stream-composite.ts` | 同 `conversationId` + `corpusUserId` 下，按稳定 **facetKey**（`id:name`、`id:age`、`enum:projects`…）缓存各子问 Analyst 终稿 |
-| **L4 增量 composite** | `composite-incremental.ts` + `retrieve-composite-incremental.ts` | Q2 = Q1 + 邮箱/电话：**L3 命中槽跳过 KM + Analyst**，仅对新 facet 检索/流式；「全部重来」→ `clearCompositeSession` |
+| **L1 同问短路** | `intake-repeat-guard.ts` | 同会话**字面相同**问 → 复用 history 整答；`REPEAT_QUESTION_CACHE_DISABLED=1` 关闭 |
+| **L2 检索 cache** | `retrieval-cache.ts` | 单槽 KM 结果 cache（`searchQuery+queryType`）；`RETRIEVAL_CACHE_DISABLED=1` 关闭 |
+| **L3 facet 终稿** | `composite-answer-cache.ts` + `stream-composite.ts` / `stream.ts` | 同 `conversationId` + `corpusUserId` 下按 **facetKey** 缓存子问终稿；slot 单槽 L3 命中时 `retrieve-composite-incremental` 从 citations 还原 hits，`streamSingleAnalyze` 可直接回放 L3 |
+| **L4 增量 composite** | `composite-incremental.ts` + `retrieve-composite-incremental.ts` | Q2 = Q1 + 邮箱/电话：**L3 命中槽跳过 KM**，仅对新 facet 检索/流式；「全部重来」→ `clearCompositeSession` |
 
-**环境变量：** `COMPOSITE_ANSWER_CACHE_*`（见 `.env.example`）；未配 Redis 时 memory fallback。
+**环境变量：** 见 `.env.example` 中 **Pipeline cache 开关**（L1 / L2 / L3）；未配 Redis 时 L2/L3 用 memory fallback（清 cache 须重启 agents）。
 
 **验证：**
 
 ```bash
-pnpm --filter @fambrain/agents run verify:composite-route      # 17 项路由/merge/单问年龄
+pnpm --filter @fambrain/agents run verify:composite-route      # 路由/merge/Intake identity 单槽
 pnpm --filter @fambrain/agents run verify:composite-incremental # L3/L4 facet cache
+pnpm --filter @fambrain/agents exec tsx --env-file=../../.env scripts/diagnose-age-query.ts  # 年龄单问 KM
+pnpm --filter @fambrain/agents exec tsx --env-file=../../.env scripts/clear-pipeline-cache.ts
 ```
 
-Web：Q1 综合履历 → Q2 加邮箱/电话应见 `compositeFacetCacheHits > 0`；单问「今年多大」应 `routeMode=slot` + identity canonical query。
+Web：Q1 综合履历 → Q2 加邮箱/电话应见 `compositeFacetCacheHits > 0`；单问「今年多大」须 Intake 输出 `retrieve_and_answer` + `queryType=identity`（prompt **示例 9**），`routeMode=slot`，简历 excerpt 含出生日期。
+
+#### 2.5.4 单问年龄 — Intake clarify / L3+slot 空 hits（2026-06）
+
+| 现象 | 根因 | 修复 |
+|------|------|------|
+| 「我今年多大了」→ Intake `clarify`，Mem0 有工作年限但无出生日期 | LLM 误判「信息不足」；**Mem0 不能代替 corpus** | Intake prompt：年龄/档案单问禁止 clarify（示例 9）；须 `needsRetrieval` + identity `searchQuery` |
+| 同句再问 1ms 复用「未标注年龄」兜底 | **L1 repeat** 复用 history 错误答 | `REPEAT_QUESTION_CACHE_DISABLED=1` 调试；或 `clear-pipeline-cache` + 新问 |
+| L3 命中 + `routeMode=slot` 仍报「未标注年龄」 | L3 跳过 KM 但 merge hits 空，Analyst 走 `rules_empty_hits_skip_llm` | `retrieve-composite-incremental` citations→hits；`stream.ts` 单槽 L3 直出 |
+
+**勿用问句 regex guard 强改 Intake**（已移除 profile-retrieval-guard）；路由以 Intake `retrievalPlan` / `queryType` 为主。
 
 ### 2.6 跨会话用户自述事实未召回（2026-06 · Web 联调）
 
@@ -405,7 +417,7 @@ Web：Q1 综合履历 → Q2 加邮箱/电话应见 `compositeFacetCacheHits > 0
 |--------|------|-------------------|--------|
 | P0 必留 | 检索后 FactChecker + 最多 1 次打回再检索 | 同轮证据不足 | 已实现 |
 | **+1** | **检索结果缓存（L2）** `corpusUserId + queryType + normalizedSearchQuery`，TTL 可配；cache hit 时 FactChecker 规则快检 | 跨轮同义再问（Intake searchQuery 稳定） | `retrievalNode` / `@fambrain/infra` ✅ |
-| **+2** | **Intake 同问短路（L1）**：`normalize(userQuestion)` 与本会话 history 相同 → 复用上轮 assistant 答，跳过 KM/FC/Analyst | 跨轮 verbatim 重复 | `intake-repeat-guard.ts` + `stream.ts` ✅ |
+| **+2** | **Intake 同问短路（L1）**：`normalize(userQuestion)` 与本会话 history 相同 → 复用上轮 assistant 答；`REPEAT_QUESTION_CACHE_DISABLED=1` 可关 | 跨轮 verbatim 重复 | `intake-repeat-guard.ts` + `stream.ts` ✅ |
 | +3 | 生成后 citation 规则校验（answer vs hits） | 幻觉终稿 | Analyst 后节点 / pitfalls #9 |
 | +4 | 向量 rerank，降低 FactChecker 打回率 | 同轮少出现 2 次 FactChecker | KM |
 

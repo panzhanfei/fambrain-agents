@@ -1,9 +1,19 @@
+import type { CachedFacetAnswer } from "@fambrain/infra";
 import type { IncrementalCompositePlan } from "@/agentflow/agents/online/intake-coordinator/composite-incremental";
+import type { KnowledgeHit } from "@/agentflow/agents/online/knowledge-manager";
 import { retrieveCompositeSlotsParallel } from "./retrieve-slots-parallel";
 import {
     mergeCompositeRetrieval,
     type CompositeSubRetrieval,
 } from "./merge-composite-retrieval";
+
+const hitsFromCachedFacet = (cached: CachedFacetAnswer): KnowledgeHit[] =>
+    cached.citations.map((c, i) => ({
+        path: c.path,
+        title: c.path.split("/").pop() ?? c.path,
+        excerpt: c.excerpt,
+        relevance: Math.max(0.5, 1 - i * 0.05),
+    }));
 
 /** composite 增量检索：L3 命中槽跳过 KM，仅对 active 槽并行 L2 */
 export const retrieveCompositeIncremental = async (input: {
@@ -35,7 +45,7 @@ export const retrieveCompositeIncremental = async (input: {
                 slot: slotPlan.id,
                 facetKey: slotPlan.facetKey,
                 label: slotPlan.label,
-                hits: [],
+                hits: hitsFromCachedFacet(slotPlan.cachedAnswer),
                 coverage: slotPlan.cachedAnswer.coverage,
                 notes: null,
                 cacheHit: true,
@@ -59,9 +69,7 @@ export const retrieveCompositeIncremental = async (input: {
         });
     }
 
-    const merged = mergeCompositeRetrieval(
-        subResults.filter((s) => s.hits.length > 0)
-    );
+    const merged = mergeCompositeRetrieval(subResults);
 
     return {
         subResults,
