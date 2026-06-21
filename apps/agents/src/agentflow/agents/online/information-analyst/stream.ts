@@ -2,7 +2,7 @@ import { getAgentsConfig } from "@fambrain/agent-config";
 import { logAgentIn, logAgentOut } from "@fambrain/agent-shared/agent-log";
 import { streamOllamaNative } from "@fambrain/agent-shared/ollama-native-stream";
 import { parseJsonObject } from "@/agentflow/utils";
-import { buildFallbackAnswer, normalizeAnalystResult } from "./analyze-helpers";
+import { buildFallbackAnswer, normalizeAnalystResult, shouldSkipAnalystLlm, } from "./analyze-helpers";
 import {
   prompt,
   type InformationAnalystInput,
@@ -35,6 +35,17 @@ export async function* streamAnalyzeInformation(
     subTasks: input.subTasks,
     hitPaths: input.hits.map((h) => h.path),
   });
+  if (shouldSkipAnalystLlm(input)) {
+    logAgentOut("InformationAnalyst", "出去", {
+      source: "rules_empty_hits_skip_llm",
+      insufficientEvidence: fallback.insufficientEvidence,
+      confidence: fallback.confidence,
+      citationCount: 0,
+      answerPreview: fallback.answer.length > 400 ? `${fallback.answer.slice(0, 400)}…` : fallback.answer,
+    });
+    yield { type: "assistant", text: fallback.answer };
+    return fallback;
+  }
   try {
     const messages = [
       { role: "system", content: prompt },

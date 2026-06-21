@@ -76,7 +76,7 @@
 | P0-9 | RAG | 口语命中率低 | 曾仅关键词；离线向量已入库 | Intake 补全指代；在线向量检索 | ✅ D3 已接 LangChain |
 | P0-10 | 上下文 | `corpusUserId` 与「我是谁」混淆 | 语料主人 ≠ 登录者 | session / direct_answer 与 corpus 分离 | ⬜ 待做 |
 | P0-11 | FactChecker / 编排 | 用户以为「核查过一次，同句再问不应再进 FactChecker」 | **两类现象混为一谈：**（A）同轮打回再检索 → FactChecker 跑 2 次是 Corrective RAG 设计；（B）**新一条用户消息** = 新 pipeline，`checkerPassed`/`retryCount` 重置，无跨轮 cache | 见 §2.2；消坑 sprint **D5-消坑** | ⬜ 待做 |
-| P0-12 | Analyst + FC | **路径 B（待验证）：** FC **二次 force_pass**（`retryCount≥1`）后 KM 仍 `hits=[]` / `coverage=none`，Analyst **仍调 LLM** 编造终稿（如陈明 / Charlie；语料实际为潘展飞） | `streamAnalyzeInformation` hits 空仍调 LLM；`buildFallbackAnswer` 仅在 JSON 解析失败时用；FC `checkerNotes` 未在 Analyst 层 enforce。**与 P0-17 不同：** P0-17 是 KM₁ 曾有 hits，被 FC 打回后 KM₂ 变差 | hits 空时 **跳过 LLM** 直出 fallback（仍经 Analyst 节点或 `respondEarly`，不编造）；normalize 强制 `insufficientEvidence`；**先复现再改**（§2.2.1） | ⬜ **待复现验证**（§2.2.1） |
+| P0-12 | Analyst + FC | **路径 B：** FC **二次 force_pass** 后 KM 仍 `hits=[]` / `coverage=none`，Analyst 编造终稿（陈明 / Charlie） | `streamAnalyzeInformation` hits 空仍调 LLM | **`shouldSkipAnalystLlm`** → `rules_empty_hits_skip_llm` 直出 fallback；`insufficientEvidence=true` | ✅ **已解决**（2026-06-18） |
 | P0-17 | FactChecker + 编排 | **路径 A：** KM₁ 有 hits，FC 产出 meta 式 `refinedSearchQuery`（如「姓名 **全名 完整称呼**」），编排覆盖 `searchQuery` → KM₂ 变差 | FC LLM 把「怎么查」写成检索词；编排无条件覆盖；无 refined 有效性校验 | `personal/` + 姓名类 → **跳过 FC LLM 直接 pass**；`mergeRetrySearchQuery` meta  strip + 无增量不重检；见 **§2.2.2** | ✅ **已解决**（2026-06） |
 | P0-13 | Intake | Golden / Web「你好」→ `briefReply` 出现 **「大表哥」** 等未定义称呼；prompt 示例为「FamBrain 助手」 | `chitchat` 路径不经 Analyst；Intake 小模型在 `briefReply` 自由发挥 | prompt 禁止称呼用户昵称；`briefReply` 规则化或模板兜底；可选 Zod 后检 | ⬜ Golden Day 2（§2.5） |
 | P0-14 | Analyst + Mem0 | 「我的名字」→ 同句 **「知识库没有记录」+「长期记忆已知潘展飞」** 自相矛盾 | hits 弱时走 insufficientEvidence 话术，Mem0 又补姓名；**corpus 与 memory 优先级未定义** | 个人信息类：**hits 含 personal 优先**；Mem0 仅辅助指代、不得与 corpus 结论冲突；hits 空时不应用 Mem0 补履历事实 | ⬜ Golden Day 2（§2.5） |
@@ -174,7 +174,7 @@
 |------|--------|------------------|----------|-------|
 | Golden G1 | 你好 | 「你好，**大表哥**…」 | Intake `briefReply` 乱称呼 | **P0-13** |
 | Golden G2 | 我的名字 | 「**知识库没有**…**长期记忆**已知潘展飞」 | corpus / Mem0 自相矛盾 | **P0-14** |
-| Golden G2（早先） | 我的名字 | 「《个人简介》**陈明** / Charlie」 | 空 hits 幻觉（**路径 B，待验证**） | **P0-12** |
+| Golden G2（早先） | 我的名字 | 「《个人简介》**陈明** / Charlie」 | 空 hits 幻觉（**路径 B**） | **P0-12** ✅ |
 | Web / agent-log（2026-06） | 我的名字 | KM₁ 有 hits → FC 打回 → KM₂ query「姓名 全名 完整称呼」→ 乱答 | FC meta refined 毁掉首轮证据（**路径 A**） | **P0-17** |
 | Web | 我叫什么 年龄 职业 从业经历 | **赵一**，28 岁，秦汉新城智慧园林… | 完全编造另一人 | **P0-15** |
 | Web（2026-06-18） | 综合履历问 → 编号 1～4 子问（同会话） | 首轮 **4 家** 全对 → 第 3 轮仅 **2 家** 且称「两家公司」 | 同会话答案降级 | **R6-3** §2.7 |
@@ -190,8 +190,8 @@
 |------|----------|
 | **Intake** | `chitchat` 的 `briefReply` 无硬约束（P0-13） |
 | **KM** | `personal/` 检索不稳定；复合问法一次 hit 简历、一次 hit 别的 chunk 或空（P0-15、D3-2） |
-| **FactChecker** | meta `refinedSearchQuery` 打回 KM₂（**P0-17**）；二次 force_pass 后弱/空 hits 仍放行（**P0-12，待验证**） |
-| **Analyst** | hits 空/弱仍调 LLM；训练数据填「假简历」（赵一）；未强制 citations 来自 hits（P0-12、P0-15）；P0-17 下游受害 |
+| **FactChecker** | meta `refinedSearchQuery` 打回 KM₂（**P0-17** ✅）；二次 force_pass 后空 hits → Analyst skip LLM（**P0-12** ✅） |
+| **Analyst** | hits 空已 skip LLM（P0-12 ✅）；弱 hits 仍可能编造（赵一）（**P0-15**）；P0-17 下游受害已修 |
 | **Mem0** | 与 corpus 结论可同句冲突（P0-14）；跨会话自述事实（QQ 等）未召回（P0-16） |
 
 #### 解决排期（记录用 · 非断言清单）
@@ -199,7 +199,7 @@
 | 优先级 | 对策 | 解决哪条现象 | 计划日历 | 改动面 |
 |--------|------|--------------|----------|--------|
 | **P0** | FC：`personal/` + 姓名类 → pass；meta refined **不覆盖、不重检 KM**（P0-17） | KM₁ 好 → KM₂ 坏 | **当前优先** | `fact-checker/check-facts.ts`、`check-helpers.ts` |
-| **P0** | Analyst：`hits=[]` / `coverage=none` **不调 LLM**，直出 fallback（**P0-12，验证后做**） | 陈明类幻觉（路径 B） | Day 3 | `information-analyst/stream.ts` |
+| **P0** | Analyst：`hits=[]` / `coverage=none` **不调 LLM**，直出 fallback（**P0-12**） | 陈明类幻觉（路径 B） | Day 3 | `information-analyst/stream.ts` ✅ |
 | **P0** | Intake：`briefReply` 模板或后检（禁昵称；宜含 FamBrain/助手） | 大表哥 | Day 3 | `intake-coordinator` prompt / 规则 |
 | **P0** | Analyst：Mem0 **不得**与「知识库无记录」同句补履历；个人信息以 hits 为准 | P0-14 | Day 3 + D3-9 | `information-analyst` prompt、`build-prompt-block` |
 | **P0** | 跨会话 **remember_fact** 显式写入 Mem0；联系方式类 Mem0 优先于空 corpus | P0-16 | Day 3 + D8 | `intake-coordinator`、`mem0/store.ts`、`persist-turn.ts` |
@@ -212,7 +212,7 @@
 
 - [ ] 「你好」10 次无「大表哥」类称呼（P0-13）
 - [ ] 「我的名字」3 遍均含 **潘展飞**，无陈明/赵一，无「库里无 + 记忆有」同句（P0-14）；agent-log 无 FC meta refined 打回（P0-17）
-- [ ] 复现 **路径 B** 后：`hitCount=0` + FC force_pass 时 Analyst 不调 LLM（P0-12）
+- [x] 复现 **路径 B** 后：`hitCount=0` + FC force_pass 时 Analyst 不调 LLM（P0-12）← `verify:analyst-empty-hits` ✅
 - [ ] 「我叫什么 年龄 职业 从业经历」3 遍姓名均为 **潘展飞**，且至少 1 条 citation 来自 `personal/个人简历`（P0-15）
 - [ ] `pnpm run golden:regression` 与 `GOLDEN_RUNS=3` 稳定性汇总 **≥4/5 且全轮无 P0-12～16 类现象**
 - [ ] 对话 A 记 QQ（或手机）→ 新建对话 B 问同项 → answer 含该值（P0-16）
@@ -368,12 +368,12 @@
 | D5-2 | 编排 / UX | 聊天记录里**同一句再问**，仍走检索+核查 | 每轮 `runPipelineStream` 状态重置；Intake 非确定性改 searchQuery | **L1** 同问短路 ✅ + **L2** 检索 cache ✅（`@fambrain/infra` + Redis） | ✅ **已解决**（L1 2026-06-18；L2 2026-06-18） |
 | D5-3 | 职责 | 期望 FactChecker 校验**终稿** vs hits | P0 仅在生成前审证据包 | D6 后或 +3 增加生成后 groundedness | ⬜ 路线图 |
 | D5-4 | SSE | 重复问时 step 闪过快，用户只注意到「整理回答」 | `fact_checker` 与 `analyst` 连续 | 可选：重复问跳过 fact_checker step 展示 | ⬜ 低优 |
-| D5-5 | Analyst + FC | **路径 B：** 同轮 FC 二次 force_pass 后 KM 仍空/弱 hits，Analyst LLM 编造终稿（**P0-12**，待验证） | FC `force_pass_after_retry` 只写 notes；Analyst 无空 hits 硬兜底 | 见 §2.2.1；验证后再改 `stream.ts` | ⬜ 待复现 |
+| D5-5 | Analyst + FC | **路径 B：** FC 二次 force_pass 后 KM 仍空 hits，Analyst 编造终稿（**P0-12**） | Analyst 无空 hits 硬兜底 | `shouldSkipAnalystLlm` + `verify:analyst-empty-hits` | ✅ **已解决**（2026-06-18） |
 | D5-6 | FC + 编排 | **路径 A：** KM₁ 有 hits，FC meta `refinedSearchQuery` 导致 KM₂ 变差（**P0-17**） | LLM refined + 编排无条件覆盖 searchQuery | 见 §2.2.2：`refined-search-query.ts` + `personal_skip_llm` + `mergeRetrySearchQuery` | ✅ **已解决**（2026-06） |
 
-**验证脚本：** `pnpm run verify:fact-checker`、`pnpm run verify:intake-repeat-smoke`、`pnpm run verify:retrieval-cache`、`pnpm run golden:regression`（`apps/agents/package.json`）。
+**验证脚本：** `pnpm run verify:fact-checker`、`pnpm run verify:analyst-empty-hits`、`pnpm run verify:intake-repeat-smoke`、`pnpm run verify:retrieval-cache`、`pnpm run golden:regression`（`apps/agents/package.json`）。
 
-#### 2.2.1 路径 B — Analyst 空 hits 幻觉（P0-12 · 待复现验证）
+#### 2.2.1 路径 B — Analyst 空 hits 幻觉（P0-12 · ✅ 2026-06-18）
 
 > **背景：** Golden / Web 早先联调「我的名字」时，**偶发**答「根据《个人简介》，你的名字全称为**陈明**…」；语料仅有 **潘展飞**。 hypothesized 链路：**两轮 KM 后 hits 仍空** → FC force_pass → Analyst LLM 幻觉。
 >
@@ -386,8 +386,10 @@
   → FC 第 1 次：打回再检索（D5-1）
   → KM₂ 仍空/弱
   → FC 第 2 次：retryCount≥1 → passed=true（force_pass_after_retry）
-  → Analyst 仍调 LLM → 编造「陈明」（训练数据幻觉）
+  → Analyst **skip LLM**（`rules_empty_hits_skip_llm`）→ insufficientEvidence 话术，不编造
 ```
+
+**已实现（2026-06-18）：** `shouldSkipAnalystLlm`（`hits.length===0` 或 `coverage==="none"`）→ `buildFallbackAnswer`，日志 `source: "rules_empty_hits_skip_llm"`。
 
 **与相关坑的分工：**
 
@@ -395,7 +397,7 @@
 |------|-------|------|
 | 上游 | **D3-2** | KM 有 candidates 却 `hits:[]` |
 | 中游 | **D5-1** | 同轮两次 FC 是设计 |
-| 下游 | **P0-12 / D5-5** | Analyst hits 空仍调 LLM |
+| 下游 | **P0-12 / D5-5** | Analyst hits 空 skip LLM ✅ |
 | 易混 | **P0-17 / D5-6** | KM₁ 有 hits 却被 FC 打回 — **不是本路径** |
 
 **典型日志（预期，待复现）：**
@@ -403,12 +405,10 @@
 ```text
 📚 [KnowledgeManager] 📤 出去  { hitCount: 0, ... }   // KM₂ 仍空
 🔍 [FactChecker] 📤 出去  { passed: true, source: rules_fallback, retryCount: 1, ... }
-🧠 [InformationAnalyst] 📤 出去  { source: "llm", answerPreview: "…陈明…" }
+🧠 [InformationAnalyst] 📤 出去  { source: "rules_empty_hits_skip_llm", insufficientEvidence: true, ... }
 ```
 
-**「不进 Analyst 进哪儿？」** 检索类问题终稿仍由 Analyst 合同负责；P0-12 对策是 **Analyst 节点内 hits 空时不调 LLM、直出 fallback**（或编排 `respondEarly` 固定话术），不是换 Agent。**先复现路径 B 再改。**
-
-**验证：** Web 问「我的名字」；`agent-log` 须同时满足：KM₂ `hitCount=0`、FC 第二次 `passed=true`、`willRetryRetrieval=false`；再断言 Analyst 是否仍 `source: "llm"`。
+**验证：** `pnpm --filter @fambrain/agents run verify:analyst-empty-hits`；Web 若 KM₂ `hitCount=0` 应见 `rules_empty_hits_skip_llm`，answer 不含语料外姓名。
 
 #### 2.2.2 路径 A — FC meta refined 打回毁掉 KM₁（P0-17 · ✅ 已消坑 2026-06）
 
@@ -604,7 +604,7 @@ pnpm run verify:fact-checker
 - [x] 踩坑表 **P0-4 / D3-3 / D3-5 / P0-17 / D5-6** 已标 ✅（§2.1.1、§2.2.2）
 - [ ] P0-6 Analyst 有 hits 仍 insufficient ← 待回归
 - [x] D5-2：同会话连续两问 G4 原文，第二次 L2 cache 或 L1 同问短路 ← §2.2（2026-06-18）
-- [ ] **P0-12 / D5-5**：FC 二次放行且 `hits=[]` 时，Analyst 不得编造（须 fallback 或 `insufficientEvidence`）← §2.2.1
+- [x] **P0-12 / D5-5**：FC 二次放行且 `hits=[]` 时 Analyst 不得编造 ← §2.2.1（`verify:analyst-empty-hits` ✅ 2026-06-18）
 - [ ] **P0-13～P0-15**（Golden Day 2 实录）：无乱称呼、无赵一/陈明、corpus/Mem0 不矛盾 ← §2.5
 - [ ] **P0-16**（Web 联调）：对话 A 记 QQ → 对话 B 问 QQ 可召回 ← §2.6
 - [ ] R6-1：「哪几家公司上过班」类问题 → hits/answer 枚举 **4 家**且同句再问结果一致 ← §2.3
@@ -627,7 +627,7 @@ pnpm run verify:fact-checker
 - [ ] 换模型复现：区分 prompt 问题 vs 模型能力（`OLLAMA_MODEL` / `OLLAMA_MODEL_INTAKE_COORDINATOR`）
 - [ ] agents 服务 `:3001` 是否唯一实例（无 EADDRINUSE）← D3-12
 - [ ] FactChecker 日志：`passed` / `refinedSearchQuery` / `retryCount` 是否符合 §2.2 判定表
-- [ ] **FC 二次放行 + hitCount=0**：Analyst 是否仍编造姓名/公司（**P0-12**）← §2.2.1；Golden G2
+- [ ] **FC 二次放行 + hitCount=0**：Analyst 应 `rules_empty_hits_skip_llm`（**P0-12** ✅）← §2.2.1
 - [ ] **列举型问题**（「哪几家公司」）：KM `hits` 是否覆盖 `experience/` 下全部经历文件；同句再问 hits 数量是否骤降 ← R6-1 §2.3
 - [ ] **综合履历 → 编号子问**（同会话）：第 1 轮 4 家后，第 3 轮是否错误降为 2 家 ← R6-3 §2.7
 - [ ] **格式化追问**（「用表格列出来」）：Intake 是否误开全量检索；Analyst 是否否定 history 中已确认公司 ← R6-2 §2.4

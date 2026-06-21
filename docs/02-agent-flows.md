@@ -225,6 +225,8 @@ flowchart TD
 
 **职责：** 据整理后的 `hits` 写终稿；无证据时 `insufficientEvidence`，禁止编造履历。
 
+**P0-12（2026-06-18）：** `hits.length===0` 或 `coverage==="none"` 时 **`shouldSkipAnalystLlm`** 不调 Ollama，直出 `buildFallbackAnswer`（日志 `rules_empty_hits_skip_llm`）。弱 hits 仍走 LLM（P0-15 待做）。
+
 **技术：** Ollama 流式（thinking + assistant）；终稿 JSON **Zod**（`analystResultSchema`）。
 
 ```mermaid
@@ -241,10 +243,11 @@ flowchart TD
 | 步骤 | 做什么 | 规则 | 文件 | 方法 |
 |------|--------|------|------|------|
 | 1 | 输入 | 只认上游 hits；不自己检索 | `InformationAnalyst/prompt.ts` | `InformationAnalystInput` |
-| 2 | 流式 | thinking + assistant SSE | `InformationAnalyst/stream.ts` | `streamAnalyzeInformation()` |
-| 3 | 终稿 JSON | answer / citations / insufficientEvidence；**Zod parse** | `analyze-helpers.ts`, `schema.ts` | `normalizeAnalystResult()` |
-| 4 | 兜底 | 解析失败用 hits 拼可读回答 | `analyze-helpers.ts` | `buildFallbackAnswer()` |
-| 5 | 落库 | LangGraph `analyst` 节点 + SSE custom 流 | `pipeline/graph/compile.ts`, `stream.ts` | `analystNode()`, `streamAnalyzeInformation()` |
+| 2 | 空 hits 短路 | **P0-12** 不调 LLM | `analyze-helpers.ts` | `shouldSkipAnalystLlm()` |
+| 3 | 流式 | thinking + assistant SSE | `InformationAnalyst/stream.ts` | `streamAnalyzeInformation()` |
+| 4 | 终稿 JSON | answer / citations / insufficientEvidence；**Zod parse** | `analyze-helpers.ts`, `schema.ts` | `normalizeAnalystResult()` |
+| 5 | 兜底 | 解析失败用 hits 拼可读回答 | `analyze-helpers.ts` | `buildFallbackAnswer()` |
+| 6 | 落库 | LangGraph `analyst` 节点 + SSE custom 流 | `pipeline/graph/compile.ts`, `stream.ts` | `analystNode()`, `streamAnalyzeInformation()` |
 
 ### 6. ContentOrganizer — 内容整理师（D6）✅
 

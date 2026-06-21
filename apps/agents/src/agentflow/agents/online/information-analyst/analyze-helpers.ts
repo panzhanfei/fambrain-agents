@@ -2,6 +2,11 @@ import { dedupeCitations } from "@/agentflow/agents/online/content-organizer";
 import type { Citation, InformationAnalystInput, InformationAnalystResult, } from "./prompt";
 import { parseAnalystResult } from "./schema";
 export { parseAnalystResult as normalizeAnalystResult };
+
+/** P0-12：FC 二次放行后 hits 仍空时跳过 Analyst LLM，避免编造终稿 */
+export const shouldSkipAnalystLlm = (input: InformationAnalystInput): boolean =>
+    input.hits.length === 0 || input.coverage === "none";
+
 export const buildFallbackAnswer = (input: InformationAnalystInput): InformationAnalystResult => {
     const { userQuestion, hits, coverage, notes, language } = input;
     if (hits.length === 0 || coverage === "none") {

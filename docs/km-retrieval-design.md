@@ -90,7 +90,7 @@ Intake（L1）→ KM（L2～L5）→ FactChecker → ContentOrganizer → Analys
 | **P5-2** | FB-02 | L5 | pipeline | 改 | **二级兜底**：FC retry + refinedSearchQuery | `compile.ts` | — | 已有 | ✅ | retryCount≤1 |
 | **P5-3** | FB-03 | L5 | KM | 增 | **三级兜底**：外部搜索 / MCP（可选） | experiments → KM | — | FB-01 | ⬜ | 语料无命中时有外源 |
 | **P5-4** | FB-04 | L5 | KM | 改 | **四级**：明确 coverage:none + notes | `retrieve.ts` | — | EV-03 | ⬜ | 无命中 notes 清晰 |
-| **P5-5** | FB-05 | L5 | Analyst | 改 | coverage:none 时 **禁止编造**（P0-12） | `information-analyst/prompt.ts` | 建议 | FB-04 | ⬜ | 无 hits 不虚构履历 |
+| **P5-5** | FB-05 | L5 | Analyst | 改 | coverage:none / hits 空时 **禁止编造**（P0-12） | `stream.ts` `shouldSkipAnalystLlm` | 建议 | FB-04 | ✅ | `verify:analyst-empty-hits` |
 | **—** | DOC-01 | — | docs | 改 | 本文 + 架构图 v3（Hybrid/RRF） | 本文 | — | 各 Wave | 🔄 | Wave A 进度已同步 |
 | **—** | DOC-02 | — | docs | 改 | 同步 `02-agent-flows` KM 步骤 | `02-agent-flows.md` | — | DOC-01 | ⬜ | 流程图与代码一致 |
 | **—** | DOC-03 | — | docs | 改 | 坑点表 D3/R6 状态 | `04-pitfalls.md` | — | Wave A | ⬜ | 对应坑 ✅ |
