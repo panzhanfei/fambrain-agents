@@ -79,7 +79,7 @@
 | P0-12 | Analyst + FC | **路径 B：** FC **二次 force_pass** 后 KM 仍 `hits=[]` / `coverage=none`，Analyst 编造终稿（陈明 / Charlie） | `streamAnalyzeInformation` hits 空仍调 LLM | **`shouldSkipAnalystLlm`** → `rules_empty_hits_skip_llm` 直出 fallback；`insufficientEvidence=true` | ✅ **已解决**（2026-06-18） |
 | P0-17 | FactChecker + 编排 | **路径 A：** KM₁ 有 hits，FC 产出 meta 式 `refinedSearchQuery`（如「姓名 **全名 完整称呼**」），编排覆盖 `searchQuery` → KM₂ 变差 | FC LLM 把「怎么查」写成检索词；编排无条件覆盖；无 refined 有效性校验 | `personal/` + 姓名类 → **跳过 FC LLM 直接 pass**；`mergeRetrySearchQuery` meta  strip + 无增量不重检；见 **§2.2.2** | ✅ **已解决**（2026-06） |
 | P0-13 | Intake | Golden / Web「你好」→ `briefReply` 出现 **「大表哥」** 等未定义称呼；prompt 示例为「FamBrain 助手」 | `chitchat` 路径不经 Analyst；Intake 小模型在 `briefReply` 自由发挥 | **`applyIntakeChitchatGuard`** 模板兜底 + 禁用称呼后检；Intake JSON snake_case 归一 | ✅ **已解决**（2026-06-18）← `verify:intake-chitchat` |
-| P0-14 | Analyst + Mem0 | 「我的名字」→ 同句 **「知识库没有记录」+「长期记忆已知潘展飞」** 自相矛盾 | hits 弱时走 insufficientEvidence 话术，Mem0 又补姓名；**corpus 与 memory 优先级未定义** | 个人信息类：**hits 含 personal 优先**；Mem0 仅辅助指代、不得与 corpus 结论冲突；hits 空时不应用 Mem0 补履历事实 | ⬜ Golden Day 2（§2.5） |
+| P0-14 | Analyst + Mem0 | Golden / Web「我的名字」→ 同句 **「知识库没有记录」+「长期记忆已知潘展飞」** 自相矛盾 | hits 弱时走 insufficientEvidence 话术，Mem0 又补姓名；**corpus 与 memory 优先级未定义** | **KM 优化**后 `personal/` 姓名类检索稳定 → hits 含简历，Analyst 直答 corpus；不再触发「空 hits + Mem0 补履历」路径 | ✅ **已解决**（KM 优化 · Web/G2 复测 2026-06） |
 | P0-15 | Analyst | 同问「**我叫什么 年龄 职业 从业经历**」→ 一次答 **赵一 / 28 岁 / 秦汉新城智慧园林**（语料无此人），一次答 **潘展飞** + 简历引用（正确） | KM hits 波动 + Analyst 在 weak hits 下用训练数据填「完整简历模板」；复合问法未拆 subTasks | Intake 拆 subTasks；KM 强制命中 `personal/个人简历*`；Analyst 禁止输出 hits 外姓名/公司；**D5-3** 终稿校验 | ⬜ Golden Day 2（§2.5） |
 | P0-16 | Mem0 / Analyst | **对话 A** 用户说「记住我的 QQ 是 xxx」并确认；**新建对话 B** 问「我的 QQ 是多少？」→ 答不知道 / 语料无记录 | LangMem 仅本会话；Mem0 轮次后 `add` 可能未抽出 QQ、语义 search 未命中、或 Analyst 走 corpus 检索且 hits 空时未用 Mem0；`persistPipelineMemory` 失败被 `.catch` 吞掉 | Intake 识别 **remember_fact** → 显式 Mem0 写入；联系方式类 query **Mem0 优先**；持久化失败打日志/告警；Golden **G-跨会话记忆**（A 记 → B 问） | ⬜ Web 联调（§2.6） |
 | R6-1 | KM / Analyst | **「我在那几家公司上过班？」** 应枚举 **4 家**，首轮只答 **2 家**（西安奥卡云、苏州奖多多）；**同句再问** 仅确认 **1 家** 并称其余「知识库无记录」 | 见 §2.3 | 枚举型 query 专用召回 + Golden；复盘后消坑 sprint | ⬜ **复盘后统一解决** |
@@ -173,7 +173,7 @@
 | 来源 | 用户问 | 实际回答（摘要） | 问题类型 | 坑 ID |
 |------|--------|------------------|----------|-------|
 | Golden G1 | 你好 | 「你好，**大表哥**…」 | Intake `briefReply` 乱称呼 | **P0-13** |
-| Golden G2 | 我的名字 | 「**知识库没有**…**长期记忆**已知潘展飞」 | corpus / Mem0 自相矛盾 | **P0-14** |
+| Golden G2 | 我的名字 | 「**知识库没有**…**长期记忆**已知潘展飞」 | corpus / Mem0 自相矛盾 | **P0-14** ✅（KM 优化后） |
 | Golden G2（早先） | 我的名字 | 「《个人简介》**陈明** / Charlie」 | 空 hits 幻觉（**路径 B**） | **P0-12** ✅ |
 | Web / agent-log（2026-06） | 我的名字 | KM₁ 有 hits → FC 打回 → KM₂ query「姓名 全名 完整称呼」→ 乱答 | FC meta refined 毁掉首轮证据（**路径 A**） | **P0-17** |
 | Web | 我叫什么 年龄 职业 从业经历 | **赵一**，28 岁，秦汉新城智慧园林… | 完全编造另一人 | **P0-15** |
@@ -192,7 +192,7 @@
 | **KM** | `personal/` 检索不稳定；复合问法一次 hit 简历、一次 hit 别的 chunk 或空（P0-15、D3-2） |
 | **FactChecker** | meta `refinedSearchQuery` 打回 KM₂（**P0-17** ✅）；二次 force_pass 后空 hits → Analyst skip LLM（**P0-12** ✅） |
 | **Analyst** | hits 空已 skip LLM（P0-12 ✅）；弱 hits 仍可能编造（赵一）（**P0-15**）；P0-17 下游受害已修 |
-| **Mem0** | 与 corpus 结论可同句冲突（P0-14）；跨会话自述事实（QQ 等）未召回（P0-16） |
+| **Mem0** | corpus/Mem0 同句矛盾（**P0-14** ✅，KM 稳定命中后不再触发）；跨会话自述事实（QQ 等）未召回（P0-16） |
 
 #### 解决排期（记录用 · 非断言清单）
 
@@ -201,7 +201,8 @@
 | **P0** | FC：`personal/` + 姓名类 → pass；meta refined **不覆盖、不重检 KM**（P0-17） | KM₁ 好 → KM₂ 坏 | **当前优先** | `fact-checker/check-facts.ts`、`check-helpers.ts` |
 | **P0** | Analyst：`hits=[]` / `coverage=none` **不调 LLM**，直出 fallback（**P0-12**） | 陈明类幻觉（路径 B） | Day 3 | `information-analyst/stream.ts` ✅ |
 | **P0** | Intake：`briefReply` 模板或后检（禁昵称；宜含 FamBrain/助手） | 大表哥 | Day 3 | `intake-chitchat-guard.ts` + `compile.ts` ✅ |
-| **P0** | Analyst：Mem0 **不得**与「知识库无记录」同句补履历；个人信息以 hits 为准 | P0-14 | Day 3 + D3-9 | `information-analyst` prompt、`build-prompt-block` |
+| **P0** | KM：`personal/` 姓名类检索稳定（identity query）→ hits 含简历，消除 corpus/Mem0 同句矛盾 | P0-14 | KM 优化 | `knowledge-manager/retrieve.ts` 等 ✅ |
+| **P0** | Analyst：Mem0 **不得**与「知识库无记录」同句补履历（**兜底**；主因已由 KM 解决） | P0-14 | Day 3 + D3-9 | 暂不必改；若 KM 再波动可补 prompt |
 | **P0** | 跨会话 **remember_fact** 显式写入 Mem0；联系方式类 Mem0 优先于空 corpus | P0-16 | Day 3 + D8 | `intake-coordinator`、`mem0/store.ts`、`persist-turn.ts` |
 | **P0** | KM 规则精排 + `personal/` 加权；复合问拆 subTasks | 赵一 / 潘展飞波动 | **Day 6～7** | `retrieve.ts`、Intake |
 | **P1** | 生成后 citation / 姓名校验（answer 人名 ∈ hits excerpt） | P0-15 | Day 8～9 eval | D5-3 |
@@ -211,19 +212,28 @@
 #### 验收标准（消坑后）
 
 - [x] 「你好」10 次无「大表哥」类称呼（P0-13）← `verify:intake-chitchat`（`CHITCHAT_RUNS=10`）✅
-- [ ] 「我的名字」3 遍均含 **潘展飞**，无陈明/赵一，无「库里无 + 记忆有」同句（P0-14）；agent-log 无 FC meta refined 打回（P0-17）
+- [x] 「我的名字」无「库里无 + 记忆有」同句矛盾（P0-14）← KM 优化后 Web/G2 复测 ✅
+- [ ] 「我的名字」3 遍均含 **潘展飞**，无陈明/赵一（P0-15 延伸）；agent-log 无 FC meta refined 打回（P0-17）
 - [x] 复现 **路径 B** 后：`hitCount=0` + FC force_pass 时 Analyst 不调 LLM（P0-12）← `verify:analyst-empty-hits` ✅
 - [ ] 「我叫什么 年龄 职业 从业经历」3 遍姓名均为 **潘展飞**，且至少 1 条 citation 来自 `personal/个人简历`（P0-15）
 - [ ] `pnpm run golden:regression` 与 `GOLDEN_RUNS=3` 稳定性汇总 **≥4/5 且全轮无 P0-12～16 类现象**
 - [ ] 对话 A 记 QQ（或手机）→ 新建对话 B 问同项 → answer 含该值（P0-16）
 
-**Golden 脚本定位：** 当前 G1～G5 为 **冒烟 + 基线分数**；P0-13 已由 `verify:intake-chitchat` 验收；**P0-14～16** 的严格断言在对应代码消坑后再并入 Golden，避免「测了但假绿」。
+**Golden 脚本定位：** 当前 G1～G5 为 **冒烟 + 基线分数**；P0-13 / P0-14 已分别由 KM 优化 + `verify:intake-chitchat` 验收；**P0-15～16** 严格断言待消坑后再并入 Golden。
 
 #### 2.5.1 P0-13 — chitchat briefReply 乱称呼（✅ 2026-06-18）
 
 **改动：** `intake-chitchat-guard.ts` — `applyIntakeChitchatGuard` 在 `compile.ts` intake 节点串联；不合格 `briefReply`（缺 FamBrain/助手、含大表哥等）→ `DEFAULT_CHITCHAT_BRIEF_REPLY`。顺带 `schema.ts` 兼容模型 `brief_reply` 等 snake_case。
 
 **验证：** `pnpm --filter @fambrain/agents run verify:intake-chitchat`（默认 `CHITCHAT_RUNS=10`）。
+
+#### 2.5.2 P0-14 — corpus 与 Mem0 同句矛盾（✅ KM 优化 · 2026-06）
+
+**原现象：** 「我的名字」→ Analyst 同句「知识库没有…」+「长期记忆已知潘展飞」。
+
+**实际修复：** KM 优化后 `identity` / `personal/` 检索稳定命中 `个人简历` chunk，Analyst 有 hits 直答 **潘展飞**，不再走 `insufficientEvidence` + Mem0 补姓名。Analyst prompt 层面对 Mem0/corpus 优先级**暂未另改**；若 KM 再波动可再补 D3-9 兜底。
+
+**复测：** Web「我的名字」+ Golden G2 冒烟；无 corpus/Mem0 同句打架。
 
 ### 2.6 跨会话用户自述事实未召回（2026-06 · Web 联调）
 
@@ -560,7 +570,7 @@ pnpm run verify:fact-checker
 # Web 问「我的名字是什么？」→ KM resultSource=rule，FC personal_skip_llm，无二次 KM
 ```
 
-**仍待完善（KM v3）：** 见 [km-retrieval-design.md](./km-retrieval-design.md) [§三 主计划表](./km-retrieval-design.md#三主计划表按优先级)；Analyst corpus/Mem0（P0-14）不在 KM 范围。
+**仍待完善（KM v3）：** 见 [km-retrieval-design.md](./km-retrieval-design.md) [§三 主计划表](./km-retrieval-design.md#三主计划表按优先级)；P0-14（corpus/Mem0 矛盾）已由 KM 优化 ✅。
 
 ### 与通用坑 #1～#19 的对应
 
@@ -578,7 +588,8 @@ pnpm run verify:fact-checker
 | P0-12 / D5-5 | #9 信息捏造（路径 B：force_pass 后 hits 空，Analyst 仍编造 — 待验证） |
 | P0-17 / D5-6 | #4 计划漂移（FC 坏 refined 导致 Corrective RAG 二次检索跑偏） |
 | P0-13 | #1 意图误判（chitchat briefReply 风格漂移） | ✅ `verify:intake-chitchat` |
-| P0-14 / P0-15 | #9 信息捏造；#16 关键信息遗忘（Mem0 vs corpus）；#15 信息不对称 |
+| P0-14 | #9 信息捏造；#16 Mem0 vs corpus 同句矛盾 | ✅ KM 优化 |
+| P0-15 | #9 信息捏造；#15 信息不对称 |
 | P0-16 | #16 关键信息遗忘（跨 conversationId；用户自述 fact） |
 | R6-1 | #3 过早终止（枚举未穷尽）；#16 跨轮不一致；P0-11 / D5-2 |
 | R6-3 | #16 跨轮不一致；#12 重复输出（同会话结论自相矛盾）；R6-1 枚举未穷尽 |
@@ -612,7 +623,8 @@ pnpm run verify:fact-checker
 - [x] D5-2：同会话连续两问 G4 原文，第二次 L2 cache 或 L1 同问短路 ← §2.2（2026-06-18）
 - [x] **P0-12 / D5-5**：FC 二次放行且 `hits=[]` 时 Analyst 不得编造 ← §2.2.1（`verify:analyst-empty-hits` ✅ 2026-06-18）
 - [x] **P0-13**（Golden Day 2）：chitchat 无乱称呼 ← `verify:intake-chitchat` ✅ 2026-06-18
-- [ ] **P0-14～P0-15**（Golden Day 2 实录）：无赵一/陈明、corpus/Mem0 不矛盾 ← §2.5
+- [x] **P0-14**（Golden Day 2）：corpus/Mem0 不矛盾 ← KM 优化 ✅ 2026-06
+- [ ] **P0-15**（Golden Day 2 实录）：无赵一/陈明、复合问法稳定 ← §2.5
 - [ ] **P0-16**（Web 联调）：对话 A 记 QQ → 对话 B 问 QQ 可召回 ← §2.6
 - [ ] R6-1：「哪几家公司上过班」类问题 → hits/answer 枚举 **4 家**且同句再问结果一致 ← §2.3
 - [ ] **R6-3**：同会话「综合履历 → 编号子问」公司 **4 家**（eval **`G-履历综合` 4/4 ✅**；代码层 Intake/Analyst 加固 ⬜）← §2.7
