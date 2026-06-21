@@ -22,6 +22,7 @@
     "verify:intake-chitchat": "tsx --env-file=../../.env scripts/verify-intake-chitchat.ts",
     "verify:composite-route": "tsx scripts/verify-composite-route.ts",
     "verify:composite-incremental": "tsx scripts/verify-composite-incremental.ts",
+    "verify:r6-no-cache": "tsx --env-file=../../.env scripts/verify-r6-no-cache.ts",
     "verify:intake-repeat-smoke": "tsx --env-file=../../.env scripts/verify-intake-repeat-smoke.ts",
     "verify:retrieval-cache": "tsx --env-file=../../.env scripts/verify-retrieval-cache.ts",
     "verify:fact-checker:pipeline": "tsx --env-file=../../.env scripts/verify-fact-checker-pipeline.ts",

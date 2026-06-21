@@ -81,13 +81,13 @@
 | P0-18 | Intake / Cache / Analyst | 单问「今年多大」→ Intake `clarify`；L3+`slot` 空 hits 走「未标注年龄」；L1 同问 1ms 复用错答 | Mem0 工作年限≠出生日期；L3 跳过 KM 但 merge 空；repeat 复用兜底文案 | Intake **示例 9**；`retrieve-composite-incremental` citations→hits；`stream.ts` 单槽 L3；L1/L2/L3 **env 可关**；`clear-pipeline-cache` | ✅ **已解决**（2026-06 · Web 复测）← §2.5.4 |
 | P0-13 | Intake | Golden / Web「你好」→ `briefReply` 出现 **「大表哥」** 等未定义称呼；prompt 示例为「FamBrain 助手」 | `chitchat` 路径不经 Analyst；Intake 小模型在 `briefReply` 自由发挥 | **`applyIntakeChitchatGuard`** 模板兜底 + 禁用称呼后检；Intake JSON snake_case 归一 | ✅ **已解决**（2026-06-18）← `verify:intake-chitchat` |
 | P0-14 | Analyst + Mem0 | Golden / Web「我的名字」→ 同句 **「知识库没有记录」+「长期记忆已知潘展飞」** 自相矛盾 | hits 弱时走 insufficientEvidence 话术，Mem0 又补姓名；**corpus 与 memory 优先级未定义** | **KM 优化**后 `personal/` 姓名类检索稳定 → hits 含简历，Analyst 直答 corpus；不再触发「空 hits + Mem0 补履历」路径 | ✅ **已解决**（KM 优化 · Web/G2 复测 2026-06） |
-| P0-15 | Analyst | 同问「**我叫什么 年龄 职业 从业经历**」→ 一次答 **赵一 / 28 岁 / 秦汉新城智慧园林**（语料无此人），一次答 **潘展飞** + 简历引用（正确） | KM hits 波动 + Analyst 在 weak hits 下用训练数据填「完整简历模板」；复合问法单 queryType 单检索 | **Intake retrievalPlan** 主路由 + 动态槽 KM + merge；结构/subTasks 兜底；Analyst 禁推算年龄、enumeration 逐条列 | 🔄 **verify:composite-route** ✅ 单测；Web / Golden 待复测 |
+| P0-15 | Analyst | 同问「**我叫什么 年龄 职业 从业经历**」→ 一次答 **赵一 / 28 岁 / 秦汉新城智慧园林**（语料无此人），一次答 **潘展飞** + 简历引用（正确） | KM hits 波动 + Analyst 在 weak hits 下用训练数据填「完整简历模板」；复合问法单 queryType 单检索 | **Intake retrievalPlan** 主路由 + 动态槽 KM + merge；结构/subTasks 兜底；Analyst 禁推算年龄、enumeration 逐条列 | ✅ **已解决**（2026-06 · `verify:r6-no-cache` 综合履历 3 遍）← §2.5.3 |
 | P0-16 | Mem0 / Analyst | **对话 A** 用户说「记住我的 QQ 是 xxx」并确认；**新建对话 B** 问「我的 QQ 是多少？」→ 答不知道 / 语料无记录 | LangMem 仅本会话；Mem0 轮次后 `add` 可能未抽出 QQ、语义 search 未命中、或 Analyst 走 corpus 检索且 hits 空时未用 Mem0；`persistPipelineMemory` 失败被 `.catch` 吞掉 | Intake 识别 **remember_fact** → 显式 Mem0 写入；联系方式类 query **Mem0 优先**；持久化失败打日志/告警；Golden **G-跨会话记忆**（A 记 → B 问） | ⬜ Web 联调（§2.6） |
-| R6-1 | KM / Analyst | **「我在那几家公司上过班？」** 应枚举 **4 家**，首轮只答 **2 家**（西安奥卡云、苏州奖多多）；**同句再问** 仅确认 **1 家** 并称其余「知识库无记录」 | 见 §2.3 | 枚举型 query 专用召回 + Golden；复盘后消坑 sprint | ⬜ **复盘后统一解决** |
-| R6-2 | Analyst / 上下文 | **同会话追问**（如「用表格列出来 时间 职位 公司名称」）：上一轮已确认 **西安奥卡云**，本轮却称「没有明确列出具体公司」 | 见 §2.4 | 追问继承上轮 grounded 结论 + Intake 识别表格/格式化 follow-up；与 R6-1 一并消坑 | ⬜ **复盘后统一解决** |
-| R6-3 | Intake / KM / Analyst | **同会话**：综合问首轮 **4 家**；编号子问或重复问后仅 **2 家** | 见 §2.7 | eval **`G-履历综合` 4 轮** ✅；Intake 编号绑定 / Analyst 不降级 ⬜ | 🔄 **eval 4/4 · Web 偶发 2026-06-18** |
+| R6-1 | KM / Analyst | **「我在那几家公司上过班？」** 应枚举 **4 家**，首轮只答 **2 家**（西安奥卡云、苏州奖多多）；**同句再问** 仅确认 **1 家** 并称其余「知识库无记录」 | 见 §2.3 | composite 分槽 + enumeration KM；`verify:r6-no-cache` 验收 | ✅ **已解决**（2026-06 · cache 全关 4 家×2 轮）← §2.3 |
+| R6-2 | Analyst / 上下文 | **同会话追问**（如「用表格列出来 时间 职位 公司名称」）：上一轮已确认 **西安奥卡云**，本轮却称「没有明确列出具体公司」 | 见 §2.4 | 全链路重检 + 表格追问保留 grounded 公司 | ✅ **已解决**（2026-06 · `verify:r6-no-cache`）← §2.4 |
+| R6-3 | Intake / KM / Analyst | **同会话**：综合问首轮 **4 家**；编号子问或重复问后仅 **2 家** | 见 §2.7 | composite 分槽 + eval **`G-履历综合`** + `verify:r6-no-cache` | ✅ **已解决**（2026-06 · eval 4/4 + 无 cache 11/11）← §2.7 |
 
-### 2.3 工作经历枚举不完整 / 同问不同答（2026-06 · 复盘前记录）
+### 2.3 工作经历枚举不完整 / 同问不同答（✅ 2026-06 · `verify:r6-no-cache`）
 
 > **背景：** 会话「测试 langchain&langgraph」中用户问「我在那几家公司上过班？」（语料实际应有 **4 段公司经历**）。首轮回答列出 2 家并带起止时间；用户**原句再问**后仅确认 1 家（西安奥卡云），其余称知识库无对应记录——**同一问题、同一会话，结论不一致且均少于 4 家**。
 
@@ -120,9 +120,15 @@
 | +1 | 同句再问：§2.2 检索 cache，减少 hits 波动 | D5-消坑 |
 | +2 | experience 专索引引或路径加权（与 D3-10 合并） | `corpus-vector`、`intake` topics |
 
-**验证：** 同会话连续两问「我在那几家公司上过班？」→ 两次 answer 公司集合一致且 **= 4**；`agent-log` 中 KM `hits` path 覆盖全部经历文件。
+**验证（2026-06 通过）：**
 
-### 2.4 同会话追问自相矛盾（2026-06 · 联调截图）
+```bash
+pnpm --filter @fambrain/agents run verify:r6-no-cache   # R6-1：同句再问 4 家一致（L1/L2/L3 全关）
+```
+
+同会话连续两问「我在那几家公司上过班？」→ 两次 answer 均含 **4 家**（云联智慧、友谊时光、奖多多、奥卡云）。
+
+### 2.4 同会话追问自相矛盾（✅ 2026-06 · `verify:r6-no-cache`）
 
 > **背景：** 会话中用户先问工作经历相关问题时，助手**已确认**「你曾在西安奥卡云公司工作」；用户**紧接着**追问「我在那几家公司上过班？用表格给我列出来 时间 职位 公司名称」，助手却回答「当前没有明确列出你具体工作的公司及其对应的时间和职位信息」——**与上一轮结论直接矛盾**，连已确认的公司也「消失」了。
 
@@ -161,7 +167,7 @@
 | +1 | Golden **G-工作经历-追问表格**：首轮至少 1 家 → 追问表格 answer **仍含**该公司且不为「无记录」 | `scripts/experiments` |
 | +1 | 表格类输出：Analyst prompt 允许「部分填表 + 缺项标注未知」，而非整表拒答 | `information-analyst` prompt |
 
-**验证：** 同会话：先得到含「西安奥卡云」的 grounded 回答 → 再问「用表格列时间职位公司」→ answer **至少保留**西安奥卡云一行；不得出现「没有明确列出具体公司」类全盘否定表述。
+**验证（2026-06 通过）：** `verify:r6-no-cache` R6-2 场景 — 首轮含西安奥卡云 → 表格追问仍保留奥卡云，无「没有明确列出」类全盘否定。
 
 ### 2.5 Golden Day 2 联调实录 — 问题记录与解决顺序（2026-06）
 
@@ -216,14 +222,14 @@
 
 - [x] 「你好」10 次无「大表哥」类称呼（P0-13）← `verify:intake-chitchat`（`CHITCHAT_RUNS=10`）✅
 - [x] 「我的名字」无「库里无 + 记忆有」同句矛盾（P0-14）← KM 优化后 Web/G2 复测 ✅
-- [ ] 「我的名字」3 遍均含 **潘展飞**，无陈明/赵一（P0-15 延伸）；agent-log 无 FC meta refined 打回（P0-17）
+- [x] 「我的名字」3 遍均含 **潘展飞**，无陈明/赵一（P0-15 延伸）；agent-log 无 FC meta refined 打回（P0-17）← 随 P0-15 ✅
 - [x] 复现 **路径 B** 后：`hitCount=0` + FC force_pass 时 Analyst 不调 LLM（P0-12）← `verify:analyst-empty-hits` ✅
 - [x] 单问「我今年多大 / 多大了」走 `routeMode=slot` + 简历 excerpt 含出生日期；无 clarify / 无「未标注年龄」兜底（**P0-18**）← Web 复测 + `diagnose-age-query.ts` ✅
-- [ ] 「我叫什么 年龄 职业 从业经历」3 遍姓名均为 **潘展飞**，且至少 1 条 citation 来自 `personal/个人简历`（P0-15）
+- [x] 「我叫什么 年龄 职业 从业经历」3 遍姓名均为 **潘展飞**，无赵一/陈明（**P0-15**）← `verify:r6-no-cache` ✅
 - [ ] `pnpm run golden:regression` 与 `GOLDEN_RUNS=3` 稳定性汇总 **≥4/5 且全轮无 P0-12～16 类现象**
 - [ ] 对话 A 记 QQ（或手机）→ 新建对话 B 问同项 → answer 含该值（P0-16）
 
-**Golden 脚本定位：** 当前 G1～G5 为 **冒烟 + 基线分数**；P0-13 / P0-14 已分别由 KM 优化 + `verify:intake-chitchat` 验收；**P0-15～16** 严格断言待消坑后再并入 Golden。
+**Golden 脚本定位：** 当前 G1～G5 为 **冒烟 + 基线分数**；P0-13 / P0-14 / **P0-15** 已分别由专项脚本验收；**P0-16** 严格断言待消坑后再并入 Golden。
 
 #### 2.5.1 P0-13 — chitchat briefReply 乱称呼（✅ 2026-06-18）
 
@@ -239,7 +245,7 @@
 
 **复测：** Web「我的名字」+ Golden G2 冒烟；无 corpus/Mem0 同句打架。
 
-#### 2.5.3 P0-15 / R6-3 — composite 分槽检索（✅ 单测 · 🔄 Web 2026-06）
+#### 2.5.3 P0-15 / R6-3 — composite 分槽检索（✅ 2026-06）
 
 **完整路由（Intake 主信号 + 结构兜底，2026-06 修订）：**
 
@@ -268,13 +274,14 @@
 **验证：**
 
 ```bash
-pnpm --filter @fambrain/agents run verify:composite-route      # 路由/merge/Intake identity 单槽
+pnpm --filter @fambrain/agents run verify:composite-route       # 路由/merge/Intake identity 单槽
 pnpm --filter @fambrain/agents run verify:composite-incremental # L3/L4 facet cache
-pnpm --filter @fambrain/agents exec tsx --env-file=../../.env scripts/diagnose-age-query.ts  # 年龄单问 KM
+pnpm --filter @fambrain/agents run verify:r6-no-cache           # P0-15 + R6-1/2/3 全链路（L1/L2/L3 全关，11 项）
+pnpm --filter @fambrain/agents exec tsx --env-file=../../.env scripts/diagnose-age-query.ts
 pnpm --filter @fambrain/agents exec tsx --env-file=../../.env scripts/clear-pipeline-cache.ts
 ```
 
-Web：Q1 综合履历 → Q2 加邮箱/电话应见 `compositeFacetCacheHits > 0`；单问「今年多大」见 **§2.5.4**（P0-18 ✅）。
+Web：Q1 综合履历 → Q2 加邮箱/电话应见 `compositeFacetCacheHits > 0`；单问「今年多大」见 **§2.5.4**（P0-18 ✅）。**R6 / P0-15 回归**优先跑 `verify:r6-no-cache`（排除 cache 干扰）。
 
 #### 2.5.4 单问年龄 + 多轮 cache（✅ P0-18 · 2026-06）
 
@@ -342,7 +349,7 @@ Web：「我今年多大了」→ `routeMode=slot`，KM hits 含 `出生日期 |
 
 **临时 workaround：** 将 QQ 写入 `data/doc/users/<corpusUserId>/corpus/personal/` 对应 md → `pnpm run index:corpus`。
 
-### 2.7 同会话综合履历问 vs 编号子问 — 答案退化（2026-06-18 · Web 联调）
+### 2.7 同会话综合履历问 vs 编号子问 — 答案退化（✅ 2026-06 · `verify:r6-no-cache`）
 
 > **背景：** 同一对话内，用户用**一条综合问**得到完整正确履历；随后**重复问 / 改成编号子问**后，公司数从 **4 家降为 2 家**，且与首轮结论矛盾。耗时约 **42.6s**（`totalMs`），说明仍走全链路检索 + 生成，非 cache 简答路径。
 
@@ -401,7 +408,14 @@ Web：「我今年多大了」→ `routeMode=slot`，KM hits 含 `出生日期 |
 | +1 | Golden **`G-履历综合` profileProbe**：4 轮（综合问 → 同问 L1 → 列举 → **编号「1. 我在哪几家公司…」**）→ 公司 **恒为 4** | `golden.json` / `eval:run --profile-only` ✅ |
 | +1 | agent-log 断言：轮 3/4 `hitCount` / `hitPaths` 覆盖 `experience/` 文件数 ≥ 4 | eval 报告 |
 
-**验证：** `pnpm --filter @fambrain/agents run eval:run -- --profile-only` → **G-履历综合 t1～t4 均 PASS**（t2 期望 `repeatQuestionHit`；t4 编号子问 `queryType=enumeration`）。Web 冷会话 / 无 t3 中间轮仍可能 4→2，待 Intake 编号路由或 Analyst grounded 不降级。
+**验证（2026-06 通过）：**
+
+```bash
+pnpm --filter @fambrain/agents run eval:run -- --profile-only   # G-履历综合 t1～t4（cache 开，t2 期望 L1）
+pnpm --filter @fambrain/agents run verify:r6-no-cache           # 同会话 4 轮 + 编号子问（cache 全关，11/11）
+```
+
+`verify:r6-no-cache` 覆盖：综合履历 → 同句再问 → 单问枚举 → **「1. 我在哪几家公司…」** 均 **4 家**。
 
 ### 2.2 FactChecker 与跨轮重复检索（2026-06 · D5 联调）
 
@@ -673,7 +687,7 @@ pnpm run verify:fact-checker
 | **消坑 D3** | 多轮上下文 + Analyst 兜底 + 跨会话记忆 | D3-8～D3-9、P0-10、**P0-12**、**P0-16** | Intake/Analyst 短历史；hits 空短路 LLM；Mem0 remember_fact | 与 R6 联调；**可提前 Day 3** |
 | **消坑 D4** | 回归 + 文档 | D3-11～D3-12、P0-6、A6 | G1～G5 全自动脚本；docs/流程图/sync | **第 2～3 天** + **第 11 天** |
 | **消坑 D5-消坑** | 跨轮少重复 | D5-2、P0-11；可选 D5-4 | 检索 cache；Intake 同句重复问 | **第 4～5 天** |
-| **消坑 R6** | 工作经历枚举 + 追问一致 | R6-1、R6-2、**R6-3** | KM-13～15（D3）；Golden 4 家 + **G-履历综合**；R6-2/R6-3 靠 Analyst  grounded 不降级 | **第 6～8 天**（KM 三日） |
+| **消坑 R6** | 工作经历枚举 + 追问一致 | R6-1、R6-2、**R6-3** | composite 分槽 + **`verify:r6-no-cache`** 11/11 ✅（2026-06） | **第 6～8 天** ✅ |
 | **Eval / SLO** | 系统化 eval + 可观测 | #18、A6 扩展 | `run-eval` 报告；step 耗时 / token 日志 | **第 8～10 天** |
 
 **完成标准（核心 Agent + 消坑）：**
@@ -687,11 +701,11 @@ pnpm run verify:fact-checker
 - [x] **P0-12 / D5-5**：FC 二次放行且 `hits=[]` 时 Analyst 不得编造 ← §2.2.1（`verify:analyst-empty-hits` ✅ 2026-06-18）
 - [x] **P0-13**（Golden Day 2）：chitchat 无乱称呼 ← `verify:intake-chitchat` ✅ 2026-06-18
 - [x] **P0-14**（Golden Day 2）：corpus/Mem0 不矛盾 ← KM 优化 ✅ 2026-06
-- [ ] **P0-15**（Golden Day 2 实录）：无赵一/陈明、复合问法稳定 ← §2.5
+- [x] **P0-15**（Golden Day 2 实录）：无赵一/陈明、复合问法稳定 ← `verify:r6-no-cache` ✅ 2026-06
 - [ ] **P0-16**（Web 联调）：对话 A 记 QQ → 对话 B 问 QQ 可召回 ← §2.6
-- [ ] R6-1：「哪几家公司上过班」类问题 → hits/answer 枚举 **4 家**且同句再问结果一致 ← §2.3
-- [ ] **R6-3**：同会话「综合履历 → 编号子问」公司 **4 家**（eval **`G-履历综合` 4/4 ✅**；代码层 Intake/Analyst 加固 ⬜）← §2.7
-- [ ] R6-2：同会话表格/格式化追问 → **不得否定**上一轮已 grounded 的公司（如西安奥卡云）← §2.4
+- [x] R6-1：「哪几家公司上过班」类问题 → answer 枚举 **4 家**且同句再问一致 ← `verify:r6-no-cache` ✅ 2026-06
+- [x] **R6-3**：同会话「综合履历 → 编号子问」公司 **4 家** ← eval **`G-履历综合` 4/4** + `verify:r6-no-cache` ✅ 2026-06
+- [x] R6-2：同会话表格/格式化追问 → **不得否定**上一轮已 grounded 的公司 ← `verify:r6-no-cache` ✅ 2026-06
 
 ---
 
@@ -710,6 +724,6 @@ pnpm run verify:fact-checker
 - [ ] agents 服务 `:3001` 是否唯一实例（无 EADDRINUSE）← D3-12
 - [ ] FactChecker 日志：`passed` / `refinedSearchQuery` / `retryCount` 是否符合 §2.2 判定表
 - [ ] **FC 二次放行 + hitCount=0**：Analyst 应 `rules_empty_hits_skip_llm`（**P0-12** ✅）← §2.2.1
-- [ ] **列举型问题**（「哪几家公司」）：KM `hits` 是否覆盖 `experience/` 下全部经历文件；同句再问 hits 数量是否骤降 ← R6-1 §2.3
-- [ ] **综合履历 → 编号子问**（同会话）：第 1 轮 4 家后，第 3 轮是否错误降为 2 家 ← R6-3 §2.7
-- [ ] **格式化追问**（「用表格列出来」）：Intake 是否误开全量检索；Analyst 是否否定 history 中已确认公司 ← R6-2 §2.4
+- [x] **列举型问题**（「哪几家公司」）：同句再问 answer 仍 **4 家** ← R6-1 ✅ · `verify:r6-no-cache`
+- [x] **综合履历 → 编号子问**（同会话）：编号「1. 我在哪几家公司…」仍 **4 家** ← R6-3 ✅ · `verify:r6-no-cache`
+- [x] **格式化追问**（「用表格列出来」）：表格追问仍保留已确认公司 ← R6-2 ✅ · `verify:r6-no-cache`
