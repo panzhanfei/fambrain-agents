@@ -78,6 +78,7 @@
 | P0-11 | FactChecker / 编排 | 用户以为「核查过一次，同句再问不应再进 FactChecker」 | **两类现象混为一谈：**（A）同轮打回再检索 → FactChecker 跑 2 次是 Corrective RAG 设计；（B）**新一条用户消息** = 新 pipeline，`checkerPassed`/`retryCount` 重置，无跨轮 cache | 见 §2.2；消坑 sprint **D5-消坑** | ⬜ 待做 |
 | P0-12 | Analyst + FC | **路径 B：** FC **二次 force_pass** 后 KM 仍 `hits=[]` / `coverage=none`，Analyst 编造终稿（陈明 / Charlie） | `streamAnalyzeInformation` hits 空仍调 LLM | **`shouldSkipAnalystLlm`** → `rules_empty_hits_skip_llm` 直出 fallback；`insufficientEvidence=true` | ✅ **已解决**（2026-06-18） |
 | P0-17 | FactChecker + 编排 | **路径 A：** KM₁ 有 hits，FC 产出 meta 式 `refinedSearchQuery`（如「姓名 **全名 完整称呼**」），编排覆盖 `searchQuery` → KM₂ 变差 | FC LLM 把「怎么查」写成检索词；编排无条件覆盖；无 refined 有效性校验 | `personal/` + 姓名类 → **跳过 FC LLM 直接 pass**；`mergeRetrySearchQuery` meta  strip + 无增量不重检；见 **§2.2.2** | ✅ **已解决**（2026-06） |
+| P0-18 | Intake / Cache / Analyst | 单问「今年多大」→ Intake `clarify`；L3+`slot` 空 hits 走「未标注年龄」；L1 同问 1ms 复用错答 | Mem0 工作年限≠出生日期；L3 跳过 KM 但 merge 空；repeat 复用兜底文案 | Intake **示例 9**；`retrieve-composite-incremental` citations→hits；`stream.ts` 单槽 L3；L1/L2/L3 **env 可关**；`clear-pipeline-cache` | ✅ **已解决**（2026-06 · Web 复测）← §2.5.4 |
 | P0-13 | Intake | Golden / Web「你好」→ `briefReply` 出现 **「大表哥」** 等未定义称呼；prompt 示例为「FamBrain 助手」 | `chitchat` 路径不经 Analyst；Intake 小模型在 `briefReply` 自由发挥 | **`applyIntakeChitchatGuard`** 模板兜底 + 禁用称呼后检；Intake JSON snake_case 归一 | ✅ **已解决**（2026-06-18）← `verify:intake-chitchat` |
 | P0-14 | Analyst + Mem0 | Golden / Web「我的名字」→ 同句 **「知识库没有记录」+「长期记忆已知潘展飞」** 自相矛盾 | hits 弱时走 insufficientEvidence 话术，Mem0 又补姓名；**corpus 与 memory 优先级未定义** | **KM 优化**后 `personal/` 姓名类检索稳定 → hits 含简历，Analyst 直答 corpus；不再触发「空 hits + Mem0 补履历」路径 | ✅ **已解决**（KM 优化 · Web/G2 复测 2026-06） |
 | P0-15 | Analyst | 同问「**我叫什么 年龄 职业 从业经历**」→ 一次答 **赵一 / 28 岁 / 秦汉新城智慧园林**（语料无此人），一次答 **潘展飞** + 简历引用（正确） | KM hits 波动 + Analyst 在 weak hits 下用训练数据填「完整简历模板」；复合问法单 queryType 单检索 | **Intake retrievalPlan** 主路由 + 动态槽 KM + merge；结构/subTasks 兜底；Analyst 禁推算年龄、enumeration 逐条列 | 🔄 **verify:composite-route** ✅ 单测；Web / Golden 待复测 |
@@ -179,7 +180,8 @@
 | Web | 我叫什么 年龄 职业 从业经历 | **赵一**，28 岁，秦汉新城智慧园林… | 完全编造另一人 | **P0-15** |
 | Web（2026-06-18） | 综合履历问 → 编号 1～4 子问（同会话） | 首轮 **4 家** 全对 → 第 3 轮仅 **2 家** 且称「两家公司」 | 同会话答案降级 | **R6-3** §2.7 |
 | Web（同问再跑） | 同上 | **潘展飞**，职业/经历 + 简历 path 引用 | **正确** | （对照基线） |
-| Web（同问再跑） | 同上 | 年龄字段答成「10 年前端经验」而非出生日期 | 字段映射 / hits 不全 | **P0-15** 延伸 |
+| Web（同问再跑） | 同上 | 年龄字段答成「10 年前端经验」而非出生日期 | 字段映射 / hits 不全 / L3 坏 cache | **P0-15** 延伸 · **P0-18** ✅ |
+| Web | 「我今年多大了」等单问年龄 | 曾 clarify / 「未标注年龄」/ L1 1ms 错答 | Intake clarify + L3+slot + repeat | **P0-18** ✅ |
 | Web | 对话 A：记住 QQ → 对话 B：我的 QQ？ | 对话 B **不知道** / 未引用 Mem0 | 跨会话用户自述事实未召回 | **P0-16** |
 
 **语料事实（ground truth）：** 姓名 **潘展飞**；语料中**不存在**赵一、陈明、大表哥、《个人简介》独立文档。
@@ -203,6 +205,7 @@
 | **P0** | Intake：`briefReply` 模板或后检（禁昵称；宜含 FamBrain/助手） | 大表哥 | Day 3 | `intake-chitchat-guard.ts` + `compile.ts` ✅ |
 | **P0** | KM：`personal/` 姓名类检索稳定（identity query）→ hits 含简历，消除 corpus/Mem0 同句矛盾 | P0-14 | KM 优化 | `knowledge-manager/retrieve.ts` 等 ✅ |
 | **P0** | Analyst：Mem0 **不得**与「知识库无记录」同句补履历（**兜底**；主因已由 KM 解决） | P0-14 | Day 3 + D3-9 | 暂不必改；若 KM 再波动可补 prompt |
+| **P0** | 单问年龄：Intake 示例 9 + L3/slot Analyst 路径 + cache env / 清 cache 脚本 | P0-18 | 2026-06 | `prompt.ts`、`stream.ts`、`retrieve-composite-incremental.ts`、`infra/config.ts` ✅ |
 | **P0** | 跨会话 **remember_fact** 显式写入 Mem0；联系方式类 Mem0 优先于空 corpus | P0-16 | Day 3 + D8 | `intake-coordinator`、`mem0/store.ts`、`persist-turn.ts` |
 | **P0** | KM 规则精排 + `personal/` 加权；复合问拆 subTasks | 赵一 / 潘展飞波动 | **Day 6～7** | `retrieve.ts`、Intake |
 | **P1** | 生成后 citation / 姓名校验（answer 人名 ∈ hits excerpt） | P0-15 | Day 8～9 eval | D5-3 |
@@ -215,6 +218,7 @@
 - [x] 「我的名字」无「库里无 + 记忆有」同句矛盾（P0-14）← KM 优化后 Web/G2 复测 ✅
 - [ ] 「我的名字」3 遍均含 **潘展飞**，无陈明/赵一（P0-15 延伸）；agent-log 无 FC meta refined 打回（P0-17）
 - [x] 复现 **路径 B** 后：`hitCount=0` + FC force_pass 时 Analyst 不调 LLM（P0-12）← `verify:analyst-empty-hits` ✅
+- [x] 单问「我今年多大 / 多大了」走 `routeMode=slot` + 简历 excerpt 含出生日期；无 clarify / 无「未标注年龄」兜底（**P0-18**）← Web 复测 + `diagnose-age-query.ts` ✅
 - [ ] 「我叫什么 年龄 职业 从业经历」3 遍姓名均为 **潘展飞**，且至少 1 条 citation 来自 `personal/个人简历`（P0-15）
 - [ ] `pnpm run golden:regression` 与 `GOLDEN_RUNS=3` 稳定性汇总 **≥4/5 且全轮无 P0-12～16 类现象**
 - [ ] 对话 A 记 QQ（或手机）→ 新建对话 B 问同项 → answer 含该值（P0-16）
@@ -270,17 +274,29 @@ pnpm --filter @fambrain/agents exec tsx --env-file=../../.env scripts/diagnose-a
 pnpm --filter @fambrain/agents exec tsx --env-file=../../.env scripts/clear-pipeline-cache.ts
 ```
 
-Web：Q1 综合履历 → Q2 加邮箱/电话应见 `compositeFacetCacheHits > 0`；单问「今年多大」须 Intake 输出 `retrieve_and_answer` + `queryType=identity`（prompt **示例 9**），`routeMode=slot`，简历 excerpt 含出生日期。
+Web：Q1 综合履历 → Q2 加邮箱/电话应见 `compositeFacetCacheHits > 0`；单问「今年多大」见 **§2.5.4**（P0-18 ✅）。
 
-#### 2.5.4 单问年龄 — Intake clarify / L3+slot 空 hits（2026-06）
+#### 2.5.4 单问年龄 + 多轮 cache（✅ P0-18 · 2026-06）
 
-| 现象 | 根因 | 修复 |
-|------|------|------|
-| 「我今年多大了」→ Intake `clarify`，Mem0 有工作年限但无出生日期 | LLM 误判「信息不足」；**Mem0 不能代替 corpus** | Intake prompt：年龄/档案单问禁止 clarify（示例 9）；须 `needsRetrieval` + identity `searchQuery` |
-| 同句再问 1ms 复用「未标注年龄」兜底 | **L1 repeat** 复用 history 错误答 | `REPEAT_QUESTION_CACHE_DISABLED=1` 调试；或 `clear-pipeline-cache` + 新问 |
-| L3 命中 + `routeMode=slot` 仍报「未标注年龄」 | L3 跳过 KM 但 merge hits 空，Analyst 走 `rules_empty_hits_skip_llm` | `retrieve-composite-incremental` citations→hits；`stream.ts` 单槽 L3 直出 |
+**原现象（三类，同属「年龄单问 + cache 链路」）：**
 
-**勿用问句 regex guard 强改 Intake**（已移除 profile-retrieval-guard）；路由以 Intake `retrievalPlan` / `queryType` 为主。
+| 现象 | 根因 | 对策 | 状态 |
+|------|------|------|------|
+| 「我今年多大了」→ Intake `clarify` | LLM 见 Mem0 仅工作年限、误判信息不足 | Intake prompt **示例 9**：档案/年龄单问禁止 clarify，须 `retrieve_and_answer` + identity | ✅ |
+| L3 命中 + `routeMode=slot` →「未标注年龄」 | L3 跳过 KM，`merge.hits` 空 → `rules_empty_hits_skip_llm` | `retrieve-composite-incremental`：citations→hits；`stream.ts` 单槽 L3 直出 | ✅ |
+| 同句再问 1ms 复用错误兜底 | L1 repeat 复用 history 中 insufficient 答 | `REPEAT_QUESTION_CACHE_DISABLED=1` 可关；清 cache + 重启 agents | ✅ |
+
+**改动摘要：** `5c4f89b` — Intake 示例 9；L3+slot Analyst 路径；`REPEAT_QUESTION_CACHE_DISABLED` / L2 / L3 env 开关；`clear-pipeline-cache.ts`、`diagnose-age-query.ts`。路由以 Intake `retrievalPlan` / `queryType` 为主（**无**问句 regex guard）。
+
+**验证：**
+
+```bash
+pnpm --filter @fambrain/agents exec tsx --env-file=../../.env scripts/diagnose-age-query.ts
+pnpm --filter @fambrain/agents run verify:composite-route
+pnpm --filter @fambrain/agents run verify:composite-incremental
+```
+
+Web：「我今年多大了」→ `routeMode=slot`，KM hits 含 `出生日期 | 1993.03`，Analyst 据 excerpt 作答（非 clarify、非兜底文案）。
 
 ### 2.6 跨会话用户自述事实未召回（2026-06 · Web 联调）
 

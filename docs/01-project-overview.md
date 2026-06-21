@@ -6,7 +6,7 @@
 
 基于 **Next.js（App Router）** 的家庭协作型对话应用：注册登录、成员审核、会话与消息持久化，以及 **P0 多 Agent 聊天闭环**（意图路由 → 知识库检索 → 归纳回答，SSE 流式）。
 
-**当前进度（2026-06）：** 在线 LangGraph 多 Agent 闭环 ✅；`@fambrain/corpus` / `@fambrain/agent-memory` / `@fambrain/infra` 已抽包；**`pnpm dev` 一键起 Chroma + Redis + Web + Agents** ✅；**P0-15 composite 分槽 + L3/L4 会话 facet cache** ✅（`verify:composite-route` / `verify:composite-incremental`）；**SLO 耗时**（`pipeline_timing` + 聊天 UI）🔄 部分；**R6-3** 编号子问退化 Web 待复测。详见 [路线图](./03-roadmap.md) · [流程图](./02-agent-flows.md) · [坑点 §2.5.3](./04-pitfalls.md#253-p0-15--r6-3--composite-分槽检索-2026-06)。
+**当前进度（2026-06）：** 在线 LangGraph 多 Agent 闭环 ✅；`@fambrain/corpus` / `@fambrain/agent-memory` / `@fambrain/infra` 已抽包；**`pnpm dev` 一键起 Chroma + Redis + Web + Agents** ✅；**P0-15 composite 分槽 + L3/L4 会话 facet cache** ✅；**单问年龄 + 多轮 cache（§2.5.4 / P0-18）** ✅；**SLO 耗时**（`pipeline_timing` + 聊天 UI）🔄 部分；**R6-3** 编号子问退化 Web 待复测。详见 [路线图](./03-roadmap.md) · [流程图](./02-agent-flows.md) · [坑点 §2.5.3～§2.5.4](./04-pitfalls.md#253-p0-15--r6-3--composite-分槽检索-2026-06)。
 
 ## 应用层技术栈
 
