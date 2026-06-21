@@ -641,9 +641,7 @@ export const ChatShell = ({ initialConversations, viewer }: ChatShellProps) => {
       if (result.ok) {
         setMessages((prev) => {
           const timingById = new Map(
-            prev
-              .filter((m) => m.timing)
-              .map((m) => [m.id, m.timing] as const)
+            prev.filter((m) => m.timing).map((m) => [m.id, m.timing] as const)
           );
           return result.data.map((m) => ({
             ...m,
@@ -920,12 +918,13 @@ export const ChatShell = ({ initialConversations, viewer }: ChatShellProps) => {
           typeof payload === "object" &&
           payload !== null
         ) {
-          const e = (
-            payload as {
-              error?: string;
-              message?: string;
-            }
-          ).error ?? (payload as { message?: string }).message;
+          const e =
+            (
+              payload as {
+                error?: string;
+                message?: string;
+              }
+            ).error ?? (payload as { message?: string }).message;
           streamFatal = typeof e === "string" ? e : "模型出错";
           releaseSendLock();
         }
@@ -965,8 +964,7 @@ export const ChatShell = ({ initialConversations, viewer }: ChatShellProps) => {
     !streamThinking.trim() &&
     !streamAnswerPreview.trim() &&
     !(
-      messages.length > 0 &&
-      messages[messages.length - 1]?.role === "assistant"
+      messages.length > 0 && messages[messages.length - 1]?.role === "assistant"
     );
   return (
     <div className="flex h-dvh bg-[#f3f4f6] text-[#1f2937]">
@@ -1309,9 +1307,7 @@ export const ChatShell = ({ initialConversations, viewer }: ChatShellProps) => {
                     </div>
                   </li>
                 ))}
-                {showAssistantPending ? (
-                  <AssistantPendingRow />
-                ) : null}
+                {showAssistantPending ? <AssistantPendingRow /> : null}
                 {sendBusy && thinkingPanelVisible && streamThinking.trim() ? (
                   <li className="flex justify-start">
                     <div className="max-w-[90%] rounded-2xl border border-amber-200/90 bg-amber-50 px-4 py-3 text-[15px] leading-relaxed shadow-sm">

@@ -46,6 +46,10 @@ const buildInitialState = (history: DbChatTurn[], context: AgentPipelineContext,
         confidenceTier: null,
         repeatQuestionHit: false,
         retrievalCacheHit: false,
+        retrievalCacheSlotHits: null,
+        compositeSubResults: null,
+        compositeIncrementalPlan: null,
+        compositeFacetCacheHits: null,
     };
 };
 const isAnalystStreamChunk = (value: unknown): value is AnalystStreamChunk => {
@@ -74,6 +78,15 @@ const summarizePipelineOut = (state: PipelineGraphState, answer: string, timing:
     confidenceTier: state.confidenceTier,
     repeatQuestionHit: state.repeatQuestionHit,
     retrievalCacheHit: state.retrievalCacheHit,
+    retrievalCacheSlotHits: state.retrievalCacheSlotHits,
+    routeMode: state.decision?.routeMode ?? null,
+    routeReason: state.decision?.routeReason ?? null,
+    routePlanSource: state.decision?.routePlanSource ?? null,
+    retrievalPlanGuardReason:
+        (state.decision as { retrievalPlanGuardReason?: string } | null)
+            ?.retrievalPlanGuardReason ?? null,
+    compositeSlotCount: state.compositeSubResults?.length ?? 0,
+    compositeFacetCacheHits: state.compositeFacetCacheHits ?? null,
     error: state.error,
     hitPaths: state.hits.map((h) => h.path),
     timing,
@@ -304,6 +317,7 @@ export async function* runPipelineStream(history: DbChatTurn[], context: AgentPi
             answer: finalState.answer,
             repeatQuestionHit: finalState.repeatQuestionHit,
             retrievalCacheHit: finalState.retrievalCacheHit,
+            compositeFacetCacheHits: finalState.compositeFacetCacheHits,
             timing: pipelineTiming,
         };
     }
@@ -325,6 +339,7 @@ export async function* runPipelineStream(history: DbChatTurn[], context: AgentPi
         answer,
         repeatQuestionHit: finalState.repeatQuestionHit,
         retrievalCacheHit: finalState.retrievalCacheHit,
+        compositeFacetCacheHits: finalState.compositeFacetCacheHits,
         timing: pipelineTiming,
     };
 }

@@ -52,6 +52,7 @@ const chitchatStub = (
     queryType: null,
     clarifyingQuestion: null,
     briefReply,
+    retrievalPlan: [],
 });
 
 console.log("verify-intake-chitchat\n— guard 单测 —");

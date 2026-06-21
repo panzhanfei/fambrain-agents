@@ -1,8 +1,10 @@
 import { Annotation } from "@langchain/langgraph";
 import type { AgentPipelineContext, DbChatTurn, } from "@fambrain/agent-types";
-import type { IntakeRoutingDecision } from "@/agentflow/agents/online/intake-coordinator";
+import type { RoutedIntakeDecision } from "@/agentflow/agents/online/intake-coordinator/composite-route-guard";
+import type { IncrementalCompositePlan } from "@/agentflow/agents/online/intake-coordinator/composite-incremental";
 import type { InformationAnalystInput } from "@/agentflow/agents/online/information-analyst";
 import type { ConfidenceTier } from "@/agentflow/agents/online/knowledge-manager/types";
+import type { CompositeSubRetrieval } from "./merge-composite-retrieval";
 /**
  * LangGraph 编排共享状态（Intake → KM → FactChecker → ContentOrganizer → Analyst；摘要分支 Intake → KM → ContentSummarizer）。
  * 初始值由 `stream.ts` 的 `buildInitialState()` 注入；节点只返回需要更新的字段。
@@ -14,8 +16,8 @@ export const PipelineGraphAnnotation = Annotation.Root({
     context: Annotation<AgentPipelineContext>,
     /** 用户最新一条问题（从 history 提取，供检索与分析） */
     userQuestion: Annotation<string>,
-    /** IntakeCoordinator 路由 JSON：intent、needsRetrieval、searchQuery 等 */
-    decision: Annotation<IntakeRoutingDecision | null>,
+    /** IntakeCoordinator 路由 JSON：intent、needsRetrieval、searchQuery、routeMode 等 */
+    decision: Annotation<RoutedIntakeDecision | null>,
     /** KnowledgeManager 检索命中的文档片段，交给 InformationAnalyst */
     hits: Annotation<InformationAnalystInput["hits"]>,
     /** 检索证据是否充分：sufficient / partial / none */
@@ -42,5 +44,13 @@ export const PipelineGraphAnnotation = Annotation.Root({
     repeatQuestionHit: Annotation<boolean>,
     /** D5-2：本轮 retrieval 是否命中 KM cache */
     retrievalCacheHit: Annotation<boolean>,
+    /** composite：本轮 L2 命中的槽位数 */
+    retrievalCacheSlotHits: Annotation<number | null>,
+    /** composite / slot：分槽检索结果，供 Analyst 分段写 */
+    compositeSubResults: Annotation<CompositeSubRetrieval[] | null>,
+    /** L4 增量 composite 槽计划（含 L3 facet cache 命中） */
+    compositeIncrementalPlan: Annotation<IncrementalCompositePlan | null>,
+    /** L3 子问终稿 cache 命中数 */
+    compositeFacetCacheHits: Annotation<number | null>,
 });
 export type PipelineGraphState = typeof PipelineGraphAnnotation.State;

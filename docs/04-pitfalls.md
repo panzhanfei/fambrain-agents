@@ -80,7 +80,7 @@
 | P0-17 | FactChecker + 编排 | **路径 A：** KM₁ 有 hits，FC 产出 meta 式 `refinedSearchQuery`（如「姓名 **全名 完整称呼**」），编排覆盖 `searchQuery` → KM₂ 变差 | FC LLM 把「怎么查」写成检索词；编排无条件覆盖；无 refined 有效性校验 | `personal/` + 姓名类 → **跳过 FC LLM 直接 pass**；`mergeRetrySearchQuery` meta  strip + 无增量不重检；见 **§2.2.2** | ✅ **已解决**（2026-06） |
 | P0-13 | Intake | Golden / Web「你好」→ `briefReply` 出现 **「大表哥」** 等未定义称呼；prompt 示例为「FamBrain 助手」 | `chitchat` 路径不经 Analyst；Intake 小模型在 `briefReply` 自由发挥 | **`applyIntakeChitchatGuard`** 模板兜底 + 禁用称呼后检；Intake JSON snake_case 归一 | ✅ **已解决**（2026-06-18）← `verify:intake-chitchat` |
 | P0-14 | Analyst + Mem0 | Golden / Web「我的名字」→ 同句 **「知识库没有记录」+「长期记忆已知潘展飞」** 自相矛盾 | hits 弱时走 insufficientEvidence 话术，Mem0 又补姓名；**corpus 与 memory 优先级未定义** | **KM 优化**后 `personal/` 姓名类检索稳定 → hits 含简历，Analyst 直答 corpus；不再触发「空 hits + Mem0 补履历」路径 | ✅ **已解决**（KM 优化 · Web/G2 复测 2026-06） |
-| P0-15 | Analyst | 同问「**我叫什么 年龄 职业 从业经历**」→ 一次答 **赵一 / 28 岁 / 秦汉新城智慧园林**（语料无此人），一次答 **潘展飞** + 简历引用（正确） | KM hits 波动 + Analyst 在 weak hits 下用训练数据填「完整简历模板」；复合问法未拆 subTasks | Intake 拆 subTasks；KM 强制命中 `personal/个人简历*`；Analyst 禁止输出 hits 外姓名/公司；**D5-3** 终稿校验 | ⬜ Golden Day 2（§2.5） |
+| P0-15 | Analyst | 同问「**我叫什么 年龄 职业 从业经历**」→ 一次答 **赵一 / 28 岁 / 秦汉新城智慧园林**（语料无此人），一次答 **潘展飞** + 简历引用（正确） | KM hits 波动 + Analyst 在 weak hits 下用训练数据填「完整简历模板」；复合问法单 queryType 单检索 | **Intake retrievalPlan** 主路由 + 动态槽 KM + merge；结构/subTasks 兜底；Analyst 禁推算年龄、enumeration 逐条列 | 🔄 **verify:composite-route** ✅ 单测；Web / Golden 待复测 |
 | P0-16 | Mem0 / Analyst | **对话 A** 用户说「记住我的 QQ 是 xxx」并确认；**新建对话 B** 问「我的 QQ 是多少？」→ 答不知道 / 语料无记录 | LangMem 仅本会话；Mem0 轮次后 `add` 可能未抽出 QQ、语义 search 未命中、或 Analyst 走 corpus 检索且 hits 空时未用 Mem0；`persistPipelineMemory` 失败被 `.catch` 吞掉 | Intake 识别 **remember_fact** → 显式 Mem0 写入；联系方式类 query **Mem0 优先**；持久化失败打日志/告警；Golden **G-跨会话记忆**（A 记 → B 问） | ⬜ Web 联调（§2.6） |
 | R6-1 | KM / Analyst | **「我在那几家公司上过班？」** 应枚举 **4 家**，首轮只答 **2 家**（西安奥卡云、苏州奖多多）；**同句再问** 仅确认 **1 家** 并称其余「知识库无记录」 | 见 §2.3 | 枚举型 query 专用召回 + Golden；复盘后消坑 sprint | ⬜ **复盘后统一解决** |
 | R6-2 | Analyst / 上下文 | **同会话追问**（如「用表格列出来 时间 职位 公司名称」）：上一轮已确认 **西安奥卡云**，本轮却称「没有明确列出具体公司」 | 见 §2.4 | 追问继承上轮 grounded 结论 + Intake 识别表格/格式化 follow-up；与 R6-1 一并消坑 | ⬜ **复盘后统一解决** |
@@ -234,6 +234,41 @@
 **实际修复：** KM 优化后 `identity` / `personal/` 检索稳定命中 `个人简历` chunk，Analyst 有 hits 直答 **潘展飞**，不再走 `insufficientEvidence` + Mem0 补姓名。Analyst prompt 层面对 Mem0/corpus 优先级**暂未另改**；若 KM 再波动可再补 D3-9 兜底。
 
 **复测：** Web「我的名字」+ Golden G2 冒烟；无 corpus/Mem0 同句打架。
+
+#### 2.5.3 P0-15 / R6-3 — composite 分槽检索（✅ 单测 · 🔄 Web 2026-06）
+
+**完整路由（Intake 主信号 + 结构兜底，2026-06 修订）：**
+
+| 层 | 模块 | 职责 |
+|----|------|------|
+| **L0 入口 guard 链** | `intake-retrieval-plan-guard.ts` 等 | coreference → chitchat → **retrievalPlan 补全/ canonicalize** → composite 路由 |
+| **L1 Intake retrievalPlan** | `prompt.ts` + `schema.ts` | 多问并列时 LLM 输出每项 `{ label, searchQuery, queryType, topics }`；编排**优先**据此定槽 |
+| **L2 结构 / subTasks 兜底** | `composite-routing.ts` | 无 plan 时：`subTasks≥2` 或 **多问结构**（≥2 问号等）→ 按子句拆 plan；**单问 identity/enumeration**（含「今年多大」）→ `buildSingleQuestionPlanItem` + canonical 模板 |
+| **KM 分槽** | `composite-slot-queries.ts` + `retrieve-slots-parallel.ts` | **按需子集**槽（非固定 4 槽全开）；**L2 检索 cache** key 仍为 `searchQuery+queryType`；merge → composite ≥2 槽跳过 FC LLM → Analyst 按 label 分段 |
+
+**路由结论：** plan/槽 ≥2 → `composite`；1 槽 → `slot`；tech 单问 / 无槽 → `single`。`routeReason` / `routePlanSource` 可观测。
+
+**Analyst：** composite ≥2 子问 → **顺序分问 token 流式**（`stream-composite.ts`，KM 仍并行）；非一次性大 JSON。单问年龄/姓名空 hits → `buildFallbackAnswer` 字段化提示（非通用「补充公司/项目」）。
+
+**会话 cache（D5-2 扩展 · facet L3/L4 · 2026-06）：**
+
+| 层 | 模块 | 职责 |
+|----|------|------|
+| **L1 同问短路** | `intake-repeat-guard.ts` | 同会话**字面相同**问 → 复用 history 整答 |
+| **L2 检索 cache** | `retrieval-cache.ts` | 单槽 KM 结果 cache（`searchQuery+queryType`） |
+| **L3 facet 终稿** | `composite-answer-cache.ts` + `stream-composite.ts` | 同 `conversationId` + `corpusUserId` 下，按稳定 **facetKey**（`id:name`、`id:age`、`enum:projects`…）缓存各子问 Analyst 终稿 |
+| **L4 增量 composite** | `composite-incremental.ts` + `retrieve-composite-incremental.ts` | Q2 = Q1 + 邮箱/电话：**L3 命中槽跳过 KM + Analyst**，仅对新 facet 检索/流式；「全部重来」→ `clearCompositeSession` |
+
+**环境变量：** `COMPOSITE_ANSWER_CACHE_*`（见 `.env.example`）；未配 Redis 时 memory fallback。
+
+**验证：**
+
+```bash
+pnpm --filter @fambrain/agents run verify:composite-route      # 17 项路由/merge/单问年龄
+pnpm --filter @fambrain/agents run verify:composite-incremental # L3/L4 facet cache
+```
+
+Web：Q1 综合履历 → Q2 加邮箱/电话应见 `compositeFacetCacheHits > 0`；单问「今年多大」应 `routeMode=slot` + identity canonical query。
 
 ### 2.6 跨会话用户自述事实未召回（2026-06 · Web 联调）
 

@@ -64,6 +64,10 @@ export const buildRetrievalCacheKeyPrefix = (): string => {
     return `${resolveRedisKeyPrefix()}:retrieval:v1`;
 };
 
+export const buildCompositeAnswerCacheKeyPrefix = (): string => {
+    return `${resolveRedisKeyPrefix()}:composite-answer:v1`;
+};
+
 export const buildRateLimitKeyPrefix = (): string => {
     return `${resolveRedisKeyPrefix()}:rl`;
 };
@@ -74,6 +78,12 @@ export type InfraConfig = {
     redisKeyPrefix: string;
     redisEnabled: boolean;
     retrievalCache: {
+        enabled: boolean;
+        ttlMs: number;
+        maxEntries: number;
+        keyPrefix: string;
+    };
+    compositeAnswerCache: {
         enabled: boolean;
         ttlMs: number;
         maxEntries: number;
@@ -106,6 +116,20 @@ export const getInfraConfig = (): InfraConfig => {
             ttlMs: parseIntEnv(process.env.RETRIEVAL_CACHE_TTL_MS, 900_000, 1000),
             maxEntries: parseIntEnv(process.env.RETRIEVAL_CACHE_MAX_ENTRIES, 256, 16),
             keyPrefix: buildRetrievalCacheKeyPrefix(),
+        },
+        compositeAnswerCache: {
+            enabled: !truthy(process.env.COMPOSITE_ANSWER_CACHE_DISABLED),
+            ttlMs: parseIntEnv(
+                process.env.COMPOSITE_ANSWER_CACHE_TTL_MS,
+                parseIntEnv(process.env.RETRIEVAL_CACHE_TTL_MS, 900_000, 1000),
+                1000
+            ),
+            maxEntries: parseIntEnv(
+                process.env.COMPOSITE_ANSWER_CACHE_MAX_ENTRIES,
+                128,
+                16
+            ),
+            keyPrefix: buildCompositeAnswerCacheKeyPrefix(),
         },
         pipelineQueue: {
             enabled: truthy(process.env.PIPELINE_QUEUE_ENABLED),

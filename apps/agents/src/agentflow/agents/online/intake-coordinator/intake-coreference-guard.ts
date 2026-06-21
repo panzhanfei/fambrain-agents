@@ -60,5 +60,6 @@ export const applyIntakeCoreferenceGuard = (
         queryType: null,
         clarifyingQuestion: decision.clarifyingQuestion ?? DEFAULT_CLARIFY,
         briefReply: null,
+        retrievalPlan: [],
     };
 };

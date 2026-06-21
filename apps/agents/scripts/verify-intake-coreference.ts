@@ -37,6 +37,7 @@ const retrieveStub: IntakeRoutingDecision = {
     queryType: "tech",
     clarifyingQuestion: null,
     briefReply: null,
+    retrievalPlan: [],
 };
 
 console.log("verify-intake-coreference\n— guard 单测 —");

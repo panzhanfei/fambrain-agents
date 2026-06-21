@@ -157,6 +157,8 @@ flowchart TD
 | 4 | 兜底 | 解析失败 → `needsRetrieval=true` 保守查库 | `pipeline/parse-intake.ts` | `defaultIntakeDecision()` |
 | 5 | 编排 | LangGraph 条件边 | `pipeline/graph/compile.ts` | `getCompiledPipelineGraph()` |
 
+**Guard 链（compile intake 节点内）：** coreference → chitchat → **retrievalPlan guard** → **`applyCompositeRouteGuard`**（P0-15）。多问输出 `retrievalPlan`；无 plan 时结构/subTasks 兜底；单问「今年多大」等 identity → `slot` + canonical `searchQuery`。详见 [坑点 §2.5.3](./04-pitfalls.md#253-p0-15--r6-3--composite-分槽检索-2026-06)。
+
 ### 3. KnowledgeManager — 知识管理员 ✅
 
 **职责：** 产出 `hits[]`（path / excerpt / relevance），不对用户说话。
@@ -225,9 +227,11 @@ flowchart TD
 
 **职责：** 据整理后的 `hits` 写终稿；无证据时 `insufficientEvidence`，禁止编造履历。
 
-**P0-12（2026-06-18）：** `hits.length===0` 或 `coverage==="none"` 时 **`shouldSkipAnalystLlm`** 不调 Ollama，直出 `buildFallbackAnswer`（日志 `rules_empty_hits_skip_llm`）。弱 hits 仍走 LLM（P0-15 待做）。
+**P0-12（2026-06-18）：** `hits.length===0` 或 `coverage==="none"` 时 **`shouldSkipAnalystLlm`** 不调 Ollama，直出 `buildFallbackAnswer`（日志 `rules_empty_hits_skip_llm`）。年龄/姓名单问空 hits 有字段化文案（2026-06）。
 
-**技术：** Ollama 流式（thinking + assistant）；终稿 JSON **Zod**（`analystResultSchema`）。
+**P0-15 composite（2026-06）：** `routeMode=composite` 且 ≥2 槽 → **`stream-composite.ts`** 顺序分问 token 流式；L3 facet cache 命中 instant 回放；新 facet 写回 `composite-answer-cache`。composite ≥2 槽跳过 FactChecker LLM。
+
+**技术：** Ollama 流式（thinking + assistant）；终稿 JSON **Zod**（单问）或分问 plain-text + merge（composite）。
 
 ```mermaid
 flowchart TD

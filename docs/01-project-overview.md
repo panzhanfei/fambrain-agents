@@ -6,7 +6,7 @@
 
 基于 **Next.js（App Router）** 的家庭协作型对话应用：注册登录、成员审核、会话与消息持久化，以及 **P0 多 Agent 聊天闭环**（意图路由 → 知识库检索 → 归纳回答，SSE 流式）。
 
-**当前进度（2026-06）：** 在线 LangGraph 多 Agent 闭环 ✅；`@fambrain/corpus` / `@fambrain/agent-memory` / `@fambrain/infra` 已抽包；**`pnpm dev` 一键起 Chroma + Redis + Web + Agents** ✅；**SLO 耗时**（`pipeline_timing` + 聊天 UI）🔄 部分；**R6-3** 综合履历问退化已记入 [坑点 §2.7](./04-pitfalls.md#27-同会话综合履历问-vs-编号子问--答案退化2026-06-18--web-联调)。**下一步：** Intake 重复问、R6 枚举、token 记录。详见 [路线图](./03-roadmap.md) · [流程图](./02-agent-flows.md) · [实验](../experiments/README.md)。
+**当前进度（2026-06）：** 在线 LangGraph 多 Agent 闭环 ✅；`@fambrain/corpus` / `@fambrain/agent-memory` / `@fambrain/infra` 已抽包；**`pnpm dev` 一键起 Chroma + Redis + Web + Agents** ✅；**P0-15 composite 分槽 + L3/L4 会话 facet cache** ✅（`verify:composite-route` / `verify:composite-incremental`）；**SLO 耗时**（`pipeline_timing` + 聊天 UI）🔄 部分；**R6-3** 编号子问退化 Web 待复测。详见 [路线图](./03-roadmap.md) · [流程图](./02-agent-flows.md) · [坑点 §2.5.3](./04-pitfalls.md#253-p0-15--r6-3--composite-分槽检索-2026-06)。
 
 ## 应用层技术栈
 
@@ -194,6 +194,8 @@ pnpm run dev
 | `verify:analyst-empty-hits` | `apps/agents/scripts/` | P0-12 / D5-5：空 hits skip LLM + insufficientEvidence |
 | `verify:intake-coreference` | `apps/agents/scripts/` | Wave C QU-02 + D5-2 repeat guard 单测 |
 | `verify:intake-chitchat` | `apps/agents/scripts/` | P0-13：chitchat briefReply 模板兜底 + live ×10 |
+| `verify:composite-route` | `apps/agents/scripts/` | P0-15/R6-3：composite 路由 guard + merge + 单问年龄 slot 单测 |
+| `verify:composite-incremental` | `apps/agents/scripts/` | P0-15：L3 facet 终稿 cache + L4 增量 composite 单测 |
 | `eval:run` | `apps/agents/scripts/eval/` | Eval MVP：golden + cache/profile 探测；`--profile-only` → **G-履历综合** 4 轮 |
 | `golden:regression` | `apps/agents/scripts/` | G1～G5 全链路回归（多遍稳定性） |
 | `indexAllCorpora` | `agentflow/agents/offline/knowledge-indexer/` | 离线 corpus → Chroma |

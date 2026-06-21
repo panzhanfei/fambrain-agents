@@ -22,5 +22,18 @@ export {
     type RetrievalCacheBackend,
     type RetrievalCacheKeyParts,
 } from "./cache/retrieval-cache.ts";
+export {
+    getCompositeSession,
+    setCompositeSession,
+    clearCompositeSession,
+    upsertFacetAnswers,
+    isFacetAnswerReusable,
+    clearMemoryCompositeAnswerCache,
+    getCompositeAnswerCacheBackend,
+    type CachedFacetAnswer,
+    type CompositeSessionSnapshot,
+    type CompositeSessionKey,
+    type CompositeAnswerCacheBackend,
+} from "./cache/composite-answer-cache.ts";
 export { tryConsumeRedisRateLimit } from "./rate-limit/redis-rate-limit.ts";
 export * from "./queue/index.ts";

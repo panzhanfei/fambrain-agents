@@ -5,10 +5,14 @@ import { buildSummarizeSourceText, formatSummaryAsAnswer, summarizeContent, } fr
 import { completeFactCheck } from "@/agentflow/agents/online/fact-checker";
 import { completeIntakeCoordinator } from "@/agentflow/agents/online/intake-coordinator";
 import { applyIntakeChitchatGuard } from "@/agentflow/agents/online/intake-coordinator/intake-chitchat-guard";
+import { applyCompositeRouteGuard } from "@/agentflow/agents/online/intake-coordinator/composite-route-guard";
 import { applyIntakeCoreferenceGuard } from "@/agentflow/agents/online/intake-coordinator/intake-coreference-guard";
+import { applyIntakeRetrievalPlanGuard } from "@/agentflow/agents/online/intake-coordinator/intake-retrieval-plan-guard";
 import { findRepeatAnswerInHistory } from "@/agentflow/agents/online/intake-coordinator/intake-repeat-guard";
+import { resolveIncrementalCompositePlan } from "@/agentflow/agents/online/intake-coordinator/composite-incremental";
 import { streamAnalyzeInformation } from "@/agentflow/agents/online/information-analyst";
 import { retrieveKnowledge } from "@/agentflow/agents/online/knowledge-manager";
+import { retrieveCompositeIncremental } from "./retrieve-composite-incremental";
 import {
     getRetrievalFromCache,
     setRetrievalCache,
@@ -71,8 +75,14 @@ const intakeNode = async (state: PipelineGraphState): Promise<Partial<PipelineGr
         });
         const parsed = parseIntakeDecision(intakeRaw) ??
             defaultIntakeDecision(state.userQuestion);
-        const decision = applyIntakeChitchatGuard(
-            applyIntakeCoreferenceGuard(parsed, state.intakeHistory)
+        const decision = applyCompositeRouteGuard(
+            applyIntakeRetrievalPlanGuard(
+                applyIntakeChitchatGuard(
+                    applyIntakeCoreferenceGuard(parsed, state.intakeHistory)
+                ),
+                state.userQuestion
+            ),
+            state.userQuestion
         );
         return { decision };
     }
@@ -91,6 +101,51 @@ const retrievalNode = async (state: PipelineGraphState): Promise<Partial<Pipelin
         return { error: "缺少入口路由决策" };
     }
     const fromRetry = !state.checkerPassed && state.retryCount < 1;
+    const routeMode = decision.routeMode ?? "single";
+
+    if (routeMode === "composite" || routeMode === "slot") {
+        const slots = decision.compositeSlots ?? [];
+        if (slots.length === 0) {
+            return { error: "composite 路由缺少槽位定义" };
+        }
+        try {
+            const incremental = await resolveIncrementalCompositePlan({
+                session: {
+                    conversationId: state.context.conversationId,
+                    corpusUserId: state.context.corpusUserId,
+                },
+                userQuestion: state.userQuestion,
+                slots,
+            });
+            const { subResults, cacheHits, merged } =
+                await retrieveCompositeIncremental({
+                    corpusUserId: state.context.corpusUserId,
+                    plan: incremental,
+                });
+            return {
+                hits: merged.hits,
+                coverage: merged.coverage,
+                notes: merged.notes,
+                confidenceTier: merged.confidenceTier,
+                compositeSubResults: subResults,
+                compositeIncrementalPlan: incremental,
+                compositeFacetCacheHits: incremental.facetCacheHits,
+                retrievalCacheSlotHits: cacheHits,
+                retrievalCacheHit:
+                    incremental.activeRetrievalSlots.length > 0 &&
+                    cacheHits === incremental.activeRetrievalSlots.length,
+                retryCount: fromRetry ? state.retryCount + 1 : state.retryCount,
+            };
+        }
+        catch (e) {
+            const msg = e instanceof Error ? e.message : "composite 检索失败";
+            return {
+                error: msg,
+                retryCount: fromRetry ? state.retryCount + 1 : state.retryCount,
+            };
+        }
+    }
+
     const searchQuery = decision.searchQuery || state.userQuestion;
     const queryType = decision.queryType ?? "default";
     const cacheKey = {
@@ -107,6 +162,8 @@ const retrievalNode = async (state: PipelineGraphState): Promise<Partial<Pipelin
                 notes: cached.notes,
                 confidenceTier: cached.confidenceTier ?? null,
                 retrievalCacheHit: true,
+                retrievalCacheSlotHits: null,
+                compositeSubResults: null,
                 retryCount: fromRetry ? state.retryCount + 1 : state.retryCount,
             };
         }
@@ -131,6 +188,8 @@ const retrievalNode = async (state: PipelineGraphState): Promise<Partial<Pipelin
             notes: retrieval.notes,
             confidenceTier: retrieval.confidenceTier ?? null,
             retrievalCacheHit: false,
+            retrievalCacheSlotHits: null,
+            compositeSubResults: null,
             retryCount: fromRetry ? state.retryCount + 1 : state.retryCount,
         };
     }
@@ -150,6 +209,16 @@ const factCheckerNode = async (state: PipelineGraphState): Promise<Partial<Pipel
     const decision = state.decision;
     if (!decision) {
         return { checkerPassed: true };
+    }
+    const compositeCount = state.compositeSubResults?.length ?? 0;
+    if (
+        decision.routeMode === "composite" &&
+        compositeCount >= 2
+    ) {
+        return {
+            checkerPassed: true,
+            notes: state.notes,
+        };
     }
     try {
         const result = await completeFactCheck({
@@ -171,7 +240,12 @@ const factCheckerNode = async (state: PipelineGraphState): Promise<Partial<Pipel
             checkerPassed: result.passed,
             notes: mergeAnalystNotes(state.notes, result.checkerNotes),
         };
-        if (!result.passed && result.refinedSearchQuery && state.retryCount < 1) {
+        if (
+            !result.passed &&
+            result.refinedSearchQuery &&
+            state.retryCount < 1 &&
+            (decision.routeMode ?? "single") === "single"
+        ) {
             patch.decision = {
                 ...decision,
                 searchQuery: result.refinedSearchQuery,
@@ -248,6 +322,14 @@ const analystNode = async (state: PipelineGraphState, config: LangGraphRunnableC
             coverage: state.coverage,
             notes: state.notes,
             memoryBlock: state.memoryBlock,
+            routeMode: decision.routeMode ?? "single",
+            compositeSubResults: state.compositeSubResults ?? undefined,
+            compositeIncrementalPlan:
+                state.compositeIncrementalPlan ?? undefined,
+            sessionKey: {
+                conversationId: state.context.conversationId,
+                corpusUserId: state.context.corpusUserId,
+            },
         });
         let result = await gen.next();
         while (!result.done) {

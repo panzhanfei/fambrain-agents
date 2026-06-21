@@ -18,6 +18,12 @@ export const intakeIntentSchema = z.enum([
 export const intakeLanguageSchema = z
     .enum(["zh", "en", "mixed"])
     .catch("zh" as const);
+export const intakeRetrievalPlanItemSchema = z.object({
+    label: z.coerce.string().transform((s) => String(s).trim()),
+    searchQuery: z.coerce.string().transform((s) => String(s).trim()),
+    queryType: intakeQueryTypeSchema,
+    topics: nonEmptyStringArray.catch([]),
+});
 export const intakeRoutingDecisionSchema = z.object({
     intent: intakeIntentSchema,
     needsRetrieval: z.coerce.boolean(),
@@ -29,6 +35,7 @@ export const intakeRoutingDecisionSchema = z.object({
     queryType: intakeQueryTypeSchema.nullable().catch(null),
     clarifyingQuestion: nullableTrimmedString,
     briefReply: nullableTrimmedString,
+    retrievalPlan: z.array(intakeRetrievalPlanItemSchema).catch([]),
 });
 const pickIntakeField = (
     raw: Record<string, unknown>,
@@ -44,6 +51,7 @@ const normalizeIntakeRaw = (raw: Record<string, unknown>): Record<string, unknow
     queryType: pickIntakeField(raw, "queryType", "query_type"),
     clarifyingQuestion: pickIntakeField(raw, "clarifyingQuestion", "clarifying_question"),
     briefReply: pickIntakeField(raw, "briefReply", "brief_reply"),
+    retrievalPlan: pickIntakeField(raw, "retrievalPlan", "retrieval_plan"),
 });
 export const parseIntakeRoutingDecision = (raw: unknown): IntakeRoutingDecision | null => {
     const normalized =

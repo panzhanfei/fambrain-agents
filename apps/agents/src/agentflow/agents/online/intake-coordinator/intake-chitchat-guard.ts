@@ -25,6 +25,15 @@ export const applyIntakeChitchatGuard = (
         return decision;
     const briefReply = decision.briefReply?.trim();
     if (briefReply && isAcceptableChitchatBriefReply(briefReply))
-        return decision;
-    return { ...decision, briefReply: DEFAULT_CHITCHAT_BRIEF_REPLY };
+        return {
+            ...decision,
+            needsRetrieval: false,
+            retrievalPlan: [],
+        };
+    return {
+        ...decision,
+        needsRetrieval: false,
+        retrievalPlan: [],
+        briefReply: DEFAULT_CHITCHAT_BRIEF_REPLY,
+    };
 };
