@@ -37,6 +37,16 @@ const formatDuration = (ms: number): string => {
   return `${ms}ms`;
 };
 
+/** 顶栏/侧栏展示：取首句并截断（纯 UI，不依赖 db） */
+const shortConversationTitle = (title: string, maxLen = 18): string => {
+  const trimmed = title.trim() || "新对话";
+  if (trimmed === "新对话") return trimmed;
+  const first =
+    trimmed.split(/[？?\n;；，,、]/)[0]?.trim() || trimmed;
+  if (first.length <= maxLen) return first;
+  return `${first.slice(0, maxLen)}…`;
+};
+
 const MessageTimingLine = ({ timing }: { timing: MessageTiming }) => {
   const [expanded, setExpanded] = useState(false);
   const nodeEntries = (
@@ -681,6 +691,8 @@ export const ChatShell = ({ initialConversations, viewer }: ChatShellProps) => {
   ]);
   const activeConversation =
     conversations.find((c) => c.id === activeConversationId) ?? null;
+  const activeTitleRaw = activeConversation?.title ?? "新对话";
+  const activeTitleShort = shortConversationTitle(activeTitleRaw);
   const startNewChat = useCallback(() => {
     setPreferEmptySession(true);
     setActiveConversationId(null);
@@ -1081,8 +1093,15 @@ export const ChatShell = ({ initialConversations, viewer }: ChatShellProps) => {
                             <IconChat />
                           )}
                         </span>
-                        <span className="min-w-0 flex-1 truncate text-[14px] text-[#374151]">
-                          {c.title}
+                        <span
+                          className="min-w-0 flex-1 truncate text-[14px] text-[#374151]"
+                          title={
+                            c.title !== shortConversationTitle(c.title)
+                              ? c.title
+                              : undefined
+                          }
+                        >
+                          {shortConversationTitle(c.title)}
                         </span>
                       </button>
                       <div className="flex shrink-0 items-center gap-0.5 pr-1 opacity-100 sm:opacity-0 sm:group-hover:opacity-100">
@@ -1171,8 +1190,8 @@ export const ChatShell = ({ initialConversations, viewer }: ChatShellProps) => {
       </aside>
 
       <main className="relative flex min-w-0 flex-1 flex-col bg-white shadow-[inset_1px_0_0_rgba(0,0,0,0.04)]">
-        <header className="flex h-14 shrink-0 items-center justify-between border-b border-[#f0f0f0] px-4">
-          <div className="flex items-center gap-2">
+        <header className="relative flex h-14 shrink-0 items-center border-b border-[#f0f0f0] px-4">
+          <div className="relative z-10 flex shrink-0 items-center gap-2">
             <button
               type="button"
               onClick={() => setSidebarCollapsed((v) => !v)}
@@ -1189,40 +1208,49 @@ export const ChatShell = ({ initialConversations, viewer }: ChatShellProps) => {
             >
               <IconPlus />
             </button>
-            <div className="ml-1 flex min-w-0 flex-1 flex-col justify-center leading-tight">
-              <span className="flex min-w-0 items-center gap-1">
-                <span className="truncate text-[15px] font-semibold text-[#111827]">
-                  {activeConversation?.pinned ? (
-                    <span
-                      className="mr-1 inline-block align-middle text-amber-500"
-                      title="已置顶"
-                    >
-                      <IconPin active className="inline align-[-3px]" />
-                    </span>
-                  ) : null}
-                  {activeConversation?.title ?? "新对话"}
-                </span>
-                {activeConversationId ? (
-                  <button
-                    type="button"
-                    aria-label="修改标题"
-                    className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-[#9ca3af] hover:bg-black/[0.06] hover:text-[#4f46e5]"
-                    onClick={() => {
-                      if (!activeConversationId) return;
-                      setEditingSidebarId(activeConversationId);
-                      setEditSidebarTitleDraft(activeConversation?.title ?? "");
-                    }}
-                  >
-                    <IconEditTitle className="pt-0.5" />
-                  </button>
-                ) : null}
-              </span>
-              <span className="hidden text-[11px] text-[#9ca3af] sm:block">
-                内容由 AI 生成，请仔细甄别
-              </span>
-            </div>
           </div>
-          <div className="flex items-center gap-1 text-[#9ca3af]">
+
+          <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center px-28 sm:px-36">
+            <span className="flex max-w-full min-w-0 items-center justify-center gap-1">
+              {activeConversation?.pinned ? (
+                <span
+                  className="pointer-events-auto shrink-0 text-amber-500"
+                  title="已置顶"
+                >
+                  <IconPin active className="inline align-[-3px]" />
+                </span>
+              ) : null}
+              <span
+                className="truncate text-center text-[15px] font-semibold text-[#111827]"
+                title={
+                  activeTitleRaw !== activeTitleShort
+                    ? activeTitleRaw
+                    : undefined
+                }
+              >
+                {activeTitleShort}
+              </span>
+              {activeConversationId ? (
+                <button
+                  type="button"
+                  aria-label="修改标题"
+                  className="pointer-events-auto flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-[#9ca3af] hover:bg-black/[0.06] hover:text-[#4f46e5]"
+                  onClick={() => {
+                    if (!activeConversationId) return;
+                    setEditingSidebarId(activeConversationId);
+                    setEditSidebarTitleDraft(activeTitleRaw);
+                  }}
+                >
+                  <IconEditTitle className="pt-0.5" />
+                </button>
+              ) : null}
+            </span>
+            <span className="hidden text-[11px] text-[#9ca3af] sm:block">
+              内容由 AI 生成，请仔细甄别
+            </span>
+          </div>
+
+          <div className="relative z-10 ml-auto flex shrink-0 items-center gap-1 text-[#9ca3af]">
             <span className="hidden text-[13px] sm:inline">更多</span>
             <button
               type="button"
