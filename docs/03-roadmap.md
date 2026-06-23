@@ -381,7 +381,7 @@ GOLDEN_RUNS=3 pnpm --filter @fambrain/agents run golden:regression  # G1～G5b +
 | ChatOllama / Message | P0 | 已有，保持 |
 | StructuredTool / DynamicTool | P0 | ≥2 个 Tool | **✅** 5 个 · `verify:langchain-tools` |
 | StructuredOutputParser / Zod | P0 | 全部 Agent JSON 过 schema ✅ |
-| bindTools（可选） | P1 | 1 个试验路由 | ⬜ 实验分支 |
+| bindTools（可选） | P1 | 1 个试验路由 | **✅ 触达** · `experiment:bind-tools`（ReAct 实验，不进主链） |
 | ConversationSummaryBuffer / LangMem | P1 | LangMem 会话摘要 + `verify:memory` ✅ |
 
 ### 核心技术分项（学习参考）
@@ -435,4 +435,4 @@ GOLDEN_RUNS=3 pnpm --filter @fambrain/agents run golden:regression  # G1～G5b +
 | 可观测性 | streamEvents、调试面板 | 推理黑盒（#18 部分 ✅） |
 | **P0 已落地** | `runPipelineStream`、关键词 RAG、KM **规则精排**（无在线 LLM） | P0-1～10 |
 
-**口述建议：** 先讲 17 项里已 ✅/触达的 **15 项** + P0 踩坑 **5～6 条**；Agno / bindTools 见 P2 实验。
+**口述建议：** 先讲 17 项里已 ✅/触达的 **15 项** + P0 踩坑 **5～6 条**；Agno 见 P2；bindTools 为 `experiment:bind-tools` 实验脚本。

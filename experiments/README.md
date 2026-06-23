@@ -7,6 +7,8 @@
 | `pnpm run experiment:mcp-vault` | MCP SDK | stdio MCP Server，工具 `list_vault_files` 只读列 `vault/` |
 | `pnpm run experiment:recall-compare -- <userId> "query"` | Recall vs LlamaIndex | 同 query 对比向量检索与关键词轻量 RAG |
 | `pnpm run experiment:vercel-ai -- "prompt"` | Vercel AI SDK | `streamText` + Ollama，主链仍用自研 SSE |
+| `pnpm run experiment:bind-tools -- "问法"` | LangChain bindTools | 实验性 ReAct：LLM 自主选 FamBrain StructuredTool（**不进主 pipeline**） |
+| `pnpm run experiment:bind-tools -- --schema-only` | LangChain bindTools | 仅验证 tool 绑定，不调用 Ollama |
 
 **ContentSummarizer（D9）：**
 

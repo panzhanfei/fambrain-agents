@@ -446,6 +446,7 @@ flowchart TD
 | Recall 对比 | `pnpm run experiment:recall-compare -- <userId> "query"` | BM25 sparse vs `searchCorpusVectors` |
 | Sparse / Hybrid 自测 | `pnpm run verify:sparse-recall` / `verify:hybrid-recall` / `verify:recall-compare` | HY-01～07 |
 | Vercel AI SDK | `pnpm run experiment:vercel-ai -- "prompt"` | `streamText` + Ollama（主链仍自研 SSE） |
+| LangChain bindTools | `pnpm run experiment:bind-tools -- "问法"` | ReAct 选 StructuredTool；`--schema-only` 不测 Ollama |
 
 **验证：** `pnpm run verify:vault-list`（vault 列举单测）。
 
@@ -502,7 +503,11 @@ pnpm --filter @fambrain/agents run verify:learning-extract
 ```bash
 pnpm --filter @fambrain/agents run verify:langchain-tools
 pnpm --filter @fambrain/agents run verify:vault-list   # vault 底层 API
+pnpm --filter @fambrain/agents run experiment:bind-tools -- --schema-only
+pnpm --filter @fambrain/agents run experiment:bind-tools -- "我的名字是什么？"
 ```
+
+**bindTools 实验（`scripts/experiments/bind-tools-react.ts`）：** 将 4 个工具（不含 `summarize_text`）绑定到 `ChatOllama`，最多 4 轮 tool call → 终稿；与 Golden/eval **完全隔离**。生产聊天仍走 LangGraph 节点。
 
 ## 路由字段（IntakeCoordinator 输出）
 

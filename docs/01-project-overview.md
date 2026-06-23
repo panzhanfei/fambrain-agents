@@ -102,6 +102,7 @@ pnpm run dev
 | `pnpm run experiment:mcp-vault` | MCP stdio 服务（列 vault） |
 | `pnpm run experiment:recall-compare -- <userId> "query"` | Recall vs 向量检索 |
 | `pnpm run experiment:vercel-ai -- "prompt"` | Vercel AI 流式 demo |
+| `pnpm run experiment:bind-tools -- "问法"` | LangChain **bindTools** ReAct 实验（不进主链） |
 | `cd apps/agents && pnpm run verify:content-summarizer` | 摘要师 Zod 单测 |
 | `cd apps/agents && pnpm run verify:vault-list` | vault 列举单测 |
 

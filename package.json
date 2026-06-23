@@ -27,6 +27,7 @@
     "experiment:mcp-vault": "pnpm --filter @fambrain/agents experiment:mcp-vault",
     "experiment:recall-compare": "pnpm --filter @fambrain/agents experiment:recall-compare",
     "experiment:vercel-ai": "pnpm --filter @fambrain/agents experiment:vercel-ai",
+    "experiment:bind-tools": "pnpm --filter @fambrain/agents experiment:bind-tools",
     "pack:deploy": "bash scripts/pack-deploy.sh",
     "docker:up": "docker compose up -d --build",
     "docker:down": "docker compose down"

@@ -46,6 +46,8 @@ pnpm run summarize:document -- path/to.md   # 内容摘要师 CLI
 pnpm run experiment:mcp-vault             # MCP 只读列 vault
 pnpm run experiment:recall-compare -- <userId> "query"
 pnpm run experiment:vercel-ai -- "prompt"
+pnpm run experiment:bind-tools -- "我的名字是什么？"
+pnpm run experiment:bind-tools -- --schema-only
 ```
 
 ## Monorepo 结构

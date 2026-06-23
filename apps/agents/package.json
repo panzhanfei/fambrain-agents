@@ -44,7 +44,8 @@
     "summarize:document": "tsx --env-file=../../.env scripts/summarize-document.ts",
     "experiment:mcp-vault": "tsx scripts/experiments/mcp-vault-server.ts",
     "experiment:recall-compare": "tsx --env-file=../../.env scripts/experiments/compare-recall.ts",
-    "experiment:vercel-ai": "tsx --env-file=../../.env scripts/experiments/vercel-ai-stream.ts"
+    "experiment:vercel-ai": "tsx --env-file=../../.env scripts/experiments/vercel-ai-stream.ts",
+    "experiment:bind-tools": "tsx --env-file=../../.env scripts/experiments/bind-tools-react.ts"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.25.2",
