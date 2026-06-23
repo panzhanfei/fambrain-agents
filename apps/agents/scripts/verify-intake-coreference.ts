@@ -8,13 +8,14 @@ import { resetInfraConfigForTests } from "@fambrain/infra";
 import {
     applyIntakeCoreferenceGuard,
     completeIntakeCoordinator,
-    findRepeatAnswerInHistory,
     hasCoreferenceContext,
     isVagueReferentialQuestion,
     type IntakeRoutingDecision,
 } from "../src/agentflow/agents/online/intake-coordinator/index";
+import { findRepeatAnswerInHistory } from "../src/agentflow/agents/online/intake-coordinator/intake-repeat-guard";
 import { parseIntakeDecision } from "../src/agentflow/pipeline/parse-intake";
 import { bootstrapAgentsRuntime } from "../src/config/index";
+import { enableRepeatGuardForVerify } from "./verify-test-env";
 
 const assertSync = (name: string, fn: () => void) => {
     try {
@@ -80,6 +81,9 @@ assertSync("guard：有上文实体 → 保留 retrieve", () => {
 
 console.log("\n— repeat guard 单测 —");
 
+await bootstrapAgentsRuntime();
+enableRepeatGuardForVerify();
+
 assertSync("repeat：同句再问命中 history 答", () => {
     const q = "我叫什么，我做过什么项目？";
     const history: DbChatTurn[] = [
@@ -126,9 +130,8 @@ assertSync("repeat：REPEAT_QUESTION_CACHE_DISABLED=1 时不命中", () => {
     delete process.env.REPEAT_QUESTION_CACHE_DISABLED;
     resetInfraConfigForTests();
     if (hit) throw new Error("L1 关闭时不应命中");
+    enableRepeatGuardForVerify();
 });
-
-await bootstrapAgentsRuntime();
 
 console.log("\n— Intake live + guard —");
 

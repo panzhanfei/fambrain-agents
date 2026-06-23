@@ -28,6 +28,8 @@ export type MemoryConfig = {
     langMemSummarizeAfterTurns: number;
     langMemKeepRecentTurns: number;
     mem0SearchLimit: number;
+    /** true 时轮次后走 Learning 管道，不再无脑 addTurnToMem0 */
+    learningPipelineEnabled: boolean;
     ollamaBaseUrl: string;
     ollamaChatModel: string;
     ollamaEmbedModel: string;
@@ -51,6 +53,7 @@ export const getMemoryConfig = (): MemoryConfig => {
         langMemSummarizeAfterTurns: clampInt(process.env.LANGMEM_SUMMARIZE_AFTER_TURNS, 8, 40),
         langMemKeepRecentTurns: clampInt(process.env.LANGMEM_KEEP_RECENT_TURNS, 4, 20),
         mem0SearchLimit: clampInt(process.env.MEM0_SEARCH_LIMIT, 5, 20),
+        learningPipelineEnabled: envFlag("LEARNING_PIPELINE_ENABLED", true),
         ollamaBaseUrl: ollama.baseUrl,
         ollamaChatModel: ollama.models.default,
         ollamaEmbedModel: ollama.models.embed,

@@ -1,10 +1,11 @@
 import type { DbChatTurn } from "@fambrain/agent-types";
-import { ChatRole } from "../generated/prisma/client";
+import { ChatRole, type Prisma } from "../generated/prisma/client";
 import { prisma } from "../client";
 export type MessageRow = {
   id: string;
   role: string;
   content: string;
+  metadata?: unknown;
 };
 export const findOwnedConversation = async (
   conversationId: string,
@@ -23,7 +24,7 @@ export const listConversationMessages = async (
   return prisma.message.findMany({
     where: { conversationId },
     orderBy: { createdAt: "asc" },
-    select: { id: true, role: true, content: true },
+    select: { id: true, role: true, content: true, metadata: true },
   });
 };
 export const toModelHistory = (
@@ -52,13 +53,15 @@ export const appendUserMessage = async (
 };
 export const appendAssistantMessage = async (
   conversationId: string,
-  content: string
+  content: string,
+  metadata?: Prisma.InputJsonValue
 ) => {
   return prisma.message.create({
     data: {
       conversationId,
       role: ChatRole.assistant,
       content,
+      metadata: metadata ?? undefined,
     },
     select: { id: true, role: true, content: true },
   });

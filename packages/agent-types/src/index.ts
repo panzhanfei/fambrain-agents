@@ -88,4 +88,6 @@ export type AgentPipelineResult = {
     /** L3：composite facet 终稿 cache 命中数 */
     compositeFacetCacheHits?: number | null;
     timing?: PipelineTiming;
+    /** 本轮 KM 命中的 corpus path，供反馈与 Phase D */
+    retrievalPaths?: string[];
 };

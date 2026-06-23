@@ -4,8 +4,10 @@
 import { runPipelineStream } from "@/agentflow/index";
 import { bootstrapAgentsRuntime } from "@/config";
 import { listCorpusUserIds } from "@/agentflow/agents/offline/knowledge-indexer/list-corpus-users";
+import { enableRepeatGuardForVerify } from "./verify-test-env";
 
 await bootstrapAgentsRuntime();
+enableRepeatGuardForVerify();
 const corpusUserId =
     process.env.FAMBRAIN_CORPUS_USER_ID?.trim() ||
     (await listCorpusUserIds())[0];

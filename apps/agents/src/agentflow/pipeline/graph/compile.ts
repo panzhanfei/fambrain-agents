@@ -242,6 +242,7 @@ const factCheckerNode = async (state: PipelineGraphState): Promise<Partial<Pipel
             retryCount: state.retryCount,
             confidenceTier: state.confidenceTier,
             retrievalCacheHit: state.retrievalCacheHit,
+            queryType: decision.queryType,
         });
         const patch: Partial<PipelineGraphState> = {
             checkerPassed: result.passed,

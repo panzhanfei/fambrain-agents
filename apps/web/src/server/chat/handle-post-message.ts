@@ -56,7 +56,15 @@ export const createPostMessageStreamResponse = (options: {
                     answer: finalContent,
                     timing: pipelineResult?.timing,
                 });
-                const assistantRow = await appendAssistantMessage(options.conversationId, finalContent);
+                const assistantRow = await appendAssistantMessage(
+                    options.conversationId,
+                    finalContent,
+                    pipelineResult?.retrievalPaths?.length ?
+                        {
+                            retrievalPaths: pipelineResult.retrievalPaths,
+                        }
+                    :   undefined
+                );
                 send("done", {
                     userMessage: {
                         id: userRow.id,
@@ -67,6 +75,7 @@ export const createPostMessageStreamResponse = (options: {
                         id: assistantRow.id,
                         role: mapRole(assistantRow.role),
                         content: assistantRow.content,
+                        retrievalPaths: pipelineResult?.retrievalPaths,
                     },
                     timing: pipelineResult?.timing,
                 });

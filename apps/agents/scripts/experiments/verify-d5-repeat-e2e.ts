@@ -7,6 +7,7 @@ import type { AgentPipelineContext, DbChatTurn } from "@fambrain/agent-types";
 import { listCorpusUserIds } from "@/agentflow/agents/offline/knowledge-indexer/list-corpus-users";
 import { runPipelineStream } from "@/agentflow/index";
 import { bootstrapAgentsRuntime } from "@/config";
+import { enableRepeatGuardForVerify } from "../verify-test-env";
 
 const COMPOSITE =
     "我叫什么，我做过什么项目，我在那几家公司上过班，近两年在干什么？";
@@ -76,6 +77,7 @@ const fail = (msg: string) => {
 const ok = (msg: string) => console.log(`  ✓ ${msg}`);
 
 await bootstrapAgentsRuntime();
+enableRepeatGuardForVerify();
 const corpusUserId =
     process.env.FAMBRAIN_CORPUS_USER_ID?.trim() ||
     (await listCorpusUserIds())[0];

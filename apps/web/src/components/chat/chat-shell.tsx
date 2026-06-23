@@ -18,6 +18,7 @@ import {
 } from "react";
 import { flushSync } from "react-dom";
 import { useSpeechInput } from "@/components/chat/use-speech-input";
+import { MessageRetrievalFeedback } from "@/components/chat/message-retrieval-feedback";
 import { filesFromInput, uploadDocuments } from "@/lib/documents/upload-documents";
 
 type MessageTiming = PipelineTiming & {
@@ -29,6 +30,7 @@ type ChatMessage = {
   role: "user" | "assistant";
   content: string;
   timing?: MessageTiming;
+  retrievalPaths?: string[];
 };
 
 const STEP_TIMING_LABELS: Record<PipelineStepName, string> = {
@@ -1022,6 +1024,11 @@ export const ChatShell = ({ initialConversations, viewer }: ChatShellProps) => {
               role: "assistant",
               content: p.assistantMessage.content,
               timing,
+              retrievalPaths: Array.isArray(
+                (p.assistantMessage as { retrievalPaths?: unknown }).retrievalPaths
+              )
+                ? ((p.assistantMessage as { retrievalPaths: string[] }).retrievalPaths)
+                : undefined,
             };
             flushSync(() => {
               setMessages((prev) => {
@@ -1330,6 +1337,12 @@ export const ChatShell = ({ initialConversations, viewer }: ChatShellProps) => {
 
         <div className="mt-auto border-t border-[#eceeef] p-3">
           <Link
+            href="/learning"
+            className="mb-2 block rounded-lg px-2 py-1.5 text-center text-[12px] font-medium text-[#4f46e5] hover:bg-[#eef2ff]"
+          >
+            自主学习
+          </Link>
+          <Link
             href="/corpus"
             className="mb-2 block rounded-lg px-2 py-1.5 text-center text-[12px] font-medium text-[#4f46e5] hover:bg-[#eef2ff]"
           >
@@ -1521,6 +1534,13 @@ export const ChatShell = ({ initialConversations, viewer }: ChatShellProps) => {
                       {m.content}
                       {m.role === "assistant" && m.timing ? (
                         <MessageTimingLine timing={m.timing} />
+                      ) : null}
+                      {m.role === "assistant" && activeConversationId ? (
+                        <MessageRetrievalFeedback
+                          messageId={m.id}
+                          conversationId={activeConversationId}
+                          retrievalPaths={m.retrievalPaths}
+                        />
                       ) : null}
                     </div>
                   </li>

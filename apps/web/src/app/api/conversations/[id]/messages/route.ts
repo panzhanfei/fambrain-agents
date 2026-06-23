@@ -34,11 +34,18 @@ export const GET = async (_request: Request, context: {
             return NextResponse.json({ error: "会话不存在" }, { status: 404 });
         }
         const rows = await listConversationMessages(parsedId.data);
-        const messages = rows.map((m) => ({
-            id: m.id,
-            role: mapRole(m.role),
-            content: m.content,
-        }));
+        const messages = rows.map((m) => {
+            const meta =
+                m.metadata && typeof m.metadata === "object" ?
+                    (m.metadata as { retrievalPaths?: string[] })
+                :   undefined;
+            return {
+                id: m.id,
+                role: mapRole(m.role),
+                content: m.content,
+                retrievalPaths: meta?.retrievalPaths,
+            };
+        });
         return NextResponse.json(messages);
     }
     catch (e) {

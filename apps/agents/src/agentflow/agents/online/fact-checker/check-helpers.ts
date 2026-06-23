@@ -12,7 +12,7 @@
  */
 
 import type { FactCheckerInput, FactCheckerIssue, FactCheckerResult } from "./prompt";
-import { hasPersonalCorpusHits, mergeRetrySearchQuery } from "./refined-search-query";
+import { hasExperienceCorpusHits, hasPersonalCorpusHits, mergeRetrySearchQuery } from "./refined-search-query";
 import { parseFactCheckerResult } from "./schema";
 
 /** 对外统一命名：LLM 输出经 Zod 校验 + retryCap 后的规范化入口 */
@@ -185,6 +185,24 @@ export const buildRuleBasedFactCheck = (
       issues: [],
     };
     return result;
+  }
+
+  // ── 分支 C2：列举问法 + experience 命中且 coverage 充分 → 不重检 KM ──
+  if (
+    hits.length >= 3 &&
+    coverage === "sufficient" &&
+    hasExperienceCorpusHits(hits) &&
+    (input.queryType === "enumeration" ||
+      /哪几|哪些|列举|公司|任职/.test(input.userQuestion))
+  ) {
+    const topRelevance = Math.max(...hits.map((h) => h.relevance), 0);
+    return {
+      passed: true,
+      evidenceScore: Math.min(1, Math.max(0.75, topRelevance)),
+      refinedSearchQuery: null,
+      checkerNotes: null,
+      issues: [],
+    };
   }
 
   // ── 分支 D：首次检索完全无命中 → 打回，附带更完整的 refinedSearchQuery ──

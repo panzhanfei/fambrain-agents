@@ -36,6 +36,11 @@ export const hasPersonalCorpusHits = (hits: FactCheckerInput["hits"]): boolean =
     });
 };
 
+/** experience/ 任职条目（列举公司问法 KM-13） */
+export const hasExperienceCorpusHits = (hits: FactCheckerInput["hits"]): boolean => {
+    return hits.some((h) => /(?:^|[/])experience[/]/i.test(normalizeHitPath(h.path)));
+};
+
 export const stripMetaFromSearchQuery = (query: string): string => {
     const kept = splitQueryTokens(query).filter((t) => !META_REFINED_TOKENS.has(t));
     return kept.join(" ");

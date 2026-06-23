@@ -1,7 +1,7 @@
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { buildBm25Index } from "./bm25";
-import { listCorpusScanRoots, SCAN_FOLDERS } from "./doc-paths";
+import { listCorpusScanRoots, CORPUS_SCAN_FOLDERS } from "./doc-paths";
 import { listMarkdownFiles, toRepoPath } from "./list-markdown-files";
 import { tokenizeForRecall } from "./recall-tokenize";
 
@@ -56,7 +56,7 @@ const loadSparseDocuments = async (
     const docs: ScoredDoc[] = [];
     const scanRoots = await listCorpusScanRoots(corpusUserId, listMarkdownFiles);
     for (const { root: corpusRoot } of scanRoots) {
-        for (const folder of SCAN_FOLDERS) {
+        for (const folder of CORPUS_SCAN_FOLDERS) {
             const dir = path.join(corpusRoot, folder);
             for (const abs of await listMarkdownFiles(dir)) {
                 const body = await readFile(abs, "utf8").catch(() => "");

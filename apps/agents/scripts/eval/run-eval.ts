@@ -26,6 +26,7 @@ import {
     type KmEvalSnapshot,
     type PipelineEvalSnapshot,
 } from "./assert-golden";
+import { enableRepeatGuardForVerify } from "../verify-test-env";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const GOLDEN_PATH = path.join(__dirname, "golden.json");
@@ -377,6 +378,7 @@ const runProfileProbe = async (
     probe: NonNullable<GoldenFile["profileProbe"]>,
     corpusUserId: string
 ): Promise<CaseResult[]> => {
+    enableRepeatGuardForVerify();
     const conversationId = `${probe.conversationIdPrefix}-${Date.now()}`;
     const out: CaseResult[] = [];
     let priorHistory: DbChatTurn[] = [];

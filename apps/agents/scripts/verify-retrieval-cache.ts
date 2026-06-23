@@ -12,6 +12,7 @@ import {
     resetInfraConfigForTests,
     setRetrievalCache,
 } from "@fambrain/infra";
+import { enableMemoryRetrievalCacheForVerify } from "./verify-test-env";
 
 console.log("verify-retrieval-cache\n— normalize —");
 
@@ -26,8 +27,7 @@ console.log("verify-retrieval-cache\n— normalize —");
 
 console.log("\n— memory cache —");
 
-process.env.REDIS_ENABLED = "0";
-resetInfraConfigForTests();
+enableMemoryRetrievalCacheForVerify();
 clearMemoryRetrievalCache();
 
 const key = {

@@ -16,6 +16,10 @@ export const VAULT_UPLOADS_DIR = "originals/uploads";
 /** 解析后的 Markdown 默认写入 corpus/<category>/imports/ */
 export const CORPUS_IMPORTS_DIR = "imports";
 export const SCAN_FOLDERS = ["experience", "projects", "personal"] as const;
+/** 自主学习写入目录（Phase C）；与 uploads imports 隔离 */
+export const LEARNED_DIR = "learned";
+/** BM25 / KM 扫盘时额外包含 learned */
+export const CORPUS_SCAN_FOLDERS = [...SCAN_FOLDERS, LEARNED_DIR] as const;
 export type CorpusCategory = (typeof SCAN_FOLDERS)[number];
 export type CorpusScanRoot = {
     /** 其下直接包含 experience / projects / personal */
@@ -36,6 +40,12 @@ export const getVaultUploadsRoot = (userId: string): string => {
 };
 export const getCorpusImportDir = (corpusUserId: string, category: CorpusCategory): string => {
     return path.join(getUserCorpusRoot(corpusUserId), category, CORPUS_IMPORTS_DIR);
+};
+export const getCorpusLearnedDir = (corpusUserId: string): string => {
+    return path.join(getUserCorpusRoot(corpusUserId), LEARNED_DIR);
+};
+export const getCorpusLearnedPendingDir = (corpusUserId: string): string => {
+    return path.join(getCorpusLearnedDir(corpusUserId), "pending");
 };
 const corpusHasMarkdown = async (corpusRoot: string, listMarkdownFiles: (dir: string) => Promise<string[]>): Promise<boolean> => {
     for (const folder of SCAN_FOLDERS) {

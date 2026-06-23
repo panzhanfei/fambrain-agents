@@ -20,6 +20,7 @@
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { logAgentIn, logAgentOut } from "@fambrain/agent-shared/agent-log";
+import { aggregateFeedbackByPath } from "@fambrain/db";
 import {
     listCorpusScanRoots,
     listMarkdownFiles,
@@ -308,7 +309,8 @@ const retrieveByKeywords = (
     input: Pick<KnowledgeManagerInput, "searchQuery" | "subTasks">,
     candidates: CandidateRow[],
     maxHits: number,
-    queryProfile: QueryProfile
+    queryProfile: QueryProfile,
+    feedbackByPath?: Map<string, number>
 ): Omit<KnowledgeRetrievalResult, "coverage" | "confidenceTier" | "confidenceScore"> & {
     hits: KnowledgeHit[];
 } => {
@@ -321,7 +323,8 @@ const retrieveByKeywords = (
         candidates,
         tokens,
         pickExcerpt,
-        queryProfile
+        queryProfile,
+        feedbackByPath
     );
     const scored = ranked.filter((h) => h.relevance > 0);
 
@@ -344,7 +347,8 @@ const ensureNonEmptyHits = (
     result: KnowledgeRetrievalResult,
     queryProfile: QueryProfile,
     tier: ConfidenceTier,
-    topRelevance: number
+    topRelevance: number,
+    feedbackByPath?: Map<string, number>
 ): KnowledgeRetrievalResult => {
     if (result.hits.length > 0 || candidates.length === 0) return result;
     if (!shouldCoalesceEmptyHits(tier, topRelevance)) {
@@ -363,7 +367,8 @@ const ensureNonEmptyHits = (
         candidates,
         tokens,
         pickExcerpt,
-        queryProfile
+        queryProfile,
+        feedbackByPath
     );
     const top = ranked[0];
     if (!top) return result;
@@ -396,7 +401,8 @@ const finalizeHits = (
         topCandidate?: KnowledgeCandidate;
     },
     expectedEnumerationPaths: string[] = [],
-    enumerationTarget: EnumerationTarget | null = null
+    enumerationTarget: EnumerationTarget | null = null,
+    feedbackByPath?: Map<string, number>
 ): {
     result: KnowledgeRetrievalResult;
     ranked: ReturnType<typeof rankCandidates>;
@@ -410,11 +416,18 @@ const finalizeHits = (
         candidates,
         tokens,
         pickExcerpt,
-        queryProfile
+        queryProfile,
+        feedbackByPath
     );
 
     let result: KnowledgeRetrievalResult = {
-        ...retrieveByKeywords(input, candidates, maxHits, queryProfile),
+        ...retrieveByKeywords(
+            input,
+            candidates,
+            maxHits,
+            queryProfile,
+            feedbackByPath
+        ),
         coverage: "none",
     };
 
@@ -436,7 +449,8 @@ const finalizeHits = (
         result,
         queryProfile,
         provisional.tier,
-        provisional.top1Relevance
+        provisional.top1Relevance,
+        feedbackByPath
     );
 
     const guarded = applyIdentityGuard(
@@ -669,6 +683,10 @@ export const retrieveKnowledge = async (
         return empty;
     }
 
+    const feedbackByPath = await aggregateFeedbackByPath(input.corpusUserId).catch(
+        () => new Map<string, number>()
+    );
+
     const {
         result: ruleResult,
         ranked: topRankedList,
@@ -686,7 +704,8 @@ export const retrieveKnowledge = async (
             topCandidate: rawCandidates[0],
         },
         expectedEnumerationPaths,
-        enumerationTarget
+        enumerationTarget,
+        feedbackByPath
     );
 
     const topRanked = topRankedList[0];

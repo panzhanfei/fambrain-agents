@@ -3,6 +3,7 @@ import { bootstrapAgentsRuntime, logLangSmithStartup, } from "@/config";
 import { handleAsync } from "@/server/handle-async";
 import { handleHealth, handleNotFound, handlePipelineStream, } from "@/server/routes";
 import { handleDocumentsUpload } from "@/server/documents-upload";
+import { handleLearningApply } from "@/server/learning-apply";
 
 const { langSmith, port } = bootstrapAgentsRuntime();
 
@@ -18,6 +19,10 @@ const server = createServer((req, res) => {
     }
     if (url === "/documents/upload") {
         handleAsync(handleDocumentsUpload)(req, res);
+        return;
+    }
+    if (url === "/learning/apply") {
+        handleAsync(handleLearningApply)(req, res);
         return;
     }
     handleNotFound(res);

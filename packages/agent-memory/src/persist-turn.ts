@@ -13,7 +13,7 @@ export const persistPipelineMemory = async (input: {
     if (!trimmed)
         return;
     const tasks: Promise<void>[] = [];
-    if (cfg.mem0Enabled) {
+    if (cfg.mem0Enabled && !cfg.learningPipelineEnabled) {
         tasks.push(addTurnToMem0(input.context.actorUserId, input.userQuestion, trimmed));
     }
     if (cfg.langMemEnabled && input.context.conversationId) {

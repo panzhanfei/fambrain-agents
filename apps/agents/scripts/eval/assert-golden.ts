@@ -134,7 +134,8 @@ export const assertPipeline = (
     }
     if (
         assert.answerMustNotRe &&
-        re(assert.answerMustNotRe).test(snap.answer)
+        re(assert.answerMustNotRe).test(snap.answer) &&
+        !(assert.answerRe && re(assert.answerRe).test(snap.answer))
     ) {
         issues.push(`answer 不应匹配 /${assert.answerMustNotRe}/`);
     }

@@ -56,6 +56,11 @@ export const config = {
         "/pending",
         "/api/conversations/:path*",
         "/api/users/:path*",
+        "/api/pending-memory-facts/:path*",
+        "/api/retrieval-feedback",
+        "/api/learning/:path*",
+        "/learning/:path*",
+        "/corpus/:path*",
         "/api/auth/me",
     ],
 };

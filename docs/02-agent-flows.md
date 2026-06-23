@@ -449,6 +449,38 @@ flowchart TD
 
 **验证：** `pnpm run verify:vault-list`（vault 列举单测）。
 
+### 11. 自主学习管道 — Learning Phase A–D ✅
+
+**触发：** 每轮 `runPipelineStream` 终稿落库后，`stream.ts` 调用 `persistLearningAfterTurn`（`LEARNING_PIPELINE_ENABLED=false` 时跳过）。
+
+**Phase 概览：**
+
+| Phase | 能力 | 代码 / 数据 |
+|-------|------|-------------|
+| **A** HITL pending | 中置信候选写入 DB，Web `/learning` 人工审核 | `PendingMemoryFact` · `POST /api/pending-memory-facts` · Agents `POST /learning/apply` |
+| **B** 高置信 Mem0 | `confidence ≥ LEARNING_AUTO_MEM0_MIN_CONFIDENCE` 自动结构化写入 Mem0 | `persist-learning.ts` · 开启 learning 时 `persist-turn` 跳过盲目 `addTurnToMem0` |
+| **C** `corpus/learned/` | 更高置信写入 Markdown + 可选 reindex | `writeLearnedFactToCorpus` · BM25/KM 扫盘含 `learned/` · `PATH_BOOST_LEARNED` |
+| **D** 检索反馈 | 聊天消息下 👍/👎 → 按 path 聚合 boost KM rerank | `RetrievalFeedback` · `aggregateFeedbackByPath` · `message-retrieval-feedback.tsx` |
+
+```mermaid
+flowchart LR
+  T[Pipeline 终稿] --> EX[extractLearnedCandidates]
+  EX --> R{置信度路由}
+  R -->|≥ auto corpus| LC[writeLearnedFactToCorpus + reindex]
+  R -->|≥ auto mem0| M[addStructuredUserFact]
+  R -->|pending 区间| P[(PendingMemoryFact)]
+  P -->|Web 审核 apply| LC
+  P -->|Web 审核 apply| M
+  FB[用户检索反馈] --> KM[KM rerank boost]
+```
+
+**验证：**
+
+```bash
+pnpm --filter @fambrain/agents run verify:learning-extract
+# Web：/learning 审核 pending；聊天助手消息下反馈按钮
+```
+
 ## 路由字段（IntakeCoordinator 输出）
 
 | 英文字段 | 中文名 | 含义 | 典型去向 |

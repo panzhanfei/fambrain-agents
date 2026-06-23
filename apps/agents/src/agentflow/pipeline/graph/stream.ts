@@ -16,6 +16,7 @@ import {
   persistPipelineMemory,
   preparePipelineMemory,
 } from "@fambrain/agent-memory";
+import { persistLearningAfterTurn } from "@/agentflow/agents/offline/learning";
 type AnalystStreamChunk = {
     type: "thinking";
     text: string;
@@ -74,6 +75,37 @@ const logPersistMemoryFailure = (e: unknown): void => {
     logAgentOut("Pipeline", "persist_memory_failed", { error: message });
 };
 
+const retrievalPathsFromState = (state: PipelineGraphState): string[] => {
+    const paths = state.hits
+        .map((h) => h.path?.trim())
+        .filter((p): p is string => Boolean(p));
+    return [...new Set(paths)];
+};
+
+const persistTurnSideEffects = async (input: {
+    context: AgentPipelineContext;
+    history: DbChatTurn[];
+    userQuestion: string;
+    answer: string;
+    finalState: PipelineGraphState;
+}): Promise<void> => {
+    if (input.finalState.repeatQuestionHit) return;
+    await persistPipelineMemory({
+        context: input.context,
+        history: input.history,
+        userQuestion: input.userQuestion,
+        answer: input.answer,
+    }).catch(logPersistMemoryFailure);
+    if (!input.finalState.decision?.userFact) {
+        await persistLearningAfterTurn({
+            context: input.context,
+            userQuestion: input.userQuestion,
+            answer: input.answer,
+            retrievalPaths: retrievalPathsFromState(input.finalState),
+        }).catch(logPersistMemoryFailure);
+    }
+};
+
 const shouldRetryRetrieval = (state: PipelineGraphState): boolean => {
     return !state.checkerPassed && state.retryCount < 1;
 };
@@ -130,7 +162,7 @@ function* flushPipelineLogs(): Generator<AgentStreamEvent> {
 export async function* runPipelineStream(history: DbChatTurn[], context: AgentPipelineContext): AsyncGenerator<AgentStreamEvent, AgentPipelineResult> {
     const runStore = createPipelineRunStore();
     pipelineRunStorage.enterWith(runStore);
-    yield* runPipelineStreamInner(history, context);
+    return yield* runPipelineStreamInner(history, context);
 }
 
 async function* runPipelineStreamInner(history: DbChatTurn[], context: AgentPipelineContext): AsyncGenerator<AgentStreamEvent, AgentPipelineResult> {
@@ -357,12 +389,13 @@ async function* runPipelineStreamInner(history: DbChatTurn[], context: AgentPipe
         logAgentOut("Pipeline", "出去", summarizePipelineOut(finalState, finalState.answer, pipelineTiming));
         yield* emitAssistant(finalState.answer);
         if (!finalState.repeatQuestionHit) {
-            await persistPipelineMemory({
+            await persistTurnSideEffects({
                 context,
                 history,
                 userQuestion,
                 answer: finalState.answer,
-            }).catch(logPersistMemoryFailure);
+                finalState,
+            });
         }
         return {
             answer: finalState.answer,
@@ -370,6 +403,7 @@ async function* runPipelineStreamInner(history: DbChatTurn[], context: AgentPipe
             retrievalCacheHit: finalState.retrievalCacheHit,
             compositeFacetCacheHits: finalState.compositeFacetCacheHits,
             timing: pipelineTiming,
+            retrievalPaths: retrievalPathsFromState(finalState),
         };
     }
     const answer = finalState.answer ??
@@ -378,12 +412,13 @@ async function* runPipelineStreamInner(history: DbChatTurn[], context: AgentPipe
         timing.markFirstToken();
         yield* emitAssistant(answer);
     }
-    await persistPipelineMemory({
+    await persistTurnSideEffects({
         context,
         history,
         userQuestion,
         answer,
-    }).catch(logPersistMemoryFailure);
+        finalState,
+    });
     const pipelineTiming = yield* finishPipeline(timing);
     logAgentOut("Pipeline", "出去", summarizePipelineOut(finalState, answer, pipelineTiming));
     return {
@@ -392,5 +427,6 @@ async function* runPipelineStreamInner(history: DbChatTurn[], context: AgentPipe
         retrievalCacheHit: finalState.retrievalCacheHit,
         compositeFacetCacheHits: finalState.compositeFacetCacheHits,
         timing: pipelineTiming,
+        retrievalPaths: retrievalPathsFromState(finalState),
     };
 }

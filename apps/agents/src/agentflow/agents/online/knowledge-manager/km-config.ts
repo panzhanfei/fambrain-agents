@@ -86,6 +86,12 @@ export const PATH_BOOST_EXPERIENCE = 0.1;
 /** path 位于 corpus/projects/ 时的基准分（不加不减）。用于：getPathBoost。 */
 export const PATH_BOOST_PROJECTS = 0;
 
+/** path 位于 corpus/learned/ 时的加分（Phase C 自主学习文档）。 */
+export const PATH_BOOST_LEARNED = 0.15;
+
+/** Phase D：单条路径反馈信号对 relevance 的最大加减幅度。 */
+export const FEEDBACK_BOOST_MAX = 0.12;
+
 /**
  * 项目目录下的 resume 模板 md 减分，避免与 personal 个人简历抢 Top1。
  * 用于：getPathBoost。
@@ -121,5 +127,7 @@ export const getKmRetrievalConfig = () => ({
     pathBoostPersonal: PATH_BOOST_PERSONAL,
     pathBoostExperience: PATH_BOOST_EXPERIENCE,
     pathBoostProjects: PATH_BOOST_PROJECTS,
+    pathBoostLearned: PATH_BOOST_LEARNED,
+    feedbackBoostMax: FEEDBACK_BOOST_MAX,
     pathBoostProjectsResume: PATH_BOOST_PROJECTS_RESUME,
 });

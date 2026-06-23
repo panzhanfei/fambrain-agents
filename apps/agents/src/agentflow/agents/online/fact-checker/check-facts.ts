@@ -22,7 +22,7 @@ import {
   buildRuleBasedFactCheck,
   normalizeFactCheckerResult,
 } from "./check-helpers";
-import { hasPersonalCorpusHits } from "./refined-search-query";
+import { hasExperienceCorpusHits, hasPersonalCorpusHits } from "./refined-search-query";
 import {
   prompt,
   type FactCheckerInput,
@@ -114,6 +114,23 @@ export const completeFactCheck = async (
     logAgentOut("FactChecker", "出去", summarizeFactCheckOut(result, {
       source: "rules_personal_pass",
       guardApplied: "personal_skip_llm",
+      willRetryRetrieval: false,
+    }));
+    return result;
+  }
+
+  if (
+    input.retryCount === 0 &&
+    input.hits.length >= 3 &&
+    input.coverage === "sufficient" &&
+    hasExperienceCorpusHits(input.hits) &&
+    (input.queryType === "enumeration" ||
+      /哪几|哪些|列举|公司|任职/.test(input.userQuestion))
+  ) {
+    const result = buildRuleBasedFactCheck(input);
+    logAgentOut("FactChecker", "出去", summarizeFactCheckOut(result, {
+      source: "rules_enumeration_pass",
+      guardApplied: "enumeration_skip_llm",
       willRetryRetrieval: false,
     }));
     return result;

@@ -6,7 +6,9 @@ import {
     PATH_BOOST_EXPERIENCE,
     PATH_BOOST_PERSONAL,
     PATH_BOOST_PROJECTS,
+    PATH_BOOST_LEARNED,
     PATH_BOOST_PROJECTS_RESUME,
+    FEEDBACK_BOOST_MAX,
 } from "./km-config";
 import type { QueryProfile } from "./types";
 import type { KnowledgeHit } from "./types";
@@ -120,10 +122,24 @@ export const computeKeywordRelevance = (
 export const getPathBoost = (repoPath: string): number => {
     const p = repoPath.replace(/\\/g, "/").toLowerCase();
     if (p.includes("/projects/resume.md")) return PATH_BOOST_PROJECTS_RESUME;
+    if (p.includes("/learned/")) return PATH_BOOST_LEARNED;
     if (p.includes("/personal/")) return PATH_BOOST_PERSONAL;
     if (p.includes("/experience/")) return PATH_BOOST_EXPERIENCE;
     if (p.includes("/projects/")) return PATH_BOOST_PROJECTS;
     return 0;
+};
+
+const feedbackDelta = (
+    repoPath: string,
+    feedbackByPath?: Map<string, number>
+): number => {
+    if (!feedbackByPath?.size) return 0;
+    const signal = feedbackByPath.get(repoPath);
+    if (signal === undefined) return 0;
+    return Math.max(
+        -FEEDBACK_BOOST_MAX,
+        Math.min(FEEDBACK_BOOST_MAX, signal * FEEDBACK_BOOST_MAX)
+    );
 };
 
 /** relevance = token + vector + pathBoost，封顶 1.0（KM-05）。 */
@@ -154,7 +170,8 @@ export const rankCandidates = (
         tokens: string[],
         queryProfile?: QueryProfile
     ) => string = pickExcerpt,
-    queryProfile?: QueryProfile
+    queryProfile?: QueryProfile,
+    feedbackByPath?: Map<string, number>
 ): RankedCandidate[] =>
     candidates
         .map((c) => {
@@ -162,10 +179,10 @@ export const rankCandidates = (
             const keywordRelevance = computeKeywordRelevance(haystack, tokens);
             const vectorRelevance = resolveRecallRelevance(c);
             const pathBoost = getPathBoost(c.path);
-            const relevance = computeRelevance(
-                keywordRelevance,
-                vectorRelevance,
-                pathBoost
+            const relevance = Math.min(
+                1,
+                computeRelevance(keywordRelevance, vectorRelevance, pathBoost) +
+                    feedbackDelta(c.path, feedbackByPath)
             );
             const excerpt =
                 pickExcerptFn(c.body, tokens, queryProfile) ||

@@ -24,11 +24,15 @@ export {
   VAULT_UPLOADS_DIR,
   CORPUS_IMPORTS_DIR,
   SCAN_FOLDERS,
+  LEARNED_DIR,
+  CORPUS_SCAN_FOLDERS,
   getUserHome,
   getUserCorpusRoot,
   getUserVaultRoot,
   getVaultUploadsRoot,
   getCorpusImportDir,
+  getCorpusLearnedDir,
+  getCorpusLearnedPendingDir,
   listCorpusScanRoots,
   type CorpusCategory,
   type CorpusScanRoot,
@@ -45,3 +49,9 @@ export {
 } from "./recall-keyword-retrieve";
 export { tokenizeForRecall } from "./recall-tokenize";
 export { buildBm25Index, type Bm25Index } from "./bm25";
+export {
+    buildLearnedMarkdown,
+    writeLearnedFactToCorpus,
+    type WriteLearnedFactInput,
+    type LearnedFactFrontmatter,
+} from "./write-learned-md";

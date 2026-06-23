@@ -74,6 +74,7 @@
 | **P1 触达** | Mem0 / LangMem | Pipeline `memoryBlock`；`verify:memory` | Mem0、LangMem、Ollama |
 | **P1 触达** | 内容摘要师 | CLI + Zod 结构化摘要 | Ollama、Zod、`verify:content-summarizer` |
 | **P1 触达** | MCP / Recall / Vercel AI | 实验脚本（不进主链） | MCP SDK、`recallKeywordRetrieve`、`ai` + `ollama-ai-provider` |
+| **Learning A–D** | 自主学习 | **✅ 2026-06** pending / Mem0 / `corpus/learned/` / 检索反馈 | [§11](./02-agent-flows.md#11-自主学习管道--learning-phase-ad-) |
 | **P2 延后** | Agno 对比 | `experiments/agno-minimal/` | Agno |
 
 ### 十日排期
@@ -214,7 +215,7 @@ GOLDEN_RUNS=3 pnpm run golden:regression   # G1～G5b + GMem，稳定性 3 遍
 | **memProbe（GMem）** | `golden.json` **memProbe** ↔ `golden:regression` **GMem**（conv A 记 QQ → conv B 问） |
 | **最少 4 项指标** | Golden 通过率；candidates>0 但 hits=0 率（→0）；cache 命中率；端到端 `latencyMs` |
 
-**状态：** ✅ 2026-06-18 — cache 接入 `@fambrain/infra`；eval cache **1/1**；✅ **profileProbe `G-履历综合`**（4 轮）`--profile-only` **4/4**；✅ **memProbe GMem** `runMemProbe` + `--mem-only`（2026-06）
+**状态：** ✅ 2026-06-23 — **13/13** Golden+KM+E2E；cache 探测 2/2；**profileProbe `G-履历综合`** 4/4（含 L1 repeat t2）；**memProbe GMem** 2/2；FactChecker **enumeration fast-pass** 避免二次 KM
 
 ```bash
 pnpm --filter @fambrain/agents run eval:run
@@ -266,7 +267,8 @@ GOLDEN_RUNS=3 pnpm --filter @fambrain/agents run golden:regression  # G1～G5b +
 - [ ] **D3-2 不可复现**（12 candidates → hits ≥1）
 - [x] **D5-2**：同会话 G4 连续两问，第二次命中 L2 cache 或 L1 Intake 复用（两层 ✅ 2026-06-18）
 - [x] **R6-1**：列举型「哪几家公司」→ 4 家且同句再问一致 ← `verify:r6-no-cache` ✅ 2026-06
-- [x] **eval MVP**：`run-eval` 输出报告（通过率 + 指标 4 项）— 2026-06-17 12/12
+- [x] **eval MVP**：`run-eval` 输出报告（通过率 + 指标 4 项）— **13/13** ✅ 2026-06-23
+- [x] **Learning Phase A–D**：pending 审核 / 高置信 Mem0+corpus / `corpus/learned/` / 检索反馈 ← `verify:learning-extract` + Web `/learning` ✅ 2026-06
 - [x] **SLO 日志**：每轮 step 耗时 + Token 汇总 + Web 运行日志面板（2026-06）
 - [x] **R6-3**：同会话综合履历 → **编号子问**公司数不得 4→2 ← eval **`G-履历综合` 4/4** + `verify:r6-no-cache` ✅ 2026-06
 - [x] **P0-19～21**：Analyst plain-text + 项目/公司 enumeration 分流 ← `verify:analyst-empty-hits` · `verify:composite-route` ✅ 2026-06
