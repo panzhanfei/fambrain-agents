@@ -1,4 +1,5 @@
 /** 各 Agent 控制台日志（服务端调试用）：每个 Agent 仅 📥 进入 / 📤 出去 */
+import { enqueuePipelineLog } from "./pipeline-run-context";
 export type AgentLogName =
     | "IntakeCoordinator"
     | "KnowledgeManager"
@@ -8,7 +9,8 @@ export type AgentLogName =
     | "InformationAnalyst"
     | "KnowledgeIndexer"
     | "Pipeline"
-    | "Mem0";
+    | "Mem0"
+    | "UserFact";
 
 export const AGENT_LOG_LABEL_IN = "进入";
 export const AGENT_LOG_LABEL_OUT = "出去";
@@ -23,6 +25,7 @@ const AGENT_EMOJI: Record<AgentLogName, string> = {
     KnowledgeIndexer: "📦",
     Pipeline: "🛤️",
     Mem0: "💾",
+    UserFact: "🪪",
 };
 
 const MAX_JSON_CHARS = 6000;
@@ -48,14 +51,33 @@ const prefix = (agent: AgentLogName, tag: string): string => {
     return `${AGENT_EMOJI[agent]} [${agent}] ${tag}`;
 };
 
+const previewForLog = (data: unknown): string | undefined => {
+    if (data === undefined || data === null || (typeof data === "object" && Object.keys(data as object).length === 0))
+        return undefined;
+    const text = typeof data === "string" ? data : formatPayload(data);
+    return text.length > 480 ? `${text.slice(0, 480)}…` : text;
+};
+
 /** Agent 入口：本轮输入摘要 */
 export const logAgentIn = (agent: AgentLogName, label: string = AGENT_LOG_LABEL_IN, data: unknown = {}): void => {
     console.log(`${prefix(agent, `📥 ${label}`)}\n${formatPayload(data)}`);
+    enqueuePipelineLog({
+        agent,
+        direction: "in",
+        label,
+        preview: previewForLog(data),
+    });
 };
 
 /** Agent 出口：本轮输出摘要 */
 export const logAgentOut = (agent: AgentLogName, label: string = AGENT_LOG_LABEL_OUT, data: unknown = {}): void => {
     console.log(`${prefix(agent, `📤 ${label}`)}\n${formatPayload(data)}`);
+    enqueuePipelineLog({
+        agent,
+        direction: "out",
+        label,
+        preview: previewForLog(data),
+    });
 };
 
 /**

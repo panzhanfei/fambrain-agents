@@ -2,6 +2,7 @@ import { HumanMessage, SystemMessage } from "@langchain/core/messages";
 import { ChatOllama } from "@langchain/ollama";
 import { getAgentsConfig } from "@fambrain/agent-config";
 import { logAgentOut } from "@fambrain/agent-shared/agent-log";
+import { estimateTokenUsage, recordLangChainOllamaUsage, recordPipelineTokenUsage, } from "@fambrain/agent-shared/pipeline-run-context";
 import { streamOllamaNative } from "@fambrain/agent-shared/ollama-native-stream";
 import { dedupeCitations } from "@/agentflow/agents/online/content-organizer";
 import type { KnowledgeHit } from "@/agentflow/agents/online/knowledge-manager";
@@ -79,22 +80,43 @@ export async function* streamAnalyzeSubQuestion(
     }
 
     let fullContent = "";
+    const promptMessages = [
+        {
+            role: "system",
+            content: buildSubQuestionStreamPrompt(
+                profile,
+                payload.topics
+            ),
+        },
+        { role: "user", content: JSON.stringify(payload) },
+    ] as const;
     try {
-        for await (const chunk of streamOllamaNative({
-            messages: [
-                {
-                    role: "system",
-                    content: buildSubQuestionStreamPrompt(
-                        profile,
-                        payload.topics
-                    ),
-                },
-                { role: "user", content: JSON.stringify(payload) },
-            ],
+        const gen = streamOllamaNative({
+            messages: [...promptMessages],
             think: false,
             model: ollama.models.intakeCoordinator,
-        })) {
-            if (chunk.kind !== "content") continue;
+        });
+        while (true) {
+            const next = await gen.next();
+            if (next.done) {
+                const usage = next.value;
+                if (usage) {
+                    recordPipelineTokenUsage({
+                        prompt: usage.promptTokens,
+                        completion: usage.completionTokens,
+                    }, { node: "analyst" });
+                }
+                else {
+                    recordPipelineTokenUsage(estimateTokenUsage(JSON.stringify(promptMessages), fullContent), {
+                        estimated: true,
+                        node: "analyst",
+                    });
+                }
+                break;
+            }
+            const chunk = next.value;
+            if (chunk.kind !== "content")
+                continue;
             fullContent = chunk.fullText.trim();
             if (fullContent) {
                 yield { type: "assistant", text: fullContent };
@@ -154,6 +176,11 @@ export const completeAnalyzeSubQuestion = async (
             new HumanMessage(JSON.stringify(payload)),
         ]);
         const raw = textFromResponse(ai.content);
+        recordLangChainOllamaUsage(ai, {
+            promptText: `${subQuestionPrompt}\n${JSON.stringify(payload)}`,
+            completionText: raw,
+            node: "analyst",
+        });
         const parsed = parseJsonObject<InformationAnalystResult>(raw);
         const result = normalizeAnalystResult(parsed, fallback);
         logAgentOut("InformationAnalyst", "子问出去", {

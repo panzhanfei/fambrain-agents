@@ -2,6 +2,7 @@ import { AIMessage, HumanMessage, SystemMessage, type BaseMessage, } from "@lang
 import { ChatOllama } from "@langchain/ollama";
 import { getAgentsConfig } from "@fambrain/agent-config";
 import { logAgentIn, logAgentOut } from "@fambrain/agent-shared/agent-log";
+import { recordLangChainOllamaUsage } from "@fambrain/agent-shared/pipeline-run-context";
 import type { DbChatTurn } from "@fambrain/agent-types";
 import { textFromResponse } from "@/agentflow/utils";
 import { prompt } from "./prompt";
@@ -37,6 +38,11 @@ export const completeIntakeCoordinator = async (history: DbChatTurn[], options?:
     const ai = await llm.invoke(messages);
     const raw = textFromResponse(ai.content) ||
         "（模型未返回助手文本：请确认 Ollama 已启动且模型已拉取）";
+    recordLangChainOllamaUsage(ai, {
+        promptText: JSON.stringify(messages.map((m) => m.content)),
+        completionText: raw,
+        node: "intake",
+    });
     logAgentOut("IntakeCoordinator", "出去", {
         routeJsonPreview: raw.length > 800 ? `${raw.slice(0, 800)}…` : raw,
     });

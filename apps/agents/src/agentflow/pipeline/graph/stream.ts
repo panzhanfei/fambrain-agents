@@ -2,6 +2,12 @@ import { ensureAgentsRuntime } from "@/config";
 import { buildLangGraphRunConfig, } from "@fambrain/agent-config/langsmith";
 import { logAgentIn, logAgentOut } from "@fambrain/agent-shared/agent-log";
 import type { AgentPipelineContext, AgentPipelineResult, AgentStreamEvent, DbChatTurn, PipelineStepName, PipelineTiming, } from "@fambrain/agent-types";
+import {
+    createPipelineRunStore,
+    drainPipelineLogQueue,
+    pipelineRunStorage,
+    setPipelineActiveNode,
+} from "@fambrain/agent-shared/pipeline-run-context";
 import { getCompiledPipelineGraph } from "./compile";
 import { PipelineTimingTracker } from "./pipeline-timing";
 import type { PipelineGraphState } from "./state";
@@ -101,16 +107,33 @@ const summarizePipelineOut = (state: PipelineGraphState, answer: string, timing:
 const finishPipeline = function* (
     timing: PipelineTimingTracker
 ): Generator<AgentStreamEvent, PipelineTiming> {
-    const snapshot = timing.snapshot();
+    yield* flushPipelineLogs();
+    const tokenTracker = pipelineRunStorage.getStore()?.tokenTracker;
+    const snapshot: PipelineTiming = {
+        ...timing.snapshot(),
+        ...(tokenTracker ? { tokens: tokenTracker.snapshot() } : {}),
+    };
     yield { type: "pipeline_timing", timing: snapshot };
     return snapshot;
 };
+
+function* flushPipelineLogs(): Generator<AgentStreamEvent> {
+    for (const entry of drainPipelineLogQueue()) {
+        yield { type: "pipeline_log", entry };
+    }
+}
 
 /**
  * LangGraph 流式编排：全链路在 graph 内（含 Analyst）；
  * custom 流转发 thinking / assistant，由 pipeline 映射为 AgentStreamEvent。
  */
 export async function* runPipelineStream(history: DbChatTurn[], context: AgentPipelineContext): AsyncGenerator<AgentStreamEvent, AgentPipelineResult> {
+    const runStore = createPipelineRunStore();
+    pipelineRunStorage.enterWith(runStore);
+    yield* runPipelineStreamInner(history, context);
+}
+
+async function* runPipelineStreamInner(history: DbChatTurn[], context: AgentPipelineContext): AsyncGenerator<AgentStreamEvent, AgentPipelineResult> {
     ensureAgentsRuntime();
     const userQuestion = lastUserQuestion(history);
     const timing = new PipelineTimingTracker();
@@ -122,6 +145,7 @@ export async function* runPipelineStream(history: DbChatTurn[], context: AgentPi
         displayName: context.displayName,
         conversationId: context.conversationId,
     });
+    yield* flushPipelineLogs();
 
     const repeatAnswer = findRepeatAnswerInHistory(history, userQuestion);
     if (repeatAnswer) {
@@ -143,6 +167,7 @@ export async function* runPipelineStream(history: DbChatTurn[], context: AgentPi
             repeatQuestionHit: true,
         };
         logAgentOut("Pipeline", "出去", summarizePipelineOut(repeatState, repeatAnswer, pipelineTiming));
+        yield* flushPipelineLogs();
         yield* emitAssistant(repeatAnswer);
         return {
             answer: repeatAnswer,
@@ -157,11 +182,13 @@ export async function* runPipelineStream(history: DbChatTurn[], context: AgentPi
         history,
         userQuestion,
     });
+    yield* flushPipelineLogs();
     const graph = getCompiledPipelineGraph();
     const input = buildInitialState(history, context, userQuestion, memory.promptBlock, memory.intakeHistory, memory.userMemories);
     let finalState: PipelineGraphState = input;
     let activeStep: PipelineStepName | null = "intake";
     timing.markNodeStart("intake");
+    setPipelineActiveNode("intake");
     yield { type: "step", name: "intake", status: "running" };
     const stream = await graph.stream(input as Parameters<typeof graph.stream>[0], {
         streamMode: ["updates", "values", "custom"],
@@ -175,18 +202,21 @@ export async function* runPipelineStream(history: DbChatTurn[], context: AgentPi
     const finishStep = function* (name: PipelineStepName) {
         if (activeStep === name) {
             const durationMs = timing.markNodeEnd(name);
+            setPipelineActiveNode(null);
             yield {
                 type: "step",
                 name,
                 status: "done",
                 ...(durationMs !== undefined ? { durationMs } : {}),
             } as const;
+            yield* flushPipelineLogs();
             activeStep = null;
         }
     };
     const startStep = function* (name: PipelineStepName) {
         if (activeStep !== name) {
             timing.markNodeStart(name);
+            setPipelineActiveNode(name);
             yield { type: "step", name, status: "running" } as const;
             activeStep = name;
         }
@@ -217,6 +247,7 @@ export async function* runPipelineStream(history: DbChatTurn[], context: AgentPi
         }
         if (nodeName === "intake") {
             yield* finishStep("intake");
+            yield* flushPipelineLogs();
             if (finalState.error) {
                 yield { type: "error", message: finalState.error };
                 const answer = finalState.answer ??

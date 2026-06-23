@@ -2,6 +2,7 @@ import { HumanMessage, SystemMessage, } from "@langchain/core/messages";
 import { ChatOllama } from "@langchain/ollama";
 import { getAgentsConfig } from "@fambrain/agent-config";
 import { logAgentIn, logAgentOut } from "@fambrain/agent-shared/agent-log";
+import { recordLangChainOllamaUsage } from "@fambrain/agent-shared/pipeline-run-context";
 import { parseJsonObject, textFromResponse } from "@/agentflow/utils";
 import { parseContentSummaryResult } from "./schema";
 import { prompt, type ContentSummarizerInput, type ContentSummaryResult, } from "./prompt";
@@ -45,6 +46,11 @@ export const summarizeContent = async (input: ContentSummarizerInput): Promise<C
             .join("\n")),
     ]);
     const rawText = textFromResponse(response.content);
+    recordLangChainOllamaUsage(response, {
+        promptText: `${prompt}\n${body}`,
+        completionText: rawText,
+        node: "content_summarizer",
+    });
     const parsed = parseJsonObject<unknown>(rawText);
     const result = parseContentSummaryResult(parsed, fallback);
     logAgentOut("ContentSummarizer", "出去", {

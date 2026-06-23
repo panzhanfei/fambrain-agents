@@ -5,9 +5,11 @@
   "type": "module",
   "exports": {
     "./agent-log": "./src/agent-log.ts",
-    "./ollama-native-stream": "./src/ollama-native-stream.ts"
+    "./ollama-native-stream": "./src/ollama-native-stream.ts",
+    "./pipeline-run-context": "./src/pipeline-run-context.ts"
   },
   "dependencies": {
-    "@fambrain/agent-config": "workspace:*"
+    "@fambrain/agent-config": "workspace:*",
+    "@fambrain/agent-types": "workspace:*"
   }
 }

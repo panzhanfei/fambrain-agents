@@ -13,6 +13,7 @@ import {
   logAgentIn,
   logAgentOut,
 } from "@fambrain/agent-shared/agent-log";
+import { recordLangChainOllamaUsage } from "@fambrain/agent-shared/pipeline-run-context";
 
 import { parseJsonObject, textFromResponse } from "@/agentflow/utils";
 
@@ -126,6 +127,11 @@ export const completeFactCheck = async (
     ]);
 
     const text = textFromResponse(ai.content);
+    recordLangChainOllamaUsage(ai, {
+        promptText: `${prompt}\n${humanPayload}`,
+        completionText: text,
+        node: "fact_checker",
+    });
     const parsed = parseJsonObject<FactCheckerResult>(text);
     const beforeNormalize = parsed;
     const normalized = normalizeFactCheckerResult(parsed, fallback, input.retryCount);

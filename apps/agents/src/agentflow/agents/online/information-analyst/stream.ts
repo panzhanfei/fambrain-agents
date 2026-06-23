@@ -1,5 +1,6 @@
 import { getAgentsConfig } from "@fambrain/agent-config";
 import { logAgentIn, logAgentOut } from "@fambrain/agent-shared/agent-log";
+import { estimateTokenUsage, recordPipelineTokenUsage, } from "@fambrain/agent-shared/pipeline-run-context";
 import { streamOllamaNative } from "@fambrain/agent-shared/ollama-native-stream";
 import { parseJsonObject } from "@/agentflow/utils";
 import {
@@ -132,14 +133,34 @@ async function* streamSingleAnalyze(
             { role: "user", content: JSON.stringify(input, null, 2) },
         ];
         let fullContent = "";
-        for await (const chunk of streamOllamaNative({
+        const gen = streamOllamaNative({
             messages,
             think: false,
             model: ollama.models.intakeCoordinator,
-        })) {
+        });
+        while (true) {
+            const next = await gen.next();
+            if (next.done) {
+                const usage = next.value;
+                if (usage) {
+                    recordPipelineTokenUsage({
+                        prompt: usage.promptTokens,
+                        completion: usage.completionTokens,
+                    }, { node: "analyst" });
+                }
+                else {
+                    recordPipelineTokenUsage(estimateTokenUsage(JSON.stringify(messages), fullContent), {
+                        estimated: true,
+                        node: "analyst",
+                    });
+                }
+                break;
+            }
+            const chunk = next.value;
             if (chunk.kind === "thinking") {
                 yield { type: "thinking", text: chunk.fullText };
-            } else {
+            }
+            else {
                 fullContent = chunk.fullText;
                 yield { type: "assistant", text: chunk.fullText };
             }

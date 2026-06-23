@@ -112,7 +112,7 @@
 | 顺序 | 做什么 | 命令 / 入口 |
 |------|--------|-------------|
 | ~~**1**~~ | ~~**eval 与 Golden 对齐**（`memProbe` 接入 `eval:run`）~~ | ✅ 2026-06 |
-| **2** | **SLO 收尾**（Token 估算、结构化日志） | #18 · `pipeline_timing` 已有 |
+| **2** | **SLO 收尾**（Token 估算、结构化日志） | ✅ Token 汇总 + Web 运行日志面板（2026-06） |
 | **3** | **按需硬坑**（有 Web 现象再做） | P0-10 corpusUserId · D3-10 G3 path · P0-6 |
 | **4（最后）** | **离线 Agent 复盘笔记** + **第 11 天总复盘** | 见下文 [阶段末 · 复盘（最后做）](#阶段末--复盘最后做) |
 
@@ -231,9 +231,9 @@ GOLDEN_RUNS=3 pnpm --filter @fambrain/agents run golden:regression  # G1～G5b +
 | 项 | 做法 | 优先级 | 状态 |
 |----|------|--------|------|
 | **逐步耗时** | Pipeline 每节点记录 `latencyMs`（intake / retrieval / fact_checker / analyst） | P0 | 🔄 **2026-06-18** — `pipeline_timing` SSE + `step.done.durationMs` + 聊天 UI |
-| **Token 估算** | Analyst 流式结束后记录 prompt/ completion 长度或 Ollama 返回 | P1 | ⬜ |
-| **结构化日志** | 每轮一条 JSON：`conversationId`、`steps[]`、`cacheHit`、`issueCodes` | P0 | 🔄 `agent-log` Pipeline 出参含 `timing` |
-| **前端** | 引用列表 UI、完整调试面板 | P2 | 🔄 助手消息下「用时 / 首字 / 全链路」 |
+| **Token 估算** | Ollama `prompt_eval_count` / `eval_count` 汇总；无返回时字符估算 | P1 | ✅ **2026-06** — `timing.tokens` |
+| **结构化日志** | SSE `pipeline_log` + Web 顶栏「日志」面板（按 conversationId 分轮） | P0 | ✅ **2026-06** |
+| **前端** | 引用列表 UI、完整调试面板 | P2 | 🔄 助手消息下「用时 / Token / 节点耗时」+ 运行日志侧栏 |
 
 **坑点：** [#18 推理黑盒](./04-pitfalls.md) 待做项。
 
@@ -267,7 +267,7 @@ GOLDEN_RUNS=3 pnpm --filter @fambrain/agents run golden:regression  # G1～G5b +
 - [x] **D5-2**：同会话 G4 连续两问，第二次命中 L2 cache 或 L1 Intake 复用（两层 ✅ 2026-06-18）
 - [x] **R6-1**：列举型「哪几家公司」→ 4 家且同句再问一致 ← `verify:r6-no-cache` ✅ 2026-06
 - [x] **eval MVP**：`run-eval` 输出报告（通过率 + 指标 4 项）— 2026-06-17 12/12
-- [ ] **SLO 日志**：每轮至少含 step 耗时；可选 token（**step 耗时 + UI 展示 2026-06-18** ✅ 部分）
+- [x] **SLO 日志**：每轮 step 耗时 + Token 汇总 + Web 运行日志面板（2026-06）
 - [x] **R6-3**：同会话综合履历 → **编号子问**公司数不得 4→2 ← eval **`G-履历综合` 4/4** + `verify:r6-no-cache` ✅ 2026-06
 - [x] **P0-19～21**：Analyst plain-text + 项目/公司 enumeration 分流 ← `verify:analyst-empty-hits` · `verify:composite-route` ✅ 2026-06
 - [x] **P0-16**：跨会话 userFact（A 记 QQ → B 问）← `verify:user-fact` · Web 复测 ✅ 2026-06

@@ -6,7 +6,7 @@
 
 基于 **Next.js（App Router）** 的家庭协作型对话应用：注册登录、成员审核、会话与消息持久化，以及 **P0 多 Agent 聊天闭环**（意图路由 → 知识库检索 → 归纳回答，SSE 流式）。
 
-**当前进度（2026-06）：** 在线 LangGraph 多 Agent 闭环 ✅；`@fambrain/corpus` / `@fambrain/agent-memory` / `@fambrain/infra` 已抽包；**`pnpm dev` 一键起 Chroma + Redis + Web + Agents** ✅；**P0-15 composite 分槽 + L3/L4** ✅；**P0-18 年龄 + 多轮 cache** ✅；**R6 枚举/追问** ✅（`verify:r6-no-cache`）；**P0-19 / P0-20 Analyst 纯文本流 + 项目/公司 enumeration 分流** ✅；**P0-16 跨会话用户自述事实（QQ 等）** ✅；**Golden G1～G5b + GMem** ✅（`GOLDEN_RUNS=3` 连跑 **7/7×3**）；**DocParser 自动分类 + Web `/corpus` / 对话附件** ✅；**eval memProbe（GMem）** ✅；**SLO 耗时** 🔄 部分。详见 [路线图](./03-roadmap.md) · [流程图](./02-agent-flows.md) · [坑点 §2.5.6](./04-pitfalls.md#256-golden-回归-g1gmem--2026-06)。
+**当前进度（2026-06）：** 在线 LangGraph 多 Agent 闭环 ✅；`@fambrain/corpus` / `@fambrain/agent-memory` / `@fambrain/infra` 已抽包；**`pnpm dev` 一键起 Chroma + Redis + Web + Agents** ✅；**P0-15 composite 分槽 + L3/L4** ✅；**P0-18 年龄 + 多轮 cache** ✅；**R6 枚举/追问** ✅（`verify:r6-no-cache`）；**P0-19 / P0-20 Analyst 纯文本流 + 项目/公司 enumeration 分流** ✅；**P0-16 跨会话用户自述事实（QQ 等）** ✅；**Golden G1～G5b + GMem** ✅（`GOLDEN_RUNS=3` 连跑 **7/7×3**）；**DocParser 自动分类 + Web `/corpus` / 对话附件** ✅；**eval memProbe（GMem）** ✅；**SLO Token + Web 运行日志** ✅；**SLO 耗时** 🔄 部分。详见 [路线图](./03-roadmap.md) · [流程图](./02-agent-flows.md) · [坑点 §2.5.6](./04-pitfalls.md#256-golden-回归-g1gmem--2026-06)。
 
 ## 应用层技术栈
 

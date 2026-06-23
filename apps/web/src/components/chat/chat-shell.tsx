@@ -1,6 +1,13 @@
 "use client";
 import type { ConversationListItem } from "@fambrain/db";
-import type { PipelineStepName, PipelineTiming } from "@fambrain/agent-types";
+import type { PipelineLogEntry, PipelineStepName, PipelineTiming } from "@fambrain/agent-types";
+import { ConversationLogPanel } from "@/components/chat/conversation-log-panel";
+import {
+  createTurnLog,
+  upsertStep,
+  type ConversationLogBundle,
+  type ConversationTurnLog,
+} from "@/lib/chat/conversation-logs";
 import Link from "next/link";
 import {
   useCallback,
@@ -49,11 +56,20 @@ const shortConversationTitle = (title: string, maxLen = 18): string => {
   return `${first.slice(0, maxLen)}…`;
 };
 
+const formatTokenLine = (timing: MessageTiming): string | null => {
+  const tokens = timing.tokens;
+  if (!tokens || tokens.totalTokens <= 0)
+    return null;
+  const est = tokens.estimated ? "（估算）" : "";
+  return `Token ${tokens.totalTokens.toLocaleString()}${est}`;
+};
+
 const MessageTimingLine = ({ timing }: { timing: MessageTiming }) => {
   const [expanded, setExpanded] = useState(false);
   const nodeEntries = (
     Object.entries(timing.nodes ?? {}) as [PipelineStepName, number][]
   ).filter(([, ms]) => ms > 0);
+  const tokenLine = formatTokenLine(timing);
 
   return (
     <div className="mt-1.5 text-[11px] leading-snug text-[#9ca3af]">
@@ -66,6 +82,7 @@ const MessageTimingLine = ({ timing }: { timing: MessageTiming }) => {
         {timing.ttftMs != null
           ? ` · 首字 ${formatDuration(timing.ttftMs)}`
           : ""}
+        {tokenLine ? ` · ${tokenLine}` : ""}
         {timing.clientTotalMs != null
           ? ` · 全链路 ${formatDuration(timing.clientTotalMs)}`
           : ""}
@@ -83,6 +100,24 @@ const MessageTimingLine = ({ timing }: { timing: MessageTiming }) => {
     </div>
   );
 };
+
+const patchTurnLog = (
+  bundle: ConversationLogBundle,
+  turnId: string,
+  patch: (turn: ConversationTurnLog) => ConversationTurnLog
+): ConversationLogBundle => ({
+  ...bundle,
+  turns: bundle.turns.map((turn) => (turn.turnId === turnId ? patch(turn) : turn)),
+});
+
+const appendTurnToBundle = (
+  bundle: ConversationLogBundle,
+  turn: ConversationTurnLog
+): ConversationLogBundle => ({
+  ...bundle,
+  turns: [...bundle.turns, turn],
+});
+
 type PatchConversationOk = {
   id: string;
   title: string;
@@ -438,7 +473,13 @@ export const ChatShell = ({ initialConversations, viewer }: ChatShellProps) => {
   const [editSidebarTitleDraft, setEditSidebarTitleDraft] = useState("");
   const [uploadNotice, setUploadNotice] = useState<string | null>(null);
   const [uploadBusy, setUploadBusy] = useState(false);
+  const [logPanelOpen, setLogPanelOpen] = useState(false);
+  const [conversationLogsById, setConversationLogsById] = useState<
+    Map<string, ConversationLogBundle>
+  >(() => new Map());
   const attachInputRef = useRef<HTMLInputElement>(null);
+  const activeTurnIdRef = useRef<string | null>(null);
+  const [streamingTurnId, setStreamingTurnId] = useState<string | null>(null);
   const speechDraftBaseRef = useRef("");
   const appendSpeechToDraft = useCallback(
     (text: string) => {
@@ -745,6 +786,12 @@ export const ChatShell = ({ initialConversations, viewer }: ChatShellProps) => {
         ...prev,
         { id: tempUserId, role: "user", content: trimmed },
       ]);
+      const turnId = crypto.randomUUID();
+      activeTurnIdRef.current = turnId;
+      setStreamingTurnId(turnId);
+      updateLogsForConversation(convId, (bundle) =>
+        appendTurnToBundle(bundle, createTurnLog(turnId, trimmed))
+      );
       type MetaPayload = {
         userMessage: ChatMessage;
       };
@@ -785,7 +832,34 @@ export const ChatShell = ({ initialConversations, viewer }: ChatShellProps) => {
         return;
       }
       let streamFatal: string | null = null;
+      const applyTurnTiming = (timing: PipelineTiming, clientTotalMs?: number) => {
+        const tid = activeTurnIdRef.current;
+        if (!tid)
+          return;
+        patchActiveTurnLog(convId, tid, (turn) => ({
+          ...turn,
+          timing: {
+            ...timing,
+            ...(clientTotalMs != null ? { clientTotalMs } : {}),
+          },
+        }));
+      };
       await consumeSse(res.body, (event, payload) => {
+        if (
+          event === "pipeline_log" &&
+          payload &&
+          typeof payload === "object" &&
+          payload !== null
+        ) {
+          const entry = (payload as { entry?: PipelineLogEntry }).entry;
+          const tid = activeTurnIdRef.current;
+          if (entry && tid) {
+            patchActiveTurnLog(convId, tid, (turn) => ({
+              ...turn,
+              entries: [...turn.entries, entry],
+            }));
+          }
+        }
         if (
           event === "meta" &&
           payload &&
@@ -813,6 +887,7 @@ export const ChatShell = ({ initialConversations, viewer }: ChatShellProps) => {
           };
           if (p.timing && typeof p.timing.totalMs === "number") {
             latestTiming = p.timing;
+            applyTurnTiming(p.timing);
           }
           if (typeof p.answer === "string" && p.answer.trim()) {
             setStreamAnswerPreview(p.answer);
@@ -828,6 +903,7 @@ export const ChatShell = ({ initialConversations, viewer }: ChatShellProps) => {
           const t = (payload as { timing?: PipelineTiming }).timing;
           if (t && typeof t.totalMs === "number") {
             latestTiming = t;
+            applyTurnTiming(t);
           }
           releaseSendLock();
         }
@@ -840,7 +916,23 @@ export const ChatShell = ({ initialConversations, viewer }: ChatShellProps) => {
           const p = payload as {
             name?: string;
             status?: string;
+            durationMs?: number;
           };
+          const tid = activeTurnIdRef.current;
+          if (
+            tid &&
+            typeof p.name === "string" &&
+            (p.status === "running" || p.status === "done")
+          ) {
+            patchActiveTurnLog(convId, tid, (turn) => ({
+              ...turn,
+              steps: upsertStep(turn.steps, {
+                name: p.name as PipelineStepName,
+                status: p.status as "running" | "done",
+                durationMs: p.durationMs,
+              }),
+            }));
+          }
           if (p.status === "running" && typeof p.name === "string") {
             const labels: Record<string, string> = {
               intake: "理解问题…",
@@ -906,6 +998,18 @@ export const ChatShell = ({ initialConversations, viewer }: ChatShellProps) => {
           const timing: MessageTiming | undefined = serverTiming
             ? { ...serverTiming, clientTotalMs }
             : undefined;
+          if (serverTiming)
+            applyTurnTiming(serverTiming, clientTotalMs);
+          const tid = activeTurnIdRef.current;
+          if (tid) {
+            patchActiveTurnLog(convId, tid, (turn) => ({
+              ...turn,
+              status: "done",
+              timing: timing ?? turn.timing,
+            }));
+            activeTurnIdRef.current = null;
+            setStreamingTurnId(null);
+          }
           pendingUserTempIdRef.current = null;
           releaseSendLock();
           if (
@@ -944,6 +1048,16 @@ export const ChatShell = ({ initialConversations, viewer }: ChatShellProps) => {
               }
             ).error ?? (payload as { message?: string }).message;
           streamFatal = typeof e === "string" ? e : "模型出错";
+          const tid = activeTurnIdRef.current;
+          if (tid) {
+            patchActiveTurnLog(convId, tid, (turn) => ({
+              ...turn,
+              status: "error",
+              error: streamFatal ?? undefined,
+            }));
+            activeTurnIdRef.current = null;
+            setStreamingTurnId(null);
+          }
           releaseSendLock();
         }
       });
@@ -965,11 +1079,40 @@ export const ChatShell = ({ initialConversations, viewer }: ChatShellProps) => {
       setStreamAnswerPreview("");
       pendingUserTempIdRef.current = null;
     }
-  }, [activeConversationId, draft, loadConversations, releaseSendLock]);
+  }, [activeConversationId, draft, loadConversations, patchActiveTurnLog, releaseSendLock, updateLogsForConversation]);
   const applySuggestion = (text: string) => {
     setDraft(text);
     setSendError(null);
   };
+  const updateLogsForConversation = useCallback(
+    (
+      conversationId: string,
+      updater: (bundle: ConversationLogBundle) => ConversationLogBundle
+    ) => {
+      setConversationLogsById((prev) => {
+        const next = new Map(prev);
+        const existing = next.get(conversationId) ?? {
+          conversationId,
+          turns: [],
+        };
+        next.set(conversationId, updater(existing));
+        return next;
+      });
+    },
+    []
+  );
+  const patchActiveTurnLog = useCallback(
+    (
+      conversationId: string,
+      turnId: string,
+      patch: (turn: ConversationTurnLog) => ConversationTurnLog
+    ) => {
+      updateLogsForConversation(conversationId, (bundle) =>
+        patchTurnLog(bundle, turnId, patch)
+      );
+    },
+    [updateLogsForConversation]
+  );
   const handleAttachUpload = useCallback(async (fileList: FileList | null) => {
     if (!fileList?.length || uploadBusy || sendBusy)
       return;
@@ -987,6 +1130,13 @@ export const ChatShell = ({ initialConversations, viewer }: ChatShellProps) => {
     activeConversationId == null && !messagesLoading && messages.length === 0;
   /** 新开对话且尚未选定会话时的欢迎区 */
   const showingEmptyLanding = isFreshNewChatUi && !sendBusy;
+  const activeLogBundle =
+    activeConversationId != null
+      ? (conversationLogsById.get(activeConversationId) ?? {
+          conversationId: activeConversationId,
+          turns: [],
+        })
+      : null;
   /** 首条消息已发出、会话尚在创建或模型推理中 */
   const sendingFirstOnNewChat =
     activeConversationId == null && sendBusy && messages.length === 0;
@@ -1276,15 +1426,30 @@ export const ChatShell = ({ initialConversations, viewer }: ChatShellProps) => {
           </div>
 
           <div className="relative z-10 ml-auto flex shrink-0 items-center gap-1 text-[#9ca3af]">
-            <span className="hidden text-[13px] sm:inline">更多</span>
             <button
               type="button"
-              className="rounded-lg p-2 hover:bg-black/[0.04]"
+              onClick={() => setLogPanelOpen((v) => !v)}
+              disabled={!activeConversationId}
+              className={[
+                "rounded-lg px-2.5 py-1.5 text-[12px] font-medium transition-colors disabled:opacity-40",
+                logPanelOpen
+                  ? "bg-[#eef2ff] text-[#4f46e5]"
+                  : "text-[#6b7280] hover:bg-black/[0.04] hover:text-[#374151]",
+              ].join(" ")}
+              title="查看当前对话运行日志"
             >
-              ⋮
+              日志
             </button>
           </div>
         </header>
+
+        <ConversationLogPanel
+          open={logPanelOpen && activeConversationId != null}
+          onClose={() => setLogPanelOpen(false)}
+          conversationTitle={activeTitleRaw}
+          bundle={activeLogBundle}
+          liveTurnId={streamingTurnId}
+        />
 
         <div className="flex min-h-0 flex-1 flex-col">
           {sendingFirstOnNewChat ? (

@@ -23,10 +23,32 @@ export type PipelineStepName =
     | "analyst";
 
 /** Pipeline 各节点与端到端耗时（后端 performance.now 统计） */
+export type PipelineTokenUsage = {
+    promptTokens: number;
+    completionTokens: number;
+    totalTokens: number;
+    /** true 表示 Ollama 未返回计数，按字符估算 */
+    estimated?: boolean;
+    byNode?: Partial<Record<PipelineStepName, {
+        prompt: number;
+        completion: number;
+    }>>;
+};
+
 export type PipelineTiming = {
     totalMs: number;
     ttftMs: number | null;
     nodes: Partial<Record<PipelineStepName, number>>;
+    tokens?: PipelineTokenUsage;
+};
+
+export type PipelineLogEntry = {
+    id: string;
+    at: string;
+    agent: string;
+    direction: "in" | "out";
+    label: string;
+    preview?: string;
 };
 
 /** Orchestrator 向 HTTP 层推送的流式事件 */
@@ -53,6 +75,10 @@ export type AgentStreamEvent = {
     /** SLO：pipeline 结束前的耗时汇总 */
     type: "pipeline_timing";
     timing: PipelineTiming;
+} | {
+    /** 结构化 Agent 日志（Web 运行日志面板） */
+    type: "pipeline_log";
+    entry: PipelineLogEntry;
 };
 export type AgentPipelineResult = {
     answer: string;
