@@ -6,7 +6,7 @@
 
 基于 **Next.js（App Router）** 的家庭协作型对话应用：注册登录、成员审核、会话与消息持久化，以及 **P0 多 Agent 聊天闭环**（意图路由 → 知识库检索 → 归纳回答，SSE 流式）。
 
-**当前进度（2026-06）：** 在线 LangGraph 多 Agent 闭环 ✅；`@fambrain/corpus` / `@fambrain/agent-memory` / `@fambrain/infra` 已抽包；**`pnpm dev` 一键起 Chroma + Redis + Web + Agents** ✅；**P0-15 composite 分槽 + L3/L4** ✅；**P0-18 年龄 + 多轮 cache** ✅；**R6 枚举/追问** ✅（`verify:r6-no-cache`）；**P0-19 / P0-20 Analyst 纯文本流 + 项目/公司 enumeration 分流** ✅；**P0-16 跨会话用户自述事实（QQ 等）** ✅；**Golden G1～G5b + GMem** ✅（`GOLDEN_RUNS=3` 连跑 **7/7×3**）；**SLO 耗时** 🔄 部分。详见 [路线图](./03-roadmap.md) · [流程图](./02-agent-flows.md) · [坑点 §2.5.6](./04-pitfalls.md#256-golden-回归-g1gmem--2026-06)。
+**当前进度（2026-06）：** 在线 LangGraph 多 Agent 闭环 ✅；`@fambrain/corpus` / `@fambrain/agent-memory` / `@fambrain/infra` 已抽包；**`pnpm dev` 一键起 Chroma + Redis + Web + Agents** ✅；**P0-15 composite 分槽 + L3/L4** ✅；**P0-18 年龄 + 多轮 cache** ✅；**R6 枚举/追问** ✅（`verify:r6-no-cache`）；**P0-19 / P0-20 Analyst 纯文本流 + 项目/公司 enumeration 分流** ✅；**P0-16 跨会话用户自述事实（QQ 等）** ✅；**Golden G1～G5b + GMem** ✅（`GOLDEN_RUNS=3` 连跑 **7/7×3**）；**DocParser 自动分类 + Web `/corpus` / 对话附件** ✅；**eval memProbe（GMem）** ✅；**SLO 耗时** 🔄 部分。详见 [路线图](./03-roadmap.md) · [流程图](./02-agent-flows.md) · [坑点 §2.5.6](./04-pitfalls.md#256-golden-回归-g1gmem--2026-06)。
 
 ## 应用层技术栈
 
@@ -90,7 +90,7 @@ pnpm run dev
 | `pnpm run chroma:server` | 单独启动 Chroma（需 [uv](https://docs.astral.sh/uv/)，数据目录 `data/chroma/`） |
 | `pnpm run redis:server` | 单独 `docker compose up -d redis` |
 | `pnpm run index:corpus` | **知识入库师**：全量扫描 `corpus/*.md` → embed → 写入 Chroma（语料变更后手动重跑） |
-| `pnpm run parse:documents` | **文档解析师**：CLI 批量解析本地文件 → corpus md（可选入库） |
+| `pnpm run parse:documents -- <path...>` | **文档解析师**：CLI 批量解析（**自动分类**，无需 userId；语料归属见 `.env` `FAMBRAIN_CORPUS_USER_ID`） |
 | `cd apps/agents && pnpm run verify:memory` | Mem0 / LangMem 本地验证（LangMem 可不依赖 Mem0） |
 | `cd apps/agents && pnpm run verify:user-fact` | P0-16：Intake 结构化 remember/recall + Mem0 跨 conversationId |
 | `cd apps/agents && pnpm run verify:doc-parser` | DocParser 格式与路径单测 |
@@ -206,7 +206,7 @@ pnpm run dev
 | `maxAnalystHitsForProfile` | `information-analyst/analyst-recall-limits.ts` | Analyst hits 上限与 KM profile 对齐（P0-20） |
 | `clear-pipeline-cache.ts` | `apps/agents/scripts/` | 清空 L2/L3 Redis + 进程 memory；见 `.env.example` 三层 cache 开关 |
 | `diagnose-age-query.ts` | `apps/agents/scripts/` | 年龄单问：路由 + KM 检索 + 语料字段诊断（需 Chroma） |
-| `eval:run` | `apps/agents/scripts/eval/` | Eval MVP：golden + cache/profile 探测；`--profile-only` → **G-履历综合** 4 轮 |
-| `golden:regression` | `apps/agents/scripts/` | G1～G5 全链路回归（多遍稳定性） |
+| `eval:run` | `apps/agents/scripts/eval/` | Eval MVP：G1～G5b + KM + E2E + **memProbe/cacheProbe/profileProbe**；`--mem-only` → **GMem**；`--profile-only` → **G-履历综合** |
+| `golden:regression` | `apps/agents/scripts/` | **G1～G5b + GMem** 全链路回归（`GOLDEN_RUNS=3` 稳定性） |
 | `indexAllCorpora` | `agentflow/agents/offline/knowledge-indexer/` | 离线 corpus → Chroma |
 | `logAgentIn` / `logAgentOut` | `packages/agent-shared/src/agent-log.ts` | 调试：含 FactChecker 🔍、ContentOrganizer 📋 |

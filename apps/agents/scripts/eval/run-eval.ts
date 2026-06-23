@@ -3,6 +3,7 @@
  *
  *   pnpm --filter @fambrain/agents run eval:run
  *   pnpm --filter @fambrain/agents run eval:run -- --json-only
+ *   pnpm --filter @fambrain/agents run eval:run -- --mem-only
  *   EVAL_WRITE_REPORT=1 pnpm --filter @fambrain/agents run eval:run
  *
  * 需 Ollama + 语料；KM hybrid 指标建议 Chroma 在线。
@@ -59,9 +60,22 @@ type ProfileTurn = {
     expectRepeatHit?: boolean;
 };
 
+type MemTurn = {
+    conversationSuffix: string;
+    question: string;
+    assert: JsonAssert;
+};
+
 type GoldenFile = {
     version: number;
     cases: GoldenCase[];
+    memProbe?: {
+        id: string;
+        label: string;
+        qq?: string;
+        conversationIdPrefix?: string;
+        turns: MemTurn[];
+    };
     cacheProbe?: {
         id: string;
         label: string;
@@ -116,6 +130,7 @@ type EvalReport = {
     chromaUp: boolean;
     metrics: EvalMetrics;
     results: CaseResult[];
+    memProbe?: CaseResult[];
     cacheProbe?: CaseResult[];
     profileProbe?: CaseResult[];
 };
@@ -296,6 +311,34 @@ const evaluateCase = async (
     };
 };
 
+/** 对话 A 记事实 → 新 conversationId B 召回（对齐 Golden GMem / golden.json memProbe） */
+const runMemProbe = async (
+    probe: NonNullable<GoldenFile["memProbe"]>,
+    corpusUserId: string
+): Promise<CaseResult[]> => {
+    const prefix = probe.conversationIdPrefix ?? "eval-mem";
+    const stamp = Date.now();
+    const out: CaseResult[] = [];
+    for (const [i, turn] of probe.turns.entries()) {
+        const conversationId = `${prefix}-${turn.conversationSuffix}-${stamp}`;
+        const snap = await runPipelineCase(
+            corpusUserId,
+            turn.question,
+            conversationId
+        );
+        const issues = assertPipeline(snap, turn.assert);
+        out.push({
+            id: `${probe.id}-t${i + 1}`,
+            tier: "pipeline",
+            label: `${probe.label} · ${turn.conversationSuffix}`,
+            pass: issues.length === 0,
+            reason: issues.length === 0 ? "ok" : issues.join("; "),
+            latencyMs: snap.latencyMs,
+        });
+    }
+    return out;
+};
+
 const runCacheProbe = async (
     probe: NonNullable<GoldenFile["cacheProbe"]>,
     corpusUserId: string
@@ -467,6 +510,14 @@ const formatMarkdown = (report: EvalReport): string => {
             );
         }
     }
+    if (report.memProbe?.length) {
+        lines.push(``, `## Mem 探测（GMem / P0-16）`, ``);
+        for (const r of report.memProbe) {
+            lines.push(
+                `- ${r.id}: ${r.pass ? "✅" : "❌"} ${r.reason} (${r.latencyMs}ms)`
+            );
+        }
+    }
     if (report.profileProbe?.length) {
         lines.push(``, `## Profile 探测（R6-3）`, ``);
         for (const r of report.profileProbe) {
@@ -480,6 +531,7 @@ const formatMarkdown = (report: EvalReport): string => {
 
 const jsonOnly = process.argv.includes("--json-only");
 const profileOnly = process.argv.includes("--profile-only");
+const memOnly = process.argv.includes("--mem-only");
 
 const main = async (): Promise<void> => {
     bootstrapAgentsRuntime();
@@ -487,6 +539,22 @@ const main = async (): Promise<void> => {
     const golden = JSON.parse(raw) as GoldenFile;
     const corpusUserId = await resolveCorpusUserId();
     const chromaUp = await chromaReady();
+
+    if (memOnly) {
+        if (!golden.memProbe) {
+            throw new Error("golden.json 缺少 memProbe");
+        }
+        console.log(`eval:run — mem probe only (${golden.memProbe.id})`);
+        console.log(`corpusUserId=${corpusUserId} chroma=${chromaUp ? "up" : "down"}\n`);
+        const memProbe = await runMemProbe(golden.memProbe, corpusUserId);
+        for (const r of memProbe) {
+            console.log(`  ${r.id}: ${r.pass ? "PASS" : "FAIL"} — ${r.reason} (${r.latencyMs}ms)`);
+        }
+        const failed = memProbe.filter((r) => !r.pass);
+        if (failed.length > 0) process.exit(1);
+        console.log("\nMem probe 通过。");
+        return;
+    }
 
     if (profileOnly) {
         if (!golden.profileProbe) {
@@ -520,6 +588,10 @@ const main = async (): Promise<void> => {
         results.push(result);
     }
 
+    const memProbe = golden.memProbe
+        ? await runMemProbe(golden.memProbe, corpusUserId)
+        : [];
+
     const cacheProbe = golden.cacheProbe
         ? await runCacheProbe(golden.cacheProbe, corpusUserId)
         : [];
@@ -534,6 +606,7 @@ const main = async (): Promise<void> => {
         chromaUp,
         metrics: buildMetrics(results, cacheProbe),
         results,
+        memProbe: memProbe.length ? memProbe : undefined,
         cacheProbe: cacheProbe.length ? cacheProbe : undefined,
         profileProbe: profileProbe.length ? profileProbe : undefined,
     };
@@ -557,9 +630,10 @@ const main = async (): Promise<void> => {
     }
 
     const failed = results.filter((r) => !r.pass);
+    const memFailed = (report.memProbe ?? []).filter((r) => !r.pass);
     const profileFailed = (report.profileProbe ?? []).filter((r) => !r.pass);
     const coalesceBad = report.metrics.coalesceFailures > 0;
-    if (failed.length > 0 || profileFailed.length > 0 || coalesceBad) {
+    if (failed.length > 0 || memFailed.length > 0 || profileFailed.length > 0 || coalesceBad) {
         process.exit(1);
     }
     console.log("\nEval MVP 通过。");

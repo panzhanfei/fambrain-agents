@@ -334,35 +334,45 @@ flowchart TD
 
 ### 7. DocParser — 文档解析师（D7）✅
 
-**触发：** `POST /api/documents/upload`（Web 代理 → Agents `POST /documents/upload`）或 CLI `pnpm run parse:documents -- <userId> <files...>`。**不参与**在线聊天实时链路。
+**触发：**
 
-**职责：** 批量接收 PDF / Word / PPT / 图片 → 解析为 Markdown → 原件存 `vault/originals/uploads`，语料写 `corpus/<category>/imports/` → 可选触发 `KnowledgeIndexer` 全量入库。
+- **Web**：`/corpus` 语料导入页（拖放 / 选文件 / 选文件夹）或对话输入框 **+** 附件；`POST /api/documents/upload` → Agents `POST /documents/upload`
+- **CLI**：`pnpm run parse:documents -- <path...>`（**无需 userId**；语料归属见 `.env` `FAMBRAIN_CORPUS_USER_ID` 或 `data/doc/users/`）
+
+**不参与**在线聊天问答实时链路（上传后可选重建 Chroma，再被 KM 检索）。
+
+**职责：** 批量接收 PDF / Word / PPT / 图片 → 解析为 Markdown → 原件存 `vault/originals/uploads` → **按文件自动分类**写入 `corpus/<personal|projects|experience>/imports/` → 可选 `indexOneCorpusUser()`。用户只见摘要：「已导入 N 个文件：个人 X · 项目 Y · 经历 Z，向量库已更新」。
+
+**分类：** `resolveCorpusCategory()` — 路径含 `personal/projects/experience` 优先；否则按文件名 / 标题 / 正文关键词推断；默认 `personal`。CLI `--category` 可整批强制覆盖。
 
 **技术：** pdf-parse、officeparser、mammoth（docx）、Ollama vision OCR（图片）、p-limit 并发、Zod（结果 schema）、Pino。
 
 ```mermaid
 flowchart TD
-  API["POST /documents/upload<br/>multipart"] --> BATCH["ingestDocumentBatch()"]
+  WEB["Web /corpus 或对话 +"] --> API["POST /documents/upload"]
   CLI["pnpm run parse:documents"] --> BATCH
-  BATCH --> VAULT["saveOriginalToVault()"]
-  BATCH --> PARSE["parseDocumentBuffer()<br/>pdf / word / ppt / image"]
+  API --> BATCH["ingestDocumentBatch()"]
+  BATCH --> CLASS["resolveCorpusCategory() 每文件"]
+  CLASS --> VAULT["saveOriginalToVault()"]
+  BATCH --> PARSE["parseDocumentContent()"]
   PARSE --> MD["writeParsedToCorpus()"]
   MD --> IDX{indexAfter?}
   IDX -->|是| KI["indexOneCorpusUser()"]
-  IDX -->|否| DONE[返回 JSON 结果]
+  IDX -->|否| DONE[返回 categorySummary]
   KI --> DONE
 ```
 
 | 步骤 | 做什么 | 规则 | 文件 | 方法 |
 |------|--------|------|------|------|
-| 0 | HTTP / CLI | JWT 鉴权；字段 `corpusUserId` / `category` / `indexAfter` | `server/documents-upload.ts`, `scripts/parse-documents.ts` | `handleDocumentsUpload()` |
-| 1 | 存原件 | `users/<actor>/vault/originals/uploads/` | `write-corpus-md.ts` | `saveOriginalToVault()` |
-| 2 | 解析 | PDF→pdf-parse；Word→mammoth/docx+officeparser；PPT→officeparser；图片→Ollama OCR | `parse-file.ts`, `parse-image-ocr.ts` | `parseDocumentBuffer()` |
-| 3 | 写 md | `corpus/<experience\|projects\|personal>/imports/` | `write-corpus-md.ts` | `writeParsedToCorpus()` |
-| 4 | 入库 | 默认 `indexAfter=true` 触发全量 Chroma 重建 | `ingest-batch.ts` | `ingestDocumentBatch()` |
-| 5 | 并发 | `DOC_PARSE_CONCURRENCY`（默认 2） | `ingest-batch.ts` | `getDocParseConcurrency()` |
+| 0 | HTTP / CLI | JWT 鉴权（Web）；CLI 自动 `resolveDefaultIngestIdentity()` | `documents-upload.ts`, `parse-documents.ts` | `handleDocumentsUpload()` |
+| 1 | 分类 | 每文件独立；可选 `relativePaths`（文件夹上传） | `resolve-corpus-category.ts` | `resolveCorpusCategory()` |
+| 2 | 存原件 | `users/<actor>/vault/originals/uploads/` | `write-corpus-md.ts` | `saveOriginalToVault()` |
+| 3 | 解析 | PDF→pdf-parse；Word→mammoth/docx+officeparser；PPT→officeparser；图片→Ollama OCR | `parse-file.ts`, `parse-image-ocr.ts` | `parseDocumentContent()` |
+| 4 | 写 md | `corpus/<category>/imports/` | `write-corpus-md.ts` | `writeParsedToCorpus()` |
+| 5 | 入库 | 默认 `indexAfter=true`；Web 大批量客户端分批，末批才 index | `ingest-batch.ts` | `ingestDocumentBatch()` |
+| 6 | 并发 | `DOC_PARSE_CONCURRENCY`（默认 2） | `ingest-batch.ts` | `getDocParseConcurrency()` |
 
-**验证：** `pnpm run verify:doc-parser`（格式 / 路径 / Markdown 单测，不依赖 Ollama）。
+**验证：** `pnpm run verify:doc-parser`（格式 / 路径 / 分类单测，不依赖 Ollama）。
 
 ### 8. 记忆层 — Mem0 + LangMem（D8）✅
 

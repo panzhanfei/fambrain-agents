@@ -111,7 +111,7 @@
 
 | 顺序 | 做什么 | 命令 / 入口 |
 |------|--------|-------------|
-| **1** | **eval 与 Golden 对齐**（`memProbe` 等接入 `eval:run`） | `pnpm --filter @fambrain/agents run eval:run` |
+| ~~**1**~~ | ~~**eval 与 Golden 对齐**（`memProbe` 接入 `eval:run`）~~ | ✅ 2026-06 |
 | **2** | **SLO 收尾**（Token 估算、结构化日志） | #18 · `pipeline_timing` 已有 |
 | **3** | **按需硬坑**（有 Web 现象再做） | P0-10 corpusUserId · D3-10 G3 path · P0-6 |
 | **4（最后）** | **离线 Agent 复盘笔记** + **第 11 天总复盘** | 见下文 [阶段末 · 复盘（最后做）](#阶段末--复盘最后做) |
@@ -120,7 +120,7 @@
 
 | 阶段 | 日历 | 焦点 | 对应坑点 / 验收 |
 |------|------|------|-----------------|
-| Eval | **第 8～9 天** | 系统化 eval 脚本 + 报告 | A6 扩展 |
+| Eval | **第 8～9 天** | 系统化 eval 脚本 + 报告 | A6 扩展 ✅ **memProbe（GMem）** |
 | SLO / 日志 | **第 10 天** | 耗时、token、结构化记录 | #18 待做 |
 | Golden | **第 2～3 天** | G1～GMem 自动化 + 基线 | D10、A6 ✅ 7/7×3 |
 | Cache / KM / R6 | **第 4～14 天** | 见下各节 | 大部分 ✅ |
@@ -211,14 +211,17 @@ GOLDEN_RUNS=3 pnpm run golden:regression   # G1～G5b + GMem，稳定性 3 遍
 |------|------|
 | `scripts/eval/golden.json` | 问法 + 断言（path 含、hits≥N、coverage、无幻觉关键词） |
 | `scripts/eval/run-eval.ts` | 调 `runPipelineStream` 或 KM 单测，输出 JSON/Markdown 报告 |
+| **memProbe（GMem）** | `golden.json` **memProbe** ↔ `golden:regression` **GMem**（conv A 记 QQ → conv B 问） |
 | **最少 4 项指标** | Golden 通过率；candidates>0 但 hits=0 率（→0）；cache 命中率；端到端 `latencyMs` |
 
-**状态：** ✅ 2026-06-18 — cache 接入 `@fambrain/infra`；eval cache **1/1**；✅ **profileProbe `G-履历综合`**（4 轮：综合问 → 同问 L1 → 列举 → **编号子问 t4**）`--profile-only` **4/4**
+**状态：** ✅ 2026-06-18 — cache 接入 `@fambrain/infra`；eval cache **1/1**；✅ **profileProbe `G-履历综合`**（4 轮）`--profile-only` **4/4**；✅ **memProbe GMem** `runMemProbe` + `--mem-only`（2026-06）
 
 ```bash
 pnpm --filter @fambrain/agents run eval:run
+pnpm --filter @fambrain/agents run eval:run -- --mem-only      # 仅 GMem（~40s）
 pnpm --filter @fambrain/agents run eval:run -- --profile-only   # 仅 G-履历综合（~90s）
 EVAL_WRITE_REPORT=1 pnpm --filter @fambrain/agents run eval:run  # 写入 data/eval/reports/
+GOLDEN_RUNS=3 pnpm --filter @fambrain/agents run golden:regression  # G1～G5b + GMem，稳定性 3 遍
 ```
 
 **与 A6 关系：** eval 脚本即 A6 的自动化延伸。

@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "description": "Eval MVP：Pipeline Golden G1～G5 + KM 五问；断言见 run-eval.ts",
+  "description": "Eval MVP：Pipeline G1～G5b + KM + E2E + memProbe/cacheProbe/profileProbe；断言见 run-eval.ts",
   "cases": [
     {
       "id": "G1",
@@ -190,8 +190,9 @@
     }
   ],
   "memProbe": {
-    "id": "G-跨会话记忆",
-    "label": "P0-16 对话 A 记 QQ → 新对话 B 问",
+    "id": "GMem",
+    "label": "P0-16 对话 A 记 QQ → 新对话 B 问（对齐 golden:regression GMem）",
+    "conversationIdPrefix": "eval-mem",
     "qq": "734858469",
     "turns": [
       {

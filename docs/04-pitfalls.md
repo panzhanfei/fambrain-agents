@@ -219,7 +219,7 @@ pnpm --filter @fambrain/agents run verify:r6-no-cache   # R6-1：同句再问 4 
 | **P0** | KM 规则精排 + `personal/` 加权；复合问拆 subTasks | 赵一 / 潘展飞波动 | **Day 6～7** | `retrieve.ts`、Intake |
 | **P1** | 生成后 citation / 姓名校验（answer 人名 ∈ hits excerpt） | P0-15 | Day 8～9 eval | D5-3 |
 | **P1** | Golden 加 **G-个人档案**（非仅 G2 单句）；`GOLDEN_RUNS=3` 稳定性 | 回归验收 | Day 2～3 记坑后 **消坑后再收紧断言** | `golden-regression.ts` |
-| **P1** | Golden **GMem 跨会话记忆**：A 记 QQ → B 问 | P0-16 | 2026-06 ✅ | `golden-regression.ts` · `golden.json` memProbe |
+| **P1** | Golden **GMem 跨会话记忆**：A 记 QQ → B 问 | P0-16 | 2026-06 ✅ | `golden-regression.ts` GMem · `eval:run` **memProbe** |
 
 #### 验收标准（消坑后）
 
@@ -364,7 +364,9 @@ GOLDEN_RUNS=3 pnpm run golden:regression
 |----|------|------|------|
 | **G1** | 「你好」→ 走 retrieval，答「知识库未覆盖」 | P0-16 后 schema 要求 `userFactKey` 等；LLM 未输出 → **Zod parse 失败** → `defaultIntakeDecision("你好")` | `schema.ts`：`userFact*` 缺省 `preprocess → null`；`verify:agent-schemas` chitchat 无 userFact 字段用例 |
 | **G5b** | 上文城管平台，「那个项目呢？」答 E-HR 等无关项目 | Intake searchQuery 未补全上文实体 | `intake-coreference-guard.ts` **`enrichSearchQueryFromHistory`**；Golden 断言须含城管/React 等 |
-| **GMem** | — | — | `runCrossSessionMemCase`：conv A remember → conv B recall；`golden.json` **memProbe** |
+| **GMem** | — | — | **`golden:regression`** `runCrossSessionMemCase` + **`eval:run`** `memProbe`（conv A remember → conv B recall） |
+
+**Eval 与 Golden 对齐：** GMem 在 `golden-regression.ts` 为第 7 项；`golden.json` **memProbe** 由 `eval:run` 读取（`--mem-only` 快速单测）。二者测同一 P0-16 场景。
 
 ### 2.6 跨会话用户自述事实未召回（2026-06 · Web 联调）
 

@@ -261,7 +261,8 @@ Intake `queryType` 与上表 **同名枚举**（Wave C）。
 |------|------|
 | `pnpm --filter @fambrain/agents run verify:sparse-recall` | HY-01：BM25 sparse 三问（不需 Chroma） |
 | `pnpm --filter @fambrain/agents run verify:intake-coreference` | QU-02：指代 guard 单测 + Intake live |
-| `pnpm --filter @fambrain/agents run eval:run` | Eval MVP：G1～G5b + KM 五问 + E2E（四指标报告） |
+| `pnpm --filter @fambrain/agents run eval:run` | Eval MVP：G1～G5b + KM + E2E + mem/cache/profile 探测 |
+| `pnpm --filter @fambrain/agents run eval:run -- --mem-only` | 仅 **GMem**（memProbe，跨会话 QQ） |
 | `pnpm --filter @fambrain/agents run verify:recall-compare` | HY-07：三问 vector/sparse/RRF（**需 Chroma**） |
 | `pnpm --filter @fambrain/agents run verify:hybrid-recall` | HY-02～03：RRF 单测 + hybridRecall live |
 | `pnpm --filter @fambrain/agents run verify:km-retrieve` | 规则单测：pathBoost、rank、queryProfile |
