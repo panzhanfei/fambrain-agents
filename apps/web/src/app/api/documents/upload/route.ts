@@ -30,12 +30,16 @@ export const POST = async (req: Request) => {
     const incoming = await req.formData();
     const corpusUserId = incoming.get("corpusUserId")?.toString().trim() ||
         (await resolveCorpusUserId(session.userId));
-    const category = incoming.get("category")?.toString().trim() || "personal";
+    const category = incoming.get("category")?.toString().trim();
     const indexAfter = incoming.get("indexAfter")?.toString() ?? "true";
+    const relativePathsRaw = incoming.get("relativePaths")?.toString();
     const outbound = new FormData();
     outbound.set("corpusUserId", corpusUserId);
-    outbound.set("category", category);
+    if (category)
+        outbound.set("category", category);
     outbound.set("indexAfter", indexAfter);
+    if (relativePathsRaw)
+        outbound.set("relativePaths", relativePathsRaw);
     let fileCount = 0;
     for (const [key, value] of incoming.entries()) {
         if (!(value instanceof File) || value.size === 0)

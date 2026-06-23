@@ -2,19 +2,31 @@ import pLimit from "p-limit";
 import type { Logger } from "pino";
 import { indexOneCorpusUser } from "@/agentflow/agents/offline/knowledge-indexer";
 import type { CorpusCategory } from "@fambrain/corpus";
+import { ensureCorpusUserLayout } from "./ensure-corpus-layout";
 import { docParserLogger } from "./logger";
-import { buildOutputPaths, parseDocumentBuffer, } from "./parse-file";
-import { docParseBatchResultSchema, docParseFileResultSchema, type DocParseBatchResult, type DocParseFileResult, } from "./schema";
+import { buildOutputPaths, parseDocumentContent } from "./parse-file";
+import {
+    docParseBatchResultSchema,
+    docParseCategorySummarySchema,
+    docParseFileResultSchema,
+    type DocParseBatchResult,
+    type DocParseCategorySummary,
+    type DocParseFileResult,
+} from "./schema";
+import { resolveCorpusCategory } from "./resolve-corpus-category";
 import { detectDocFormat, isSupportedDocFile } from "./supported-formats";
 import { saveOriginalToVault, writeParsedToCorpus } from "./write-corpus-md";
 export type UploadFileInput = {
     fileName: string;
     buffer: Buffer;
+    /** 上传时的相对路径（如 webkitRelativePath），用于路径分类。 */
+    relativePath?: string;
 };
 export type IngestBatchOptions = {
     actorUserId: string;
     corpusUserId: string;
-    category: CorpusCategory;
+    /** 整批强制分类；省略则按文件自动推断。 */
+    category?: CorpusCategory;
     indexAfter?: boolean;
     logger?: Logger;
 };
@@ -29,9 +41,17 @@ const clampInt = (raw: string | undefined, fallback: number, max: number): numbe
 export const getDocParseConcurrency = (): number => {
     return clampInt(process.env.DOC_PARSE_CONCURRENCY, 2, 8);
 };
+const emptyCategorySummary = (): DocParseCategorySummary => ({
+    personal: 0,
+    projects: 0,
+    experience: 0,
+});
+const bumpCategorySummary = (summary: DocParseCategorySummary, category: CorpusCategory): void => {
+    summary[category] += 1;
+};
 const ingestOneFile = async (input: UploadFileInput, options: IngestBatchOptions): Promise<DocParseFileResult> => {
-    const { fileName, buffer } = input;
-    const { actorUserId, corpusUserId, category } = options;
+    const { fileName, buffer, relativePath } = input;
+    const { actorUserId, corpusUserId, category: forcedCategory } = options;
     if (!isSupportedDocFile(fileName)) {
         return docParseFileResultSchema.parse({
             fileName,
@@ -41,17 +61,29 @@ const ingestOneFile = async (input: UploadFileInput, options: IngestBatchOptions
         });
     }
     try {
-        const { vaultRelativePath, corpusRelativePath, mdFileName } = buildOutputPaths(actorUserId, corpusUserId, category, fileName);
-        await saveOriginalToVault(actorUserId, fileName, buffer);
-        const parsed = await parseDocumentBuffer(buffer, fileName, {
+        const vaultRelativePath = await saveOriginalToVault(actorUserId, fileName, buffer);
+        const content = await parseDocumentContent(buffer, fileName);
+        const category =
+            forcedCategory ??
+            resolveCorpusCategory({
+                fileName,
+                relativePath,
+                title: content.title,
+                textSnippet: content.text,
+            });
+        const { corpusRelativePath, mdFileName } = buildOutputPaths(actorUserId, corpusUserId, category, fileName);
+        const parsed = {
+            fileName,
+            ...content,
             vaultRelativePath,
             corpusRelativePath,
-        });
+        };
         const writtenPath = await writeParsedToCorpus(corpusUserId, category, mdFileName, parsed);
         return docParseFileResultSchema.parse({
             fileName,
             ok: true,
             format: detectDocFormat(fileName),
+            category,
             vaultRelativePath,
             corpusRelativePath: writtenPath,
             title: parsed.title,
@@ -69,21 +101,27 @@ const ingestOneFile = async (input: UploadFileInput, options: IngestBatchOptions
     }
 };
 export const ingestDocumentBatch = async (files: UploadFileInput[], options: IngestBatchOptions): Promise<DocParseBatchResult> => {
-    const { actorUserId, corpusUserId, category, indexAfter = true, logger } = options;
+    const { actorUserId, corpusUserId, indexAfter = true, logger } = options;
     if (files.length === 0) {
         throw new Error("至少上传 1 个文件");
     }
+    await ensureCorpusUserLayout(corpusUserId, actorUserId);
     const limit = pLimit(getDocParseConcurrency());
     logger?.info({
         fileCount: files.length,
         actorUserId,
         corpusUserId,
-        category,
+        forcedCategory: options.category,
         concurrency: getDocParseConcurrency(),
     }, "doc parse batch started");
     const results = await Promise.all(files.map((file) => limit(() => ingestOneFile(file, options))));
+    const categorySummary = emptyCategorySummary();
+    for (const result of results) {
+        if (result.ok && result.category)
+            bumpCategorySummary(categorySummary, result.category);
+    }
     const successCount = results.filter((r) => r.ok).length;
-    logger?.info({ successCount, total: results.length }, "doc parse batch files done");
+    logger?.info({ successCount, total: results.length, categorySummary }, "doc parse batch files done");
     let indexResult: {
         fileCount: number;
         chunkCount: number;
@@ -98,7 +136,7 @@ export const ingestDocumentBatch = async (files: UploadFileInput[], options: Ing
     return docParseBatchResultSchema.parse({
         corpusUserId,
         actorUserId,
-        category,
+        categorySummary: docParseCategorySummarySchema.parse(categorySummary),
         indexed,
         indexResult,
         files: results,

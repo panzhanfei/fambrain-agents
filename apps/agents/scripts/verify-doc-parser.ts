@@ -4,7 +4,7 @@
  *   pnpm run verify:doc-parser
  */
 import assert from "node:assert/strict";
-import { buildCorpusMarkdown, buildOutputPaths, detectDocFormat, getDocParseConcurrency, isSupportedDocFile, slugifyBaseName, } from "../src/agentflow/agents/offline/doc-parser/index";
+import { buildCorpusMarkdown, buildOutputPaths, detectDocFormat, getDocParseConcurrency, isSupportedDocFile, resolveCorpusCategory, slugifyBaseName, } from "../src/agentflow/agents/offline/doc-parser/index";
 const testFormats = () => {
     assert.equal(detectDocFormat("report.pdf"), "pdf");
     assert.equal(detectDocFormat("notes.docx"), "word");
@@ -42,12 +42,28 @@ const testConcurrencyDefault = () => {
     assert.equal(getDocParseConcurrency(), 2);
     process.env.DOC_PARSE_CONCURRENCY = prev;
 };
+const testCategoryResolution = () => {
+    assert.equal(resolveCorpusCategory({
+        fileName: "foo.pdf",
+        relativePath: "batch/projects/platform-v2/spec.pdf",
+    }), "projects");
+    assert.equal(resolveCorpusCategory({
+        fileName: "resume.pdf",
+        title: "张三个人简历",
+    }), "personal");
+    assert.equal(resolveCorpusCategory({
+        fileName: "work.pdf",
+        textSnippet: "2019-2023 在某公司担任高级工程师",
+    }), "experience");
+    assert.equal(resolveCorpusCategory({ fileName: "notes.pdf" }), "personal");
+};
 const main = () => {
     testFormats();
     testSlug();
     testPaths();
     testMarkdown();
     testConcurrencyDefault();
+    testCategoryResolution();
     console.log("doc-parser 单测通过。");
 };
 main();

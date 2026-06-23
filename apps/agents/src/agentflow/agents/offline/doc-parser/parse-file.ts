@@ -33,10 +33,11 @@ const parseWithOfficeParser = async (buffer: Buffer, _fileName: string): Promise
         return raw.trim();
     return ast.toText().trim();
 };
-export const parseDocumentBuffer = async (buffer: Buffer, fileName: string, paths: {
-    vaultRelativePath: string;
-    corpusRelativePath: string;
-}): Promise<ParsedDocument> => {
+export const parseDocumentContent = async (buffer: Buffer, fileName: string): Promise<{
+    format: ParsedDocument["format"];
+    title: string;
+    text: string;
+}> => {
     const format = detectDocFormat(fileName);
     const title = titleFromFileName(fileName);
     if (format === "unsupported") {
@@ -75,10 +76,19 @@ export const parseDocumentBuffer = async (buffer: Buffer, fileName: string, path
         throw new Error(`未能从 ${fileName} 提取有效文本`);
     }
     return {
-        fileName,
         format,
         title,
         text: text.trim(),
+    };
+};
+export const parseDocumentBuffer = async (buffer: Buffer, fileName: string, paths: {
+    vaultRelativePath: string;
+    corpusRelativePath: string;
+}): Promise<ParsedDocument> => {
+    const content = await parseDocumentContent(buffer, fileName);
+    return {
+        fileName,
+        ...content,
         vaultRelativePath: paths.vaultRelativePath,
         corpusRelativePath: paths.corpusRelativePath,
     };

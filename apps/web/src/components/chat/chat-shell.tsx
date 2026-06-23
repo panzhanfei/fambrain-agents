@@ -11,6 +11,7 @@ import {
 } from "react";
 import { flushSync } from "react-dom";
 import { useSpeechInput } from "@/components/chat/use-speech-input";
+import { filesFromInput, uploadDocuments } from "@/lib/documents/upload-documents";
 
 type MessageTiming = PipelineTiming & {
   clientTotalMs?: number;
@@ -435,6 +436,9 @@ export const ChatShell = ({ initialConversations, viewer }: ChatShellProps) => {
   const [streamAnswerPreview, setStreamAnswerPreview] = useState("");
   const [editingSidebarId, setEditingSidebarId] = useState<string | null>(null);
   const [editSidebarTitleDraft, setEditSidebarTitleDraft] = useState("");
+  const [uploadNotice, setUploadNotice] = useState<string | null>(null);
+  const [uploadBusy, setUploadBusy] = useState(false);
+  const attachInputRef = useRef<HTMLInputElement>(null);
   const speechDraftBaseRef = useRef("");
   const appendSpeechToDraft = useCallback(
     (text: string) => {
@@ -966,6 +970,19 @@ export const ChatShell = ({ initialConversations, viewer }: ChatShellProps) => {
     setDraft(text);
     setSendError(null);
   };
+  const handleAttachUpload = useCallback(async (fileList: FileList | null) => {
+    if (!fileList?.length || uploadBusy || sendBusy)
+      return;
+    setUploadBusy(true);
+    setUploadNotice(null);
+    const outcome = await uploadDocuments({ files: filesFromInput(fileList) });
+    setUploadBusy(false);
+    if (!outcome.ok) {
+      setUploadNotice(outcome.error);
+      return;
+    }
+    setUploadNotice(outcome.summary);
+  }, [sendBusy, uploadBusy]);
   const isFreshNewChatUi =
     activeConversationId == null && !messagesLoading && messages.length === 0;
   /** 新开对话且尚未选定会话时的欢迎区 */
@@ -1162,6 +1179,12 @@ export const ChatShell = ({ initialConversations, viewer }: ChatShellProps) => {
         </ul>
 
         <div className="mt-auto border-t border-[#eceeef] p-3">
+          <Link
+            href="/corpus"
+            className="mb-2 block rounded-lg px-2 py-1.5 text-center text-[12px] font-medium text-[#4f46e5] hover:bg-[#eef2ff]"
+          >
+            语料导入
+          </Link>
           <Link
             href="/me"
             className="flex items-center gap-2 rounded-lg px-2 py-1.5 text-[13px] text-[#6b7280] transition-colors hover:bg-black/[0.04] hover:text-[#374151]"
@@ -1368,6 +1391,18 @@ export const ChatShell = ({ initialConversations, viewer }: ChatShellProps) => {
                   {sendError}
                 </div>
               ) : null}
+              {uploadNotice ? (
+                <div
+                  className={[
+                    "border-b px-4 py-2 text-[13px]",
+                    uploadNotice.includes("失败") || uploadNotice.startsWith("请")
+                      ? "border-red-100 text-red-600"
+                      : "border-emerald-100 text-emerald-800",
+                  ].join(" ")}
+                >
+                  {uploadNotice}
+                </div>
+              ) : null}
               {speech.error ? (
                 <div className="border-b border-amber-100 px-4 py-2 text-[13px] text-amber-800">
                   {speech.error}
@@ -1405,10 +1440,24 @@ export const ChatShell = ({ initialConversations, viewer }: ChatShellProps) => {
                 }}
               />
               <div className="flex items-center gap-2 border-t border-black/[0.04] px-3 py-2">
+                <input
+                  ref={attachInputRef}
+                  type="file"
+                  multiple
+                  className="hidden"
+                  accept=".pdf,.doc,.docx,.ppt,.pptx,.png,.jpg,.jpeg,.webp,.gif,.bmp,.tiff,.tif"
+                  onChange={(e) => {
+                    void handleAttachUpload(e.target.files);
+                    e.target.value = "";
+                  }}
+                />
                 <button
                   type="button"
-                  className="rounded-lg p-2 text-[#9ca3af] hover:bg-black/[0.04] hover:text-[#374151]"
-                  aria-label="添加"
+                  disabled={uploadBusy || sendBusy}
+                  onClick={() => attachInputRef.current?.click()}
+                  className="rounded-lg p-2 text-[#9ca3af] hover:bg-black/[0.04] hover:text-[#374151] disabled:opacity-40"
+                  aria-label="上传文档到知识库"
+                  title="上传文档到知识库（自动分类）"
                 >
                   <IconPlus className="h-5 w-5" />
                 </button>

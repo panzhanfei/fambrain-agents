@@ -21,6 +21,7 @@ export const docParseFileResultSchema = z.object({
     fileName: z.string().min(1),
     ok: z.boolean(),
     format: docParseFormatSchema.optional(),
+    category: docParseCategorySchema.optional(),
     vaultRelativePath: z.string().optional(),
     corpusRelativePath: z.string().optional(),
     title: z.string().optional(),
@@ -28,10 +29,16 @@ export const docParseFileResultSchema = z.object({
     error: z.string().optional(),
 });
 export type DocParseFileResult = z.infer<typeof docParseFileResultSchema>;
+export const docParseCategorySummarySchema = z.object({
+    personal: z.number().int().min(0),
+    projects: z.number().int().min(0),
+    experience: z.number().int().min(0),
+});
+export type DocParseCategorySummary = z.infer<typeof docParseCategorySummarySchema>;
 export const docParseBatchResultSchema = z.object({
     corpusUserId: z.string().min(1),
     actorUserId: z.string().min(1),
-    category: docParseCategorySchema,
+    categorySummary: docParseCategorySummarySchema,
     indexed: z.boolean(),
     indexResult: z
         .object({
@@ -43,8 +50,11 @@ export const docParseBatchResultSchema = z.object({
 });
 export type DocParseBatchResult = z.infer<typeof docParseBatchResultSchema>;
 export const docUploadFieldSchema = z.object({
-    corpusUserId: z.string().min(1),
-    category: docParseCategorySchema.default("personal"),
+    corpusUserId: z.string().min(1).optional(),
+    /** 若指定则整批强制归入该分类；省略则按文件自动分类。 */
+    category: docParseCategorySchema.optional(),
+    /** JSON 字符串数组，与 files 顺序对齐（webkitRelativePath）。 */
+    relativePaths: z.string().optional(),
     indexAfter: z
         .union([z.boolean(), z.string()])
         .optional()
