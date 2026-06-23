@@ -2,7 +2,7 @@
 
 基于 **Next.js（App Router）** 的家庭协作型对话应用：注册登录、成员审核、会话持久化，以及 **P0 多 Agent 聊天闭环**（意图路由 → 知识库检索 → 归纳回答，SSE 流式）。
 
-**当前进度：** 离线入库 ✅；在线 LangGraph ✅；**D5-2 三层 cache** + **`pnpm dev` 一键启动** ✅；**Golden G1～G5b + GMem** ✅；**eval MVP 13/13** ✅；**LangChain StructuredTool 层** ✅；**LangSmith  tracing** ✅；**自主学习 Phase A–D** ✅；**SLO Token + 运行日志** ✅。详见 [路线图](docs/03-roadmap.md) · [坑点](docs/04-pitfalls.md)。
+**当前进度：** 离线入库 ✅；在线 LangGraph ✅；Golden / eval ✅；LangChain Tool + LangSmith ✅；Learning A–D ✅。**下一步：** [12 日冲刺 — 治理 / OpenAI 可配置 / 上云](docs/06-twelve-day-sprint.md)。详见 [路线图](docs/03-roadmap.md) · [坑点](docs/04-pitfalls.md)。
 
 ## 快速开始
 
@@ -29,6 +29,7 @@ pnpm run dev    # 一键：Chroma + Redis + Web + Agents
 | [02 · Agent 流程图](docs/02-agent-flows.md) | 全链路 / 在线编排 / 单 Agent 实现、SSE 契约 |
 | [03 · 版本规划与进度](docs/03-roadmap.md) | P0/P1/P2、十日排期、17 项技术、验收表 |
 | [04 · 坑点清单](docs/04-pitfalls.md) | 行业常见坑 + 本项目 P0 踩坑 + 调试 checklist |
+| [06 · 12 日冲刺计划](docs/06-twelve-day-sprint.md) | 复盘 / SLA / eval / OpenAI 可配置 / 上云 / 压测 |
 
 ## 常用命令
 
