@@ -1,12 +1,15 @@
 import path from "node:path";
 import { findMonorepoRoot } from "./repo-root";
+
 /** 知识库根目录（monorepo 内 `data/doc`；测试可设 `FAMBRAIN_DOC_ROOT_OVERRIDE`） */
-export const DOC_ROOT = (() => {
+export const getDocRoot = (): string => {
     const override = process.env.FAMBRAIN_DOC_ROOT_OVERRIDE?.trim();
-    if (override)
-        return path.resolve(override);
+    if (override) return path.resolve(override);
     return path.join(findMonorepoRoot(), "data/doc");
-})();
+};
+
+/** @deprecated 优先使用 getDocRoot()（支持测试 override 动态切换） */
+export const DOC_ROOT = getDocRoot();
 export const DOC_USERS_DIR = "users";
 /** Agent 检索用的 Markdown 语料（可授权共享） */
 export const CORPUS_DIR = "corpus";
@@ -27,7 +30,7 @@ export type CorpusScanRoot = {
     layout: "corpus" | "user-flat" | "legacy-flat";
 };
 export const getUserHome = (userId: string): string => {
-    return path.join(DOC_ROOT, DOC_USERS_DIR, userId);
+    return path.join(getDocRoot(), DOC_USERS_DIR, userId);
 };
 export const getUserCorpusRoot = (corpusUserId: string): string => {
     return path.join(getUserHome(corpusUserId), CORPUS_DIR);
@@ -64,8 +67,8 @@ export const listCorpusScanRoots = async (corpusUserId: string, listMarkdownFile
     if (await corpusHasMarkdown(userFlat, listMarkdownFiles)) {
         return [{ root: userFlat, layout: "user-flat" }];
     }
-    if (await corpusHasMarkdown(DOC_ROOT, listMarkdownFiles)) {
-        return [{ root: DOC_ROOT, layout: "legacy-flat" }];
+    if (await corpusHasMarkdown(getDocRoot(), listMarkdownFiles)) {
+        return [{ root: getDocRoot(), layout: "legacy-flat" }];
     }
     return [{ root: corpusRoot, layout: "corpus" }];
 };

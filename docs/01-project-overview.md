@@ -6,7 +6,7 @@
 
 基于 **Next.js（App Router）** 的家庭协作型对话应用：注册登录、成员审核、会话与消息持久化，以及 **P0 多 Agent 聊天闭环**（意图路由 → 知识库检索 → 归纳回答，SSE 流式）。
 
-**当前进度（2026-06）：** 在线 LangGraph 多 Agent 闭环 ✅；`@fambrain/corpus` / `@fambrain/agent-memory` / `@fambrain/infra` 已抽包；**`pnpm dev` 一键起 Chroma + Redis + Web + Agents** ✅；**P0-15 composite 分槽 + L3/L4** ✅；**P0-18 年龄 + 多轮 cache** ✅；**R6 枚举/追问** ✅（`verify:r6-no-cache`）；**P0-19 / P0-20 Analyst 纯文本流 + 项目/公司 enumeration 分流** ✅；**P0-16 跨会话用户自述事实（QQ 等）** ✅；**Golden G1～G5b + GMem** ✅（`GOLDEN_RUNS=3` 连跑 **7/7×3**）；**eval MVP 13/13 + profileProbe + memProbe** ✅；**自主学习 Phase A–D**（HITL pending / 高置信 Mem0+corpus / `corpus/learned/` / 检索反馈 rerank）✅；**DocParser 自动分类 + Web `/corpus` / 对话附件** ✅；**Web `/learning` 审核页** ✅；**SLO Token + Web 运行日志** ✅；**SLO 耗时** 🔄 部分。详见 [路线图](./03-roadmap.md) · [流程图](./02-agent-flows.md) · [坑点 §2.5.6](./04-pitfalls.md#256-golden-回归-g1gmem--2026-06)。
+**当前进度（2026-06）：** 在线 LangGraph 多 Agent 闭环 ✅；`@fambrain/corpus` / `@fambrain/agent-memory` / `@fambrain/infra` 已抽包；**`pnpm dev` 一键起 Chroma + Redis + Web + Agents** ✅；**P0-15 composite 分槽 + L3/L4** ✅；**R6 / Golden / eval 13/13** ✅；**LangChain StructuredTool 层**（5 工具）✅；**LangSmith tracing**（配 API Key 即用）✅；**Learning Phase A–D** ✅；**SLO Token + Web 运行日志** ✅。详见 [路线图](./03-roadmap.md) · [流程图](./02-agent-flows.md)。
 
 ## 应用层技术栈
 
@@ -27,7 +27,8 @@
 | 技术 | 当前用途 |
 |------|----------|
 | Ollama | 本地 chat + embed（`ChatOllama`、流式 thinking） |
-| LangChain | Intake / FactChecker / Analyst / Organizer 模型调用（`SystemMessage` / `HumanMessage`）；**KM 在线检索不调 LLM** |
+| LangChain | Intake / FactChecker / Analyst / Organizer 模型调用（`SystemMessage` / `HumanMessage`）；**StructuredTool** 封装检索/Mem0/vault/摘要（`agentflow/tools/`）；**KM 在线检索不调 LLM** |
+| LangSmith | LangGraph run trace + 节点 metadata | 配 `LANGSMITH_API_KEY` 后自动上报 [smith.langchain.com](https://smith.langchain.com)；`/health` 可见状态 |
 | LlamaIndex | 离线 `VectorStoreIndex` 入库；在线检索走 `@fambrain/corpus` `searchCorpusVectors` |
 | ChromaDB | 按 `corpusUserId` 分 collection；离线入库 + **在线检索** |
 | Zod | 注册/会话 + 入库 metadata；**在线 Agent JSON schema**（Intake / KM / FactChecker / Analyst / Organizer） |
@@ -93,6 +94,7 @@ pnpm run dev
 | `pnpm run parse:documents -- <path...>` | **文档解析师**：CLI 批量解析（**自动分类**，无需 userId；语料归属见 `.env` `FAMBRAIN_CORPUS_USER_ID`） |
 | `cd apps/agents && pnpm run verify:memory` | Mem0 / LangMem 本地验证（LangMem 可不依赖 Mem0） |
 | `cd apps/agents && pnpm run verify:learning-extract` | 自主学习候选抽取单测（无 Ollama） |
+| `cd apps/agents && pnpm run verify:langchain-tools` | LangChain StructuredTool 注册 + invoke 冒烟 |
 | `cd apps/agents && pnpm run eval:run` | Eval MVP：G1～G5b + KM + E2E + memProbe/profileProbe |
 | `cd apps/agents && pnpm run verify:user-fact` | P0-16：Intake 结构化 remember/recall + Mem0 跨 conversationId |
 | `cd apps/agents && pnpm run verify:doc-parser` | DocParser 格式与路径单测 |
@@ -148,6 +150,9 @@ pnpm run dev
 | `LANGMEM_SESSIONS_DIR` | 否 | LangMem 会话摘要目录，默认 `data/memory/sessions` |
 | `LANGMEM_SUMMARIZE_AFTER_TURNS` | 否 | 满 N 轮后触发会话摘要，默认 `8` |
 | `LANGMEM_KEEP_RECENT_TURNS` | 否 | 摘要后保留最近轮数，默认 `4` |
+| `LANGSMITH_API_KEY` | 否 | 配置后启用 LangSmith tracing（亦支持 `LANGCHAIN_API_KEY`） |
+| `LANGSMITH_PROJECT` | 否 | 项目名，默认 `fambrain` |
+| `LANGSMITH_TRACING` | 否 | 设为 `false` 可关闭（即使已配 Key） |
 | `LEARNING_PIPELINE_ENABLED` | 否 | 自主学习管道总开关，默认 `true` |
 | `LEARNING_AUTO_MEM0_MIN_CONFIDENCE` | 否 | 高置信自动写入 Mem0，默认 `0.85` |
 | `LEARNING_AUTO_CORPUS_MIN_CONFIDENCE` | 否 | 高置信自动写入 `corpus/learned/` 并 reindex，默认 `0.92` |
@@ -215,6 +220,9 @@ pnpm run dev
 | `eval:run` | `apps/agents/scripts/eval/` | Eval MVP：G1～G5b + KM + E2E + **memProbe/cacheProbe/profileProbe**；`--mem-only` → **GMem**；`--profile-only` → **G-履历综合** |
 | `verify:learning-extract` | `apps/agents/scripts/` | 自主学习候选抽取（Phase A 前置） |
 | `verify-test-env.ts` | `apps/agents/scripts/` | verify 脚本内覆盖 `.env` cache 开关（L1/L2）；**勿**在生产入口引用 |
+| `createFambrainTools` | `agentflow/tools/` | LangChain **StructuredTool**：`retrieve_corpus` / `remember_user_fact` / `recall_user_fact` / `list_vault_files` / `summarize_text` |
+| `configureLangSmithTracing` | `packages/agent-config/langsmith.ts` | 启动时启用 tracing；`stream.ts` 附加 conversationId 等 metadata |
+| `verify:langchain-tools` | `apps/agents/scripts/` | Tool 注册 + retrieve / Mem0 / vault invoke 冒烟 |
 | `persistLearningAfterTurn` | `agentflow/agents/offline/learning/` | 每轮结束后按置信度路由：Mem0 / `corpus/learned/` / `PendingMemoryFact` |
 | Web `/learning` | `apps/web/src/app/(main)/learning/` | 待审核事实 + 已写入 learned 文档列表 |
 | `golden:regression` | `apps/agents/scripts/` | **G1～G5b + GMem** 全链路回归（`GOLDEN_RUNS=3` 稳定性） |

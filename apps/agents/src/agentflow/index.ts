@@ -6,6 +6,7 @@ export { ingestDocumentBatch, docParserLogger, detectDocFormat, isSupportedDocFi
 export { persistLearningAfterTurn, promoteLearnedCandidate, extractLearnedCandidates, getLearningConfig, type LearnedCandidate, } from "@/agentflow/agents/offline/learning";
 export { summarizeContent, summarizeMarkdownFile, parseContentSummaryResult, contentSummaryResultSchema, type ContentSummarizerInput, type ContentSummaryResult, } from "@/agentflow/agents/online/content-summarizer";
 export { listVaultFiles, recallKeywordRetrieve, type VaultFileEntry, type RecallKeywordHit, } from "@fambrain/corpus";
+export { createFambrainTools, FAMBRAIN_TOOL_NAMES, retrieveCorpusTool, rememberUserFactTool, recallUserFactTool, listVaultFilesTool, summarizeTextTool, runWithToolContext, getToolContext, type FambrainToolContext, } from "@/agentflow/tools";
 export const runAgentStream = (history: DbChatTurn[], context: AgentPipelineContext): AsyncGenerator<AgentStreamEvent, AgentPipelineResult> => {
     return runPipelineStream(history, context);
 };

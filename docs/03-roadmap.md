@@ -115,7 +115,8 @@
 | ~~**1**~~ | ~~**eval 与 Golden 对齐**（`memProbe` 接入 `eval:run`）~~ | ✅ 2026-06 |
 | **2** | **SLO 收尾**（Token 估算、结构化日志） | ✅ Token 汇总 + Web 运行日志面板（2026-06） |
 | **3** | **按需硬坑**（有 Web 现象再做） | P0-10 corpusUserId · D3-10 G3 path · P0-6 |
-| **4（最后）** | **离线 Agent 复盘笔记** + **第 11 天总复盘** | 见下文 [阶段末 · 复盘（最后做）](#阶段末--复盘最后做) |
+| ~~**4**~~ | ~~**LangChain StructuredTool 层**~~ | ✅ `verify:langchain-tools` |
+| **5（最后）** | **离线 Agent 复盘笔记** + **第 11 天总复盘** | 见下文 [阶段末 · 复盘（最后做）](#阶段末--复盘最后做) |
 
 ### 总览
 
@@ -269,6 +270,8 @@ GOLDEN_RUNS=3 pnpm --filter @fambrain/agents run golden:regression  # G1～G5b +
 - [x] **R6-1**：列举型「哪几家公司」→ 4 家且同句再问一致 ← `verify:r6-no-cache` ✅ 2026-06
 - [x] **eval MVP**：`run-eval` 输出报告（通过率 + 指标 4 项）— **13/13** ✅ 2026-06-23
 - [x] **Learning Phase A–D**：pending 审核 / 高置信 Mem0+corpus / `corpus/learned/` / 检索反馈 ← `verify:learning-extract` + Web `/learning` ✅ 2026-06
+- [x] **LangChain StructuredTool**：5 工具 + `verify:langchain-tools` ✅ 2026-06
+- [x] **LangSmith tracing**：`configureLangSmithTracing` + pipeline metadata ✅ 2026-06
 - [x] **SLO 日志**：每轮 step 耗时 + Token 汇总 + Web 运行日志面板（2026-06）
 - [x] **R6-3**：同会话综合履历 → **编号子问**公司数不得 4→2 ← eval **`G-履历综合` 4/4** + `verify:r6-no-cache` ✅ 2026-06
 - [x] **P0-19～21**：Analyst plain-text + 项目/公司 enumeration 分流 ← `verify:analyst-empty-hits` · `verify:composite-route` ✅ 2026-06
@@ -306,7 +309,7 @@ GOLDEN_RUNS=3 pnpm --filter @fambrain/agents run golden:regression  # G1～G5b +
 | A8 | 技术 | 记忆触达 | Mem0 跨会话检索 + LangMem 会话摘要注入 Intake/Analyst；`verify:memory` | **✅** 脚本已通过 |
 | A9 | Agent | 内容摘要师 | `summarizeContent` + CLI；`verify:content-summarizer` | **✅** 脚本已通过 |
 | A10 | 实验 | MCP / Recall / Vercel AI | `experiment:*` + `verify:vault-list` | **✅** 脚本已通过 |
-| T1 | 技术 | 17 项总表 | 1～9、11、14、16、17 触达/✅；10、15 P2；12 或 13 至少其一待补 | **🔄** LangSmith 待触达 |
+| T1 | 技术 | 17 项总表 | 1～9、11、12、14、16、17 触达/✅；10、15 P2 | **✅** LangSmith + StructuredTool 2026-06 |
 | T2 | 技术 | 可观测 | 1 次完整链路 trace 或结构化日志 | 部分（Pino 入库） |
 | D1 | 文档 | docs 更新 | Agent 表与 17 项 ✅/⬜ 同步 | **✅** 2026-06-02 含 D9 + 实验触达 |
 
@@ -329,7 +332,7 @@ GOLDEN_RUNS=3 pnpm --filter @fambrain/agents run golden:regression  # G1～G5b +
 
 | 序号 | 技术名称 | 所属类别 | 核心作用 | 落地 | 落地说明 |
 |------|----------|----------|----------|------|----------|
-| 1 | LangChain | AI 基础框架 | 模型调用、工具、链式任务 | ✅ | `ChatOllama`、Message（Intake/KM）；Tool/Memory 未用 |
+| 1 | LangChain | AI 基础框架 | 模型调用、工具、链式任务 | ✅ | `ChatOllama`、Message、**StructuredTool**（`agentflow/tools/`）；主链仍 LangGraph 节点 |
 | 2 | LangGraph | 多 Agent 编排 | 状态图、条件分支、循环 | ✅ | `pipeline/graph` StateGraph（Intake → KM → FC → **Organizer** → Analyst） |
 | 3 | LlamaIndex | RAG 框架 | 索引、分片、检索 | ✅ | 离线入库 + **在线 `vectorRetrieve`** |
 | 4 | ChromaDB | 向量数据库 | Embedding 存储与检索 | ✅ | 离线入库 + **在线检索** |
@@ -340,14 +343,14 @@ GOLDEN_RUNS=3 pnpm --filter @fambrain/agents run golden:regression  # G1～G5b +
 | 9 | Vercel AI SDK | 轻量 AI SDK | 流式、多模型 | **✅ 触达** | `experiment:vercel-ai`（`ai` + `ollama-ai-provider`）；主链仍自研 SSE |
 | 10 | Agno | 轻量多 Agent | 对比 LangGraph | ⬜ | 实验目录 |
 | 11 | LangMem | 记忆增强 | 会话摘要、压缩 | **✅ 触达** | `langmem-session` + `data/memory/sessions/` |
-| 12 | LangSmith | 链路追踪 | 可视化执行链 | ⬜ | 调试用 `agent-log` |
+| 12 | LangSmith | 链路追踪 | 可视化执行链 | **✅** | `configureLangSmithTracing` + `buildLangGraphRunConfig`；配 Key 上报 smith.langchain.com |
 | 13 | Pino | 日志框架 | 结构化运行日志 | ✅ | 知识入库师 `indexerLogger` |
 | 14 | p-limit | 并发控制 | 限制 embed 并发 | ✅ | Indexer `addDocumentsWithEmbedLimit`（`INDEX_EMBED_CONCURRENCY` / `BATCH_SIZE`） |
 | 15 | TypeBox | 结构校验 | Zod 替代学习 | ⬜ | 实验对比 |
 | 16 | MCP SDK | 模型上下文协议 | 标准化工具交互 | **✅ 触达** | `experiment:mcp-vault` · 工具 `list_vault_files` |
 | 17 | Recall | 轻量 RAG | 对比 LlamaIndex | **✅ 触达** | `recallKeywordRetrieve` + `experiment:recall-compare` |
 
-**统计（2026-06-02）：** ✅ **14 项**已接入或触达（含 **Vercel AI**、**MCP**、**Recall**、**Mem0**、**LangMem**；Docling 以 DocParser 替代触达）。
+**统计（2026-06-23）：** ✅ **15 项**已接入或触达（含 **LangSmith**、**LangChain Tool**、Vercel AI、MCP、Recall、Mem0、LangMem；Docling 以 DocParser 替代触达）。
 
 ### P1 技术覆盖计划（17 项 × 触达方式）
 
@@ -364,7 +367,7 @@ GOLDEN_RUNS=3 pnpm --filter @fambrain/agents run golden:regression  # G1～G5b +
 | 9 | Vercel AI SDK | 触达 | P1 | `experiment:vercel-ai` ✅ |
 | 10 | Agno | 触达 | P2 | 独立实验 |
 | 11 | LangMem | 触达 | P1 | 满 N 轮摘要 + Intake 历史裁剪 ✅ |
-| 12 | LangSmith | 触达 | **P0** | 与 Pino 至少落地其一 |
+| 12 | LangSmith | 触达 | **P0** | `configureLangSmithTracing` + pipeline run metadata ✅ |
 | 13 | Pino | 触达 | **P0** | 部分 agent-log 迁移 |
 | 14 | p-limit | 接入 | **P0** | Indexer embed 并发限制 |
 | 15 | TypeBox | 触达 | P2 | schema 对比实验 |
@@ -376,9 +379,9 @@ GOLDEN_RUNS=3 pnpm --filter @fambrain/agents run golden:regression  # G1～G5b +
 | 子能力 | 优先级 | 验收 |
 |--------|--------|------|
 | ChatOllama / Message | P0 | 已有，保持 |
-| StructuredTool / DynamicTool | P0 | ≥2 个 Tool |
+| StructuredTool / DynamicTool | P0 | ≥2 个 Tool | **✅** 5 个 · `verify:langchain-tools` |
 | StructuredOutputParser / Zod | P0 | 全部 Agent JSON 过 schema ✅ |
-| bindTools（可选） | P1 | 1 个试验路由 |
+| bindTools（可选） | P1 | 1 个试验路由 | ⬜ 实验分支 |
 | ConversationSummaryBuffer / LangMem | P1 | LangMem 会话摘要 + `verify:memory` ✅ |
 
 ### 核心技术分项（学习参考）
@@ -432,4 +435,4 @@ GOLDEN_RUNS=3 pnpm --filter @fambrain/agents run golden:regression  # G1～G5b +
 | 可观测性 | streamEvents、调试面板 | 推理黑盒（#18 部分 ✅） |
 | **P0 已落地** | `runPipelineStream`、关键词 RAG、KM **规则精排**（无在线 LLM） | P0-1～10 |
 
-**口述建议：** 先讲 17 项里已 ✅/触达的 **14 项** + P0 踩坑 **5～6 条**，再带「LangSmith / Agno 见 P2」。
+**口述建议：** 先讲 17 项里已 ✅/触达的 **15 项** + P0 踩坑 **5～6 条**；Agno / bindTools 见 P2 实验。

@@ -481,6 +481,29 @@ pnpm --filter @fambrain/agents run verify:learning-extract
 # Web：/learning 审核 pending；聊天助手消息下反馈按钮
 ```
 
+### 12. LangChain StructuredTool 层 ✅
+
+**定位：** 将已有 FamBrain 能力封装为 LangChain **`tool()`**（Zod schema），供实验性 `bindTools` / 外部 Agent 复用；**主聊天仍走 LangGraph 固定节点**，不由 LLM 自主选工具。
+
+| Tool | 包装 | 说明 |
+|------|------|------|
+| `retrieve_corpus` | `retrieveKnowledge` | 语料 hybrid 检索，返回 JSON hits |
+| `remember_user_fact` | `addStructuredUserFact` | 结构化写入 Mem0 |
+| `recall_user_fact` | `searchUserFactMemories` | 跨会话召回 user_fact |
+| `list_vault_files` | `listVaultFiles` | vault 只读列举（同 MCP） |
+| `summarize_text` | `summarizeContent` | 正文摘要（需 Ollama） |
+
+调用前须 `runWithToolContext({ corpusUserId, actorUserId }, () => tool.invoke(...))` 注入上下文。
+
+**LangSmith：** `bootstrapAgentsRuntime()` → `configureLangSmithTracing()`；`graph.stream` 附带 `runName` / `metadata`（conversationId 等）。配 `LANGSMITH_API_KEY` 后在 [smith.langchain.com](https://smith.langchain.com) 查看 trace。
+
+**验证：**
+
+```bash
+pnpm --filter @fambrain/agents run verify:langchain-tools
+pnpm --filter @fambrain/agents run verify:vault-list   # vault 底层 API
+```
+
 ## 路由字段（IntakeCoordinator 输出）
 
 | 英文字段 | 中文名 | 含义 | 典型去向 |

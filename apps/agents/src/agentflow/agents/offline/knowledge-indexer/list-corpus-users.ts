@@ -1,9 +1,9 @@
 import { readdir } from "node:fs/promises";
 import path from "node:path";
-import { DOC_ROOT, DOC_USERS_DIR, getUserCorpusRoot, listMarkdownFiles, toRepoPath, } from "@fambrain/corpus";
+import { getDocRoot, DOC_USERS_DIR, getUserCorpusRoot, listMarkdownFiles, toRepoPath, } from "@fambrain/corpus";
 import { logIndexerStep } from "./indexer-log";
 export const listCorpusUserIds = async (): Promise<string[]> => {
-    const usersRoot = path.join(DOC_ROOT, DOC_USERS_DIR);
+    const usersRoot = path.join(getDocRoot(), DOC_USERS_DIR);
     logIndexerStep("1a 扫描用户目录", { usersRoot });
     let entries;
     try {

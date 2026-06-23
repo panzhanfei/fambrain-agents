@@ -1,6 +1,6 @@
 import { readdir } from "node:fs/promises";
 import path from "node:path";
-import { DOC_ROOT, DOC_USERS_DIR } from "@fambrain/corpus";
+import { getDocRoot, DOC_USERS_DIR } from "@fambrain/corpus";
 
 export type IngestIdentity = {
     actorUserId: string;
@@ -8,7 +8,7 @@ export type IngestIdentity = {
 };
 
 const listUserIdsOnDisk = async (): Promise<string[]> => {
-    const usersRoot = path.join(DOC_ROOT, DOC_USERS_DIR);
+    const usersRoot = path.join(getDocRoot(), DOC_USERS_DIR);
     let entries;
     try {
         entries = await readdir(usersRoot, { withFileTypes: true });

@@ -18,6 +18,7 @@ export {
 export { chunkMetadataSchema, type ChunkMetadata } from "./chunk-metadata";
 export {
   DOC_ROOT,
+  getDocRoot,
   DOC_USERS_DIR,
   CORPUS_DIR,
   VAULT_DIR,
