@@ -99,27 +99,36 @@
 
 ## 质量冲刺 — 10 日计划（2026-06）
 
-**定位：** 在线 Agent 复盘已完成（Intake → KM → FactChecker → ContentOrganizer → Analyst；摘要分支 ContentSummarizer）。本阶段不新增 Agent，专注 **Golden 回归、检索质量、跨轮 cache、系统化 eval、SLO/可观测**，并在第 11 天做全链路总复盘。
+**定位：** 在线 Agent 主链已跑通（Intake → KM → FactChecker → ContentOrganizer → Analyst；摘要分支 ContentSummarizer）。本阶段不新增 Agent，优先 **eval 对齐、SLO、按需硬坑**；**离线复盘 + 第 11 天总复盘统一放在最后**（Golden 已 7/7×3，不必先写文档）。
 
 **原则：**
 
-1. **Golden 先行** — 先测后改，每日改完跑一遍分数表。
-2. **依赖顺序** — Golden 基线 → cache → KM 硬坑 → eval → SLO；**rerank 可砍 scope**，用 path 加权 / topics 引导顶替。
+1. **Golden 先行** — 先测后改，每日改完跑一遍分数表。（✅ 2026-06：`GOLDEN_RUNS=3` 7/7×3）
+2. **依赖顺序** — eval 对齐 → SLO → 按需硬坑（P0-10 / D3-10 等）；**复盘文档最后做**。
 3. **完成标准对齐** [坑点 §三 完成标准](./04-pitfalls.md#三集中消坑计划核心-agent-完成后--4-天)。
+
+### 当前推荐顺序（复盘置后 · 2026-06）
+
+| 顺序 | 做什么 | 命令 / 入口 |
+|------|--------|-------------|
+| **1** | **eval 与 Golden 对齐**（`memProbe` 等接入 `eval:run`） | `pnpm --filter @fambrain/agents run eval:run` |
+| **2** | **SLO 收尾**（Token 估算、结构化日志） | #18 · `pipeline_timing` 已有 |
+| **3** | **按需硬坑**（有 Web 现象再做） | P0-10 corpusUserId · D3-10 G3 path · P0-6 |
+| **4（最后）** | **离线 Agent 复盘笔记** + **第 11 天总复盘** | 见下文 [阶段末 · 复盘（最后做）](#阶段末--复盘最后做) |
 
 ### 总览
 
 | 阶段 | 日历 | 焦点 | 对应坑点 / 验收 |
 |------|------|------|-----------------|
-| 离线复盘 | **第 1 天** | KnowledgeIndexer + DocParser + `@fambrain/corpus` | 搞清语料如何进 Chroma |
-| Golden | **第 2～3 天** | G1～G5 自动化 + 基线分数 | D10、A6 |
-| Cache | **第 4～5 天** | 检索 cache + Intake 重复问 | D5-2、P0-11、#19 |
-| **KM 完善（业界对标 v3）** | **第 6～14 天（Wave A～D）** | [KM v3 主计划表](./km-retrieval-design.md#三主计划表按优先级) Wave A→B→C→D | D3-4/6/7/10、P0-15、R6-1 |
 | Eval | **第 8～9 天** | 系统化 eval 脚本 + 报告 | A6 扩展 |
 | SLO / 日志 | **第 10 天** | 耗时、token、结构化记录 | #18 待做 |
-| **总复盘** | **第 11 天** | 离线 + 在线全链路、坑点表、L4 gap | 文档同步 |
+| Golden | **第 2～3 天** | G1～GMem 自动化 + 基线 | D10、A6 ✅ 7/7×3 |
+| Cache / KM / R6 | **第 4～14 天** | 见下各节 | 大部分 ✅ |
+| **复盘（置后）** | **阶段末 · 最后** | 离线笔记 + 第 11 天总复盘 | 见 [阶段末 · 复盘](#阶段末--复盘最后做) |
 
-### 第 1 天 — 离线 Agent 复盘
+### 第 1 天 — 离线 Agent 复盘（⏸ 置后 · 与第 11 天一并做）
+
+> **说明：** 不阻塞当前开发；Golden / eval / SLO 完成后再写离线链路笔记即可。
 
 | 顺序 | Agent / 模块 | 路径 | 要搞清什么 | 验证 |
 |------|--------------|------|------------|------|
@@ -225,19 +234,31 @@ EVAL_WRITE_REPORT=1 pnpm --filter @fambrain/agents run eval:run  # 写入 data/e
 
 **坑点：** [#18 推理黑盒](./04-pitfalls.md) 待做项。
 
-### 第 11 天 — 全面总复盘
+### 阶段末 · 复盘（最后做）
+
+> **触发条件：** eval 对齐、SLO 基本可用、或准备面试演示版本时再集中写文档。  
+> **含：** 原「第 1 天离线复盘」+「第 11 天总复盘」，合并为一次归档即可。
+
+#### 离线 Agent 复盘（原第 1 天）
 
 | 产出 | 内容 |
 |------|------|
-| 全链路图 | 离线入库 + 在线编排（含 cache/eval 新节点） |
-| 分数对比 | Golden / eval 第 1 天 vs 第 10 天 |
-| 坑点表 | 更新 [04-pitfalls.md](./04-pitfalls.md) 中 D3-*、D5-2、R6-* 为 ✅ / 🔄 |
-| 能力自评 | L3 → L4 gap 一页纸（eval 闭环、生产就绪度） |
-| 文档 | 同步 [02-agent-flows.md](./02-agent-flows.md)、本路线图状态列 |
+| 离线链路笔记 | Indexer → DocParser → `@fambrain/corpus` → Chroma |
+| 验证 | `index:corpus`、`verify:doc-parser`、`verify:embed-batches` |
+
+#### 第 11 天 — 全面总复盘（原日历末）
+
+| 产出 | 内容 |
+|------|------|
+| 全链路图 | 离线入库 + 在线编排（含 cache/eval/userFact 节点） |
+| 分数对比 | Golden / eval 基线 vs 当前 |
+| 坑点表 | 同步 [04-pitfalls.md](./04-pitfalls.md) 开放项 |
+| 能力自评 | L3 → L4 gap 一页纸 |
+| 文档 | 同步 [02-agent-flows.md](./02-agent-flows.md)、本路线图 |
 
 ### 10 日冲刺 — 完成标准（勾选）
 
-- [ ] 离线 Agent 复盘笔记（KnowledgeIndexer + DocParser + corpus 包）
+- [ ] 离线 Agent 复盘笔记（KnowledgeIndexer + DocParser + corpus 包）← **阶段末最后做**
 - [x] Golden **G1～G5b + GMem ≥7 条稳定通过**（`GOLDEN_RUNS=3` → **7/7×3** ✅ 2026-06）
 - [ ] **D3-2 不可复现**（12 candidates → hits ≥1）
 - [x] **D5-2**：同会话 G4 连续两问，第二次命中 L2 cache 或 L1 Intake 复用（两层 ✅ 2026-06-18）
@@ -248,7 +269,7 @@ EVAL_WRITE_REPORT=1 pnpm --filter @fambrain/agents run eval:run  # 写入 data/e
 - [x] **P0-19～21**：Analyst plain-text + 项目/公司 enumeration 分流 ← `verify:analyst-empty-hits` · `verify:composite-route` ✅ 2026-06
 - [x] **P0-16**：跨会话 userFact（A 记 QQ → B 问）← `verify:user-fact` · Web 复测 ✅ 2026-06
 - [x] 坑点表与路线图状态已更新（D5-2 L1+L2 / dev 一键 / **R6 全项** / **P0-16 userFact** / **P0-19～21** / SLO 耗时 **2026-06**）
-- [ ] 第 11 天总复盘文档或会话纪要归档
+- [ ] 阶段末总复盘文档或会话纪要归档 ← **最后做**（含离线笔记 + L3→L4 自评）
 
 ### 每日建议节奏
 
@@ -262,7 +283,7 @@ EVAL_WRITE_REPORT=1 pnpm --filter @fambrain/agents run eval:run  # 写入 data/e
 
 | 可砍 | 不可砍 |
 |------|--------|
-| rerank、前端 citation UI、LangSmith 接入 | Golden 基线、D3-2 coalesce、检索 cache、eval MVP |
+| rerank、前端 citation UI、LangSmith 接入、**离线/总复盘文档** | Golden 基线、eval MVP、按需硬坑、SLO step 耗时 |
 
 ---
 
