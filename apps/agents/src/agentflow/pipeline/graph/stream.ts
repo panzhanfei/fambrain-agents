@@ -27,7 +27,7 @@ const lastUserQuestion = (history: DbChatTurn[]): string => {
 function* emitAssistant(answer: string): Generator<AgentStreamEvent> {
     yield { type: "assistant", text: answer };
 }
-const buildInitialState = (history: DbChatTurn[], context: AgentPipelineContext, userQuestion: string, memoryBlock: string | null, intakeHistory: DbChatTurn[]): PipelineGraphState => {
+const buildInitialState = (history: DbChatTurn[], context: AgentPipelineContext, userQuestion: string, memoryBlock: string | null, intakeHistory: DbChatTurn[], userMemories: string[]): PipelineGraphState => {
     return {
         history,
         context,
@@ -42,6 +42,7 @@ const buildInitialState = (history: DbChatTurn[], context: AgentPipelineContext,
         checkerPassed: true,
         retryCount: 0,
         memoryBlock,
+        userMemories,
         intakeHistory,
         confidenceTier: null,
         repeatQuestionHit: false,
@@ -62,6 +63,11 @@ const isAnalystStreamChunk = (value: unknown): value is AnalystStreamChunk => {
     return ((chunk.type === "thinking" || chunk.type === "assistant") &&
         typeof chunk.text === "string");
 };
+const logPersistMemoryFailure = (e: unknown): void => {
+    const message = e instanceof Error ? e.message : String(e);
+    logAgentOut("Pipeline", "persist_memory_failed", { error: message });
+};
+
 const shouldRetryRetrieval = (state: PipelineGraphState): boolean => {
     return !state.checkerPassed && state.retryCount < 1;
 };
@@ -131,7 +137,7 @@ export async function* runPipelineStream(history: DbChatTurn[], context: AgentPi
         };
         const pipelineTiming = yield* finishPipeline(timing);
         const repeatState: PipelineGraphState = {
-            ...buildInitialState(history, context, userQuestion, null, history),
+            ...buildInitialState(history, context, userQuestion, null, history, []),
             answer: repeatAnswer,
             exitEarly: true,
             repeatQuestionHit: true,
@@ -152,7 +158,7 @@ export async function* runPipelineStream(history: DbChatTurn[], context: AgentPi
         userQuestion,
     });
     const graph = getCompiledPipelineGraph();
-    const input = buildInitialState(history, context, userQuestion, memory.promptBlock, memory.intakeHistory);
+    const input = buildInitialState(history, context, userQuestion, memory.promptBlock, memory.intakeHistory, memory.userMemories);
     let finalState: PipelineGraphState = input;
     let activeStep: PipelineStepName | null = "intake";
     timing.markNodeStart("intake");
@@ -226,11 +232,25 @@ export async function* runPipelineStream(history: DbChatTurn[], context: AgentPi
                     timing: pipelineTiming,
                 };
             }
-            if (finalState.decision?.needsRetrieval) {
+            if (finalState.decision?.userFact) {
+                yield* startStep("user_fact");
+            }
+            else if (finalState.decision?.needsRetrieval) {
                 yield* startStep("retrieval");
             }
             else if (finalState.decision?.intent === "summarize_content") {
                 yield* startStep("content_summarizer");
+            }
+            continue;
+        }
+        if (nodeName === "userFact") {
+            yield* finishStep("user_fact");
+            if (finalState.answer) {
+                timing.markFirstToken();
+                yield* emitAssistant(finalState.answer);
+            }
+            if (finalState.error) {
+                yield { type: "error", message: finalState.error };
             }
             continue;
         }
@@ -311,7 +331,7 @@ export async function* runPipelineStream(history: DbChatTurn[], context: AgentPi
                 history,
                 userQuestion,
                 answer: finalState.answer,
-            }).catch(() => undefined);
+            }).catch(logPersistMemoryFailure);
         }
         return {
             answer: finalState.answer,
@@ -332,7 +352,7 @@ export async function* runPipelineStream(history: DbChatTurn[], context: AgentPi
         history,
         userQuestion,
         answer,
-    }).catch(() => undefined);
+    }).catch(logPersistMemoryFailure);
     const pipelineTiming = yield* finishPipeline(timing);
     logAgentOut("Pipeline", "出去", summarizePipelineOut(finalState, answer, pipelineTiming));
     return {

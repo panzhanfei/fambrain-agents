@@ -68,7 +68,18 @@ export {
     type CompositeSlotPlan,
     type IncrementalCompositePlan,
 } from "./composite-incremental";
-export { findRepeatAnswerInHistory } from "./intake-repeat-guard";
+export {
+    applyUserFactFromIntake,
+    buildUserFactRoutedDecision,
+} from "./intake-user-fact-guard";
+export {
+    routeUserFactFromIntake,
+    parseUserFactRecord,
+    serializeUserFactRecord,
+    memoryBlockHasStructuredUserFacts,
+    type UserFactRoute,
+    type UserFactRecord,
+} from "./user-fact";
 export {
     intakeRetrievalPlanItemSchema,
     intakeRoutingDecisionSchema,

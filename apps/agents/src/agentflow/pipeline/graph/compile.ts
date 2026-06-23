@@ -10,22 +10,28 @@ import { applyCompositeRouteGuard } from "@/agentflow/agents/online/intake-coord
 import { applyIntakeCoreferenceGuard } from "@/agentflow/agents/online/intake-coordinator/intake-coreference-guard";
 import { applyIntakeRetrievalPlanGuard } from "@/agentflow/agents/online/intake-coordinator/intake-retrieval-plan-guard";
 import { findRepeatAnswerInHistory } from "@/agentflow/agents/online/intake-coordinator/intake-repeat-guard";
+import { applyUserFactFromIntake } from "@/agentflow/agents/online/intake-coordinator/intake-user-fact-guard";
+import { routeUserFactFromIntake } from "@/agentflow/agents/online/intake-coordinator/user-fact";
 import { resolveIncrementalCompositePlan } from "@/agentflow/agents/online/intake-coordinator/composite-incremental";
 import { streamAnalyzeInformation } from "@/agentflow/agents/online/information-analyst";
 import { retrieveKnowledge } from "@/agentflow/agents/online/knowledge-manager";
 import { retrieveCompositeIncremental } from "./retrieve-composite-incremental";
+import { userFactNode } from "./user-fact-node";
 import {
     getRetrievalFromCache,
     setRetrievalCache,
 } from "@fambrain/infra";
 import { defaultIntakeDecision, parseIntakeDecision } from "../parse-intake";
 import { PipelineGraphAnnotation, type PipelineGraphState } from "./state";
-const routeAfterIntake = (state: PipelineGraphState): "respondEarly" | "retrieval" | "factChecker" | "contentSummarizer" => {
+const routeAfterIntake = (state: PipelineGraphState): "respondEarly" | "userFact" | "retrieval" | "factChecker" | "contentSummarizer" => {
     if (state.exitEarly || state.error)
         return "respondEarly";
     const decision = state.decision;
     if (!decision)
         return "respondEarly";
+    if (decision.userFact) {
+        return "userFact";
+    }
     if (decision.intent === "clarify" && decision.clarifyingQuestion) {
         return "respondEarly";
     }
@@ -76,15 +82,15 @@ const intakeNode = async (state: PipelineGraphState): Promise<Partial<PipelineGr
         });
         const parsed = parseIntakeDecision(intakeRaw) ??
             defaultIntakeDecision(state.userQuestion);
-        const decision = applyCompositeRouteGuard(
-            applyIntakeRetrievalPlanGuard(
-                applyIntakeChitchatGuard(
-                    applyIntakeCoreferenceGuard(parsed, state.intakeHistory)
-                ),
-                state.userQuestion
-            ),
-            state.userQuestion
-        );
+        let guarded = applyIntakeCoreferenceGuard(parsed, state.intakeHistory);
+        guarded = applyIntakeChitchatGuard(guarded);
+        const userFactRoute = routeUserFactFromIntake(guarded);
+        const decision = userFactRoute
+            ? applyUserFactFromIntake(guarded, userFactRoute)
+            : applyCompositeRouteGuard(
+                  applyIntakeRetrievalPlanGuard(guarded, state.userQuestion),
+                  state.userQuestion
+              );
         return { decision };
     }
     catch (e) {
@@ -388,9 +394,11 @@ const buildPipelineGraph = () => {
         .addNode("contentSummarizer", contentSummarizerNode)
         .addNode("contentOrganizer", contentOrganizerNode)
         .addNode("analyst", analystNode)
+        .addNode("userFact", userFactNode)
         .addNode("respondEarly", respondEarlyNode)
         .addEdge(START, "intake")
         .addConditionalEdges("intake", routeAfterIntake)
+        .addEdge("userFact", END)
         .addConditionalEdges("retrieval", routeAfterRetrieval)
         .addConditionalEdges("factChecker", routeAfterFactChecker)
         .addEdge("contentSummarizer", "respondEarly")

@@ -14,6 +14,8 @@ export const intakeIntentSchema = z.enum([
     "clarify",
     "chitchat",
     "out_of_scope",
+    "remember_user_fact",
+    "recall_user_fact",
 ]);
 export const intakeLanguageSchema = z
     .enum(["zh", "en", "mixed"])
@@ -36,6 +38,9 @@ export const intakeRoutingDecisionSchema = z.object({
     clarifyingQuestion: nullableTrimmedString,
     briefReply: nullableTrimmedString,
     retrievalPlan: z.array(intakeRetrievalPlanItemSchema).catch([]),
+    userFactKey: nullableTrimmedString,
+    userFactLabel: nullableTrimmedString,
+    userFactValue: nullableTrimmedString,
 });
 const pickIntakeField = (
     raw: Record<string, unknown>,
@@ -52,6 +57,9 @@ const normalizeIntakeRaw = (raw: Record<string, unknown>): Record<string, unknow
     clarifyingQuestion: pickIntakeField(raw, "clarifyingQuestion", "clarifying_question"),
     briefReply: pickIntakeField(raw, "briefReply", "brief_reply"),
     retrievalPlan: pickIntakeField(raw, "retrievalPlan", "retrieval_plan"),
+    userFactKey: pickIntakeField(raw, "userFactKey", "user_fact_key"),
+    userFactLabel: pickIntakeField(raw, "userFactLabel", "user_fact_label"),
+    userFactValue: pickIntakeField(raw, "userFactValue", "user_fact_value"),
 });
 export const parseIntakeRoutingDecision = (raw: unknown): IntakeRoutingDecision | null => {
     const normalized =

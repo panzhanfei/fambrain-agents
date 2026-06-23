@@ -25,6 +25,7 @@ type ChatMessage = {
 
 const STEP_TIMING_LABELS: Record<PipelineStepName, string> = {
   intake: "理解问题",
+  user_fact: "读取记忆",
   retrieval: "检索知识库",
   fact_checker: "核查证据",
   content_summarizer: "生成摘要",
@@ -839,6 +840,7 @@ export const ChatShell = ({ initialConversations, viewer }: ChatShellProps) => {
           if (p.status === "running" && typeof p.name === "string") {
             const labels: Record<string, string> = {
               intake: "理解问题…",
+              user_fact: "读取记忆…",
               retrieval: "检索知识库…",
               fact_checker: "核查证据…",
               content_summarizer: "生成摘要…",

@@ -51,7 +51,7 @@
 | `FactChecker` | 事实核查员 | 新建 | **✅ D5 已接入**（证据包核查 + **Zod**；跨轮 cache → **消坑 sprint 末段**） | [§4](./02-agent-flows.md#4-factchecker--事实核查员-d5-) |
 | `ContentOrganizer` | 内容整理师 | 新建 | **✅ D6 已接入**（hits 去重 / 规范化 → Analyst 前） | [§6](./02-agent-flows.md#6-contentorganizer--内容整理师-d6-) |
 | LangGraph 编排 | — | 迁移 | **✅** `pipeline/graph` StateGraph | [P0 在线编排](./02-agent-flows.md#p0-在线编排流程) |
-| Mem0 + LangMem | 记忆层 | 触达 | **✅ D8**（跨会话 + 会话摘要 → Intake/Analyst） | [§8](./02-agent-flows.md#8-记忆层--mem0--langmemd8) |
+| Mem0 + LangMem | 记忆层 | 触达 | **✅ D8**（跨会话 + 会话摘要 → Intake/Analyst）；**P0-16 userFact** 结构化 remember/recall | [§8](./02-agent-flows.md#8-记忆层--mem0--langmemd8) · [§2.5 userFact](./02-agent-flows.md#25-跨会话用户事实-userfact--p0-16-) |
 | `DocParser` | 文档解析师 | 触达 | **✅ D7**（PDF/Word/PPT/图片批量上传→解析→入库） | [§7](./02-agent-flows.md#7-docparser--文档解析师d7) |
 | `ContentSummarizer` | 内容摘要师 | 在线分支 | **✅ D9**（Intake `summarize_content` → KM? → 摘要师；CLI 保留） | [§9](./02-agent-flows.md#9-contentsummarizer--内容摘要师d9) |
 | MCP / Recall / Vercel AI | 实验触达 | 触达 | **✅**（见 [experiments/README.md](../experiments/README.md)） | [§10](./02-agent-flows.md#10-实验触达--mcp--recall--vercel-ai-) |
@@ -242,7 +242,8 @@ EVAL_WRITE_REPORT=1 pnpm --filter @fambrain/agents run eval:run  # 写入 data/e
 - [ ] **SLO 日志**：每轮至少含 step 耗时；可选 token（**step 耗时 + UI 展示 2026-06-18** ✅ 部分）
 - [x] **R6-3**：同会话综合履历 → **编号子问**公司数不得 4→2 ← eval **`G-履历综合` 4/4** + `verify:r6-no-cache` ✅ 2026-06
 - [x] **P0-19～21**：Analyst plain-text + 项目/公司 enumeration 分流 ← `verify:analyst-empty-hits` · `verify:composite-route` ✅ 2026-06
-- [x] 坑点表与路线图状态已更新（D5-2 L1+L2 / dev 一键 / **R6 全项** / **P0-19～21** / SLO 耗时 **2026-06**）
+- [x] **P0-16**：跨会话 userFact（A 记 QQ → B 问）← `verify:user-fact` · Web 复测 ✅ 2026-06
+- [x] 坑点表与路线图状态已更新（D5-2 L1+L2 / dev 一键 / **R6 全项** / **P0-16 userFact** / **P0-19～21** / SLO 耗时 **2026-06**）
 - [ ] 第 11 天总复盘文档或会话纪要归档
 
 ### 每日建议节奏
@@ -304,7 +305,7 @@ EVAL_WRITE_REPORT=1 pnpm --filter @fambrain/agents run eval:run  # 写入 data/e
 | 4 | ChromaDB | 向量数据库 | Embedding 存储与检索 | ✅ | 离线入库 + **在线检索** |
 | 5 | Ollama | 本地模型 | 离线跑开源模型 | ✅ | chat + embed + 流式 thinking |
 | 6 | Zod | 结构化校验 | Schema 约束 LLM/API 输出 | ✅ | 注册/会话 + 入库 metadata；**在线 Agent JSON 均已 schema**（`verify:agent-schemas`） |
-| 7 | Mem0 | 高级记忆 | 跨会话语义记忆 | **✅ 触达** | `preparePipelineMemory` + `data/memory/mem0/` |
+| 7 | Mem0 | 高级记忆 | 跨会话语义记忆 | **✅ 触达** | `preparePipelineMemory` + **P0-16** `userFact` / `addStructuredUserFact` |
 | 8 | Docling | 文档解析 | PDF/DOC 预处理 | **🔄 触达** | **DocParser** 以 pdf-parse / officeparser / Ollama OCR 落地（Docling 对照见 P2） |
 | 9 | Vercel AI SDK | 轻量 AI SDK | 流式、多模型 | **✅ 触达** | `experiment:vercel-ai`（`ai` + `ollama-ai-provider`）；主链仍自研 SSE |
 | 10 | Agno | 轻量多 Agent | 对比 LangGraph | ⬜ | 实验目录 |

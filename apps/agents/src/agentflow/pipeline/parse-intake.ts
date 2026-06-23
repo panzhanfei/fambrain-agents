@@ -38,5 +38,8 @@ export const defaultIntakeDecision = (userQuestion: string): IntakeRoutingDecisi
         clarifyingQuestion: null,
         briefReply: null,
         retrievalPlan: fallbackPlan.length >= 2 ? fallbackPlan : [],
+        userFactKey: null,
+        userFactLabel: null,
+        userFactValue: null,
     };
 };

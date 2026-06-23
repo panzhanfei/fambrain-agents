@@ -15,6 +15,7 @@ export type AgentPipelineContext = {
 };
 export type PipelineStepName =
     | "intake"
+    | "user_fact"
     | "retrieval"
     | "fact_checker"
     | "content_summarizer"

@@ -1,1 +1,1 @@
-export { addTurnToMem0, searchUserMemories } from "./store";
+export { addTurnToMem0, addExplicitUserMemory, addStructuredUserFact, searchUserMemories, searchUserFactMemories } from "./store";

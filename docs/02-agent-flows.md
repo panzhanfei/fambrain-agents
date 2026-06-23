@@ -44,6 +44,7 @@ flowchart TB
     REP -->|miss| MEM["preparePipelineMemory<br/>Mem0 + LangMem"]
     MEM --> IC[IntakeCoordinator<br/>入口接线员]
     IC --> P{parseIntakeDecision<br/>LangGraph 路由}
+    P -->|remember/recall user_fact| UF[userFact 节点<br/>Mem0 显式读写]
     P -->|clarify / chitchat| R1[briefReply / 澄清]
     P -->|needsRetrieval| KM[KnowledgeManager<br/>L2 检索 cache]
     KM --> FC[FactChecker<br/>事实核查员]
@@ -52,6 +53,7 @@ flowchart TB
     CO --> IA[InformationAnalyst<br/>信息分析师]
     P -->|direct_answer 等| FC2[FactChecker 可选] --> CO2[ContentOrganizer] --> IA
     IA --> OUT[assistant 入库]
+    UF --> OUT
   end
 
   CH -.->|向量 hits| KM
@@ -84,6 +86,7 @@ flowchart TD
   B --> C{parseIntakeDecision}
 
   C -->|clarify / chitchat + briefReply| D[respondEarly]
+  C -->|remember_user_fact / recall_user_fact| UF[userFact → Mem0]
   C -->|needsRetrieval = true| F[KnowledgeManager]
   C -->|其它需下游| FC0[FactChecker]
 
@@ -94,6 +97,7 @@ flowchart TD
   FC0 --> CO0[ContentOrganizer] --> G
   G --> H[assistant 入库]
   D --> H
+  UF --> H
 ```
 
 ## 单 Agent 实现流程
@@ -160,7 +164,43 @@ flowchart TD
 | 4 | 兜底 | 解析失败 → `needsRetrieval=true` 保守查库 | `pipeline/parse-intake.ts` | `defaultIntakeDecision()` |
 | 5 | 编排 | LangGraph 条件边 | `pipeline/graph/compile.ts` | `getCompiledPipelineGraph()` |
 
-**Guard 链（compile intake 节点内）：** coreference → chitchat → **retrievalPlan guard** → **`applyCompositeRouteGuard`**（P0-15）。多问输出 `retrievalPlan`；无 plan 时结构/subTasks 兜底；单问「今年多大」等 identity → `slot` + canonical `searchQuery`。详见 [坑点 §2.5.3](./04-pitfalls.md#253-p0-15--r6-3--composite-分槽检索-2026-06)。
+**Guard 链（compile intake 节点内）：** coreference → chitchat → **retrievalPlan guard** → **`applyCompositeRouteGuard`**（P0-15）→ **`routeUserFactFromIntake`**（P0-16，优先于 composite）。多问输出 `retrievalPlan`；无 plan 时结构/subTasks 兜底；单问「今年多大」等 identity → `slot` + canonical `searchQuery`。详见 [坑点 §2.5.3](./04-pitfalls.md#253-p0-15--r6-3--composite-分槽检索-2026-06) · [§2.6 userFact](./04-pitfalls.md#26-跨会话用户自述事实未召回2026-06--web-联调)。
+
+### 2.5 跨会话用户事实 userFact — P0-16 ✅
+
+**职责：** 用户自述联系方式/账号（QQ、手机、邮箱、微信等）的 **记住** 与 **跨 conversationId 召回**；不经 KM / FactChecker / Analyst，直接读写 Mem0。
+
+**设计要点：**
+
+| 层 | 模块 | 行为 |
+|----|------|------|
+| **Intake schema** | `prompt.ts` + `schema.ts` | `intent`: `remember_user_fact` / `recall_user_fact`；字段 `userFactKey` / `userFactLabel` / `userFactValue` |
+| **路由** | `user-fact.ts` → `intake-user-fact-guard.ts` | `routeUserFactFromIntake()` 从 JSON 解析；**不靠问句 regex 词表** |
+| **编排** | `compile.ts` | Intake 后 `decision.userFact` 存在 → **userFact 节点** → END |
+| **Mem0** | `mem0/store.ts` | `addStructuredUserFact()` 写入；`searchUserFactMemories(factKey, label, question)` 语义检索 |
+| **值提取** | `user-fact.ts` | `extractByFactKey` + `validateFactValueForKey`；Mem0 行如 `QQ号是734858469` 须提取完整号码（勿误切「码」） |
+
+```mermaid
+flowchart TD
+  U[用户: 我的qq是734858469] --> IC[IntakeCoordinator]
+  IC -->|remember_user_fact| UF[userFactNode]
+  UF --> M0[addStructuredUserFact]
+  M0 --> A1[确认已记住]
+
+  U2[新对话: 我的qq是多少] --> IC2[IntakeCoordinator]
+  IC2 -->|recall_user_fact| UF2[userFactNode]
+  UF2 --> S[searchUserFactMemories]
+  S --> A2[您记录的QQ号是 …]
+```
+
+| 步骤 | 做什么 | 文件 | 方法 |
+|------|--------|------|------|
+| 1 | Intake 产出 schema | `intake-coordinator/prompt.ts` | `remember_user_fact` / `recall_user_fact` 示例 |
+| 2 | 解析路由 | `user-fact.ts` | `routeUserFactFromIntake()`、`findUserFactValueInTexts()` |
+| 3 | 写入 / 召回 | `user-fact-node.ts` | `userFactNode()` → Mem0 |
+| 4 | SSE | `stream.ts` | step `user_fact` |
+
+**验证：** `pnpm --filter @fambrain/agents run verify:user-fact`（跨 conversationId A 记 → B 问）。**改 agents 代码后须重启服务**；与 L1/L2/L3 检索 cache 无关。
 
 ### 3. KnowledgeManager — 知识管理员 ✅
 
@@ -330,6 +370,8 @@ flowchart TD
 
 **职责：** **Mem0** 按 `actorUserId` 检索跨会话偏好/事实；**LangMem** 按 `conversationId` 维护会话摘要；合并为 `memoryBlock` 注入 **IntakeCoordinator** 与 **InformationAnalyst** prompt。轮次结束后 `persistTurnMemory` 写回 Mem0 与 LangMem 存储。
 
+**P0-16 补充：** 联系方式类 **remember/recall** 走 **userFact 节点**（`addStructuredUserFact` / `searchUserFactMemories`），不依赖轮次后 LLM 抽取；LangMem 仍仅本会话。
+
 **存储：** `data/memory/mem0/history.db`（Mem0 SQLite）、`data/memory/sessions/<conversationId>.json`（LangMem）。BFF 请求体须带 `conversationId`（`packages/agent-types`）。
 
 ```mermaid
@@ -410,6 +452,9 @@ flowchart TD
 | `confidence` | 置信度 | 0–1，可观测、可降级 | 日志 / 后续策略 |
 | `clarifyingQuestion` | 澄清提问 | 信息不足时追问一个关键问题 | **直接返回用户** |
 | `briefReply` | 简短回复 | 寒暄或拒答（≤80 字） | **直接返回用户** |
+| `userFactKey` | 事实键 | 如 `qq` / `phone` / `email` / `wechat` | → **userFact 节点** |
+| `userFactLabel` | 展示标签 | 如「QQ号」 | → userFact 召回文案 |
+| `userFactValue` | 事实值 | remember 时必填；recall 时为 `null` | → Mem0 写入 / 校验 |
 
 ## 编排分支（`pipeline/graph/compile.ts`）
 
@@ -419,6 +464,7 @@ flowchart TD
 | `intent` 为 `chitchat` / `out_of_scope` 且 `briefReply` 有值 | `respondEarly` | 简短回复 |
 | `intent === "summarize_content"` 且 `needsRetrieval === true` | KM → **ContentSummarizer** → 终稿 | SSE：检索 → **生成摘要** |
 | `intent === "summarize_content"` 且 `needsRetrieval === false` | **ContentSummarizer** → 终稿 | SSE：**生成摘要** |
+| `intent` 为 `remember_user_fact` / `recall_user_fact` 且 Intake 填齐 schema | **userFact** → 终稿 | SSE：`user_fact`；**不经 KM / FC / Analyst** |
 | `needsRetrieval === true`（非摘要） | KM → **FactChecker** → **ContentOrganizer** →（可选再打回 KM）→ Analyst | SSE：检索 → 核查 → **整理证据** → 整理回答 |
 | `needsRetrieval === false` 且无 `briefReply` | FactChecker → **ContentOrganizer** → Analyst（`hits` 常为空） | 不查库长答 |
 | FactChecker `passed=false` 且 `retryCount<1` | 再 `retrieval` → 再 **FactChecker** | 同轮可能见两次「核查证据…」 |
@@ -429,7 +475,7 @@ flowchart TD
 | `event` | 含义 |
 |---------|------|
 | `meta` | 用户消息已落库（含真实 `id`） |
-| `step` | 编排进度：`intake` / `retrieval` / `fact_checker` / **`content_summarizer`** / **`content_organizer`** / `analyst`，`status` 为 `running` \| `done`；`done` 时可带 `durationMs` |
+| `step` | 编排进度：`intake` / **`user_fact`** / `retrieval` / `fact_checker` / **`content_summarizer`** / **`content_organizer`** / `analyst`，`status` 为 `running` \| `done`；`done` 时可带 `durationMs` |
 | `pipeline_timing` | SLO：本轮 `totalMs`、`ttftMs`、各节点 `nodes`（Agents → BFF 转发） |
 | `ready` | Pipeline 已出终稿、即将落库（BFF）；前端可提前解锁输入 |
 | `thinking` | 信息分析师推理流（若模型/Ollama 支持） |

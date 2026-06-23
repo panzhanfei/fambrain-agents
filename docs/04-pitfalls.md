@@ -82,7 +82,7 @@
 | P0-13 | Intake | Golden / Web「你好」→ `briefReply` 出现 **「大表哥」** 等未定义称呼；prompt 示例为「FamBrain 助手」 | `chitchat` 路径不经 Analyst；Intake 小模型在 `briefReply` 自由发挥 | **`applyIntakeChitchatGuard`** 模板兜底 + 禁用称呼后检；Intake JSON snake_case 归一 | ✅ **已解决**（2026-06-18）← `verify:intake-chitchat` |
 | P0-14 | Analyst + Mem0 | Golden / Web「我的名字」→ 同句 **「知识库没有记录」+「长期记忆已知潘展飞」** 自相矛盾 | hits 弱时走 insufficientEvidence 话术，Mem0 又补姓名；**corpus 与 memory 优先级未定义** | **KM 优化**后 `personal/` 姓名类检索稳定 → hits 含简历，Analyst 直答 corpus；不再触发「空 hits + Mem0 补履历」路径 | ✅ **已解决**（KM 优化 · Web/G2 复测 2026-06） |
 | P0-15 | Analyst | 同问「**我叫什么 年龄 职业 从业经历**」→ 一次答 **赵一 / 28 岁 / 秦汉新城智慧园林**（语料无此人），一次答 **潘展飞** + 简历引用（正确） | KM hits 波动 + Analyst 在 weak hits 下用训练数据填「完整简历模板」；复合问法单 queryType 单检索 | **Intake retrievalPlan** 主路由 + 动态槽 KM + merge；结构/subTasks 兜底；Analyst 禁推算年龄、enumeration 逐条列 | ✅ **已解决**（2026-06 · `verify:r6-no-cache` 综合履历 3 遍）← §2.5.3 |
-| P0-16 | Mem0 / Analyst | **对话 A** 用户说「记住我的 QQ 是 xxx」并确认；**新建对话 B** 问「我的 QQ 是多少？」→ 答不知道 / 语料无记录 | LangMem 仅本会话；Mem0 轮次后 `add` 可能未抽出 QQ、语义 search 未命中、或 Analyst 走 corpus 检索且 hits 空时未用 Mem0；`persistPipelineMemory` 失败被 `.catch` 吞掉 | Intake 识别 **remember_fact** → 显式 Mem0 写入；联系方式类 query **Mem0 优先**；持久化失败打日志/告警；Golden **G-跨会话记忆**（A 记 → B 问） | ⬜ Web 联调（§2.6） |
+| P0-16 | Mem0 / Analyst | **对话 A** 用户说「记住我的 QQ 是 xxx」并确认；**新建对话 B** 问「我的 QQ 是多少？」→ 答不知道 / 误答「码」 | LangMem 仅本会话；轮次后 Mem0 抽取不可靠；Mem0 行 `QQ号是…` 旧提取误切「码」 | Intake **remember_user_fact / recall_user_fact** + **userFact 节点**；`extractByFactKey` + `validateFactValueForKey`；`verify:user-fact` | ✅ **已解决**（2026-06 · Intake schema + Web 复测）← §2.6 |
 | R6-1 | KM / Analyst | **「我在那几家公司上过班？」** 应枚举 **4 家**，首轮只答 **2 家**（西安奥卡云、苏州奖多多）；**同句再问** 仅确认 **1 家** 并称其余「知识库无记录」 | 见 §2.3 | composite 分槽 + enumeration KM；`verify:r6-no-cache` 验收 | ✅ **已解决**（2026-06 · cache 全关 4 家×2 轮）← §2.3 |
 | R6-2 | Analyst / 上下文 | **同会话追问**（如「用表格列出来 时间 职位 公司名称」）：上一轮已确认 **西安奥卡云**，本轮却称「没有明确列出具体公司」 | 见 §2.4 | 全链路重检 + 表格追问保留 grounded 公司 | ✅ **已解决**（2026-06 · `verify:r6-no-cache`）← §2.4 |
 | R6-3 | Intake / KM / Analyst | **同会话**：综合问首轮 **4 家**；编号子问或重复问后仅 **2 家** | 见 §2.7 | composite 分槽 + eval **`G-履历综合`** + `verify:r6-no-cache` | ✅ **已解决**（2026-06 · eval 4/4 + 无 cache 11/11）← §2.7 |
@@ -191,7 +191,7 @@ pnpm --filter @fambrain/agents run verify:r6-no-cache   # R6-1：同句再问 4 
 | Web（同问再跑） | 同上 | **潘展飞**，职业/经历 + 简历 path 引用 | **正确** | （对照基线） |
 | Web（同问再跑） | 同上 | 年龄字段答成「10 年前端经验」而非出生日期 | 字段映射 / hits 不全 / L3 坏 cache | **P0-15** 延伸 · **P0-18** ✅ |
 | Web | 「我今年多大了」等单问年龄 | 曾 clarify / 「未标注年龄」/ L1 1ms 错答 | Intake clarify + L3+slot + repeat | **P0-18** ✅ |
-| Web | 对话 A：记住 QQ → 对话 B：我的 QQ？ | 对话 B **不知道** / 未引用 Mem0 | 跨会话用户自述事实未召回 | **P0-16** |
+| Web | 对话 A：记住 QQ → 对话 B：我的 QQ？ | 对话 B **不知道** / 未引用 Mem0；修复后曾误答「码」 | 跨会话用户自述事实 | **P0-16** ✅ |
 
 **语料事实（ground truth）：** 姓名 **潘展飞**；语料中**不存在**赵一、陈明、大表哥、《个人简介》独立文档。
 
@@ -203,7 +203,7 @@ pnpm --filter @fambrain/agents run verify:r6-no-cache   # R6-1：同句再问 4 
 | **KM** | `personal/` 检索不稳定；复合问法一次 hit 简历、一次 hit 别的 chunk 或空（P0-15、D3-2） |
 | **FactChecker** | meta `refinedSearchQuery` 打回 KM₂（**P0-17** ✅）；二次 force_pass 后空 hits → Analyst skip LLM（**P0-12** ✅） |
 | **Analyst** | hits 空已 skip LLM（P0-12 ✅）；弱 hits 仍可能编造（赵一）（**P0-15**）；P0-17 下游受害已修 |
-| **Mem0** | corpus/Mem0 同句矛盾（**P0-14** ✅，KM 稳定命中后不再触发）；跨会话自述事实（QQ 等）未召回（P0-16） |
+| **Mem0** | corpus/Mem0 同句矛盾（**P0-14** ✅，KM 稳定命中后不再触发）；跨会话自述事实（P0-16 ✅） |
 
 #### 解决排期（记录用 · 非断言清单）
 
@@ -215,7 +215,7 @@ pnpm --filter @fambrain/agents run verify:r6-no-cache   # R6-1：同句再问 4 
 | **P0** | KM：`personal/` 姓名类检索稳定（identity query）→ hits 含简历，消除 corpus/Mem0 同句矛盾 | P0-14 | KM 优化 | `knowledge-manager/retrieve.ts` 等 ✅ |
 | **P0** | Analyst：Mem0 **不得**与「知识库无记录」同句补履历（**兜底**；主因已由 KM 解决） | P0-14 | Day 3 + D3-9 | 暂不必改；若 KM 再波动可补 prompt |
 | **P0** | 单问年龄：Intake 示例 9 + L3/slot Analyst 路径 + cache env / 清 cache 脚本 | P0-18 | 2026-06 | `prompt.ts`、`stream.ts`、`retrieve-composite-incremental.ts`、`infra/config.ts` ✅ |
-| **P0** | 跨会话 **remember_fact** 显式写入 Mem0；联系方式类 Mem0 优先于空 corpus | P0-16 | Day 3 + D8 | `intake-coordinator`、`mem0/store.ts`、`persist-turn.ts` |
+| **P0** | 跨会话 **remember_user_fact / recall_user_fact** Intake schema + userFact 节点 + Mem0 结构化读写 | P0-16 | 2026-06 ✅ | `user-fact.ts`、`user-fact-node.ts`、`mem0/store.ts` |
 | **P0** | KM 规则精排 + `personal/` 加权；复合问拆 subTasks | 赵一 / 潘展飞波动 | **Day 6～7** | `retrieve.ts`、Intake |
 | **P1** | 生成后 citation / 姓名校验（answer 人名 ∈ hits excerpt） | P0-15 | Day 8～9 eval | D5-3 |
 | **P1** | Golden 加 **G-个人档案**（非仅 G2 单句）；`GOLDEN_RUNS=3` 稳定性 | 回归验收 | Day 2～3 记坑后 **消坑后再收紧断言** | `golden-regression.ts` |
@@ -230,7 +230,7 @@ pnpm --filter @fambrain/agents run verify:r6-no-cache   # R6-1：同句再问 4 
 - [x] 单问「我今年多大 / 多大了」走 `routeMode=slot` + 简历 excerpt 含出生日期；无 clarify / 无「未标注年龄」兜底（**P0-18**）← Web 复测 + `diagnose-age-query.ts` ✅
 - [x] 「我叫什么 年龄 职业 从业经历」3 遍姓名均为 **潘展飞**，无赵一/陈明（**P0-15**）← `verify:r6-no-cache` ✅
 - [ ] `pnpm run golden:regression` 与 `GOLDEN_RUNS=3` 稳定性汇总 **≥4/5 且全轮无 P0-12～16 类现象**
-- [ ] 对话 A 记 QQ（或手机）→ 新建对话 B 问同项 → answer 含该值（P0-16）
+- [x] 对话 A 记 QQ（或手机）→ 新建对话 B 问同项 → answer 含该值（P0-16）← `verify:user-fact` · Web 复测 ✅
 
 **Golden 脚本定位：** 当前 G1～G5 为 **冒烟 + 基线分数**；P0-13 / P0-14 / **P0-15** 已分别由专项脚本验收；**P0-16** 严格断言待消坑后再并入 Golden。
 
@@ -365,15 +365,15 @@ pnpm --filter @fambrain/agents run verify:r6-no-cache          # 回归 R6 / P0-
 | 场景 | 同轮：corpus 说无 + Mem0 说有 | **跨 conversationId**：上轮记、下轮忘 | 多轮内偏好遗忘 |
 | 体感 | 一句话自相矛盾 | 「你刚才不是记住了吗？」 | 第 5 轮忘了第 1 轮说的 |
 
-#### 根因分析（待 Day 3 验证）
+#### 根因分析（2026-06 已验证）
 
 | 层级 | 根因 | 说明 |
 |------|------|------|
 | **LangMem** | 按 `conversationId` 隔离 | 对话 B **不会**读到对话 A 的会话摘要；跨会话只能靠 Mem0 |
-| **Mem0 写入** | 轮次结束 `addTurnToMem0(userQ, assistantA)` 依赖 LLM **抽取**事实 | 「记住 QQ」可能未抽成结构化记忆；失败时 `persistPipelineMemory(...).catch(() => undefined)` **静默丢弃** |
-| **Mem0 检索** | `searchUserMemories(actorUserId, userQuestion)` 为语义检索 | 「我的 QQ」与存储表述 embedding 不对齐 → `userMemories=[]` |
-| **Analyst / Intake** | 问 QQ 走 **needsRetrieval** → corpus 无 QQ → hits 空 | 空 hits 路径可能 **不用** Mem0（与 P0-14 对策「hits 空不用 Mem0 补履历」需区分：**用户自述联系方式应允许 Mem0**） |
-| **临时方案** | 写入 `corpus/personal/*.md` 并 re-index | RAG 可答，但不等于 Mem0 跨会话设计 |
+| **Mem0 写入** | 轮次结束 `addTurnToMem0` 依赖 LLM **抽取**事实 | 「记住 QQ」可能未抽成结构化记忆；**对策：** userFact 节点 **显式** `addStructuredUserFact` |
+| **Mem0 检索** | 语义 search 返回自然语言行如 `QQ号是734858469` | 旧 `extractLooseValueAfterLabel` 把标签 `QQ号` 只匹配前缀 → 误提取 **「码」**；**对策：** `extractByFactKey` + `validateFactValueForKey` |
+| **Analyst / Intake** | 问 QQ 走 **needsRetrieval** → corpus 无 QQ → hits 空 | **对策：** Intake `recall_user_fact` → userFact 节点，不经 Analyst |
+| **部署** | agents 未重启 | 改 `user-fact.ts` 后仍跑旧进程 → Web 仍见旧 bug |
 
 **链路（通俗）：** 对话 1 结束时系统「尝试」把整轮对话塞进长期记忆抽屉 → 抽屉里可能没有单独一张「QQ」标签 → 对话 2 问 QQ 时抽屉搜不到 → 又去书架上找（语料）也没有 → 只能说不知道。
 
@@ -387,9 +387,22 @@ pnpm --filter @fambrain/agents run verify:r6-no-cache          # 回归 R6 / P0-
 | P1 | Golden **G-跨会话记忆**：固定 conversationId A/B，A 记 fact → B 问 | `golden-regression.ts` |
 | P2 | 用户确认「写入语料」时追加 `corpus/personal/` 并触发增量 index | 产品化；非 P0 |
 
-**验证：** 对话 A 记 QQ → 新建对话 B 问 QQ → answer 含正确号码；`agent-log` Mem0 search 在 B 轮 `extractedCount ≥ 1`。
+**实现（2026-06 · P0-16 ✅）：**
 
-**临时 workaround：** 将 QQ 写入 `data/doc/users/<corpusUserId>/corpus/personal/` 对应 md → `pnpm run index:corpus`。
+1. Intake 输出 **remember_user_fact / recall_user_fact** + **userFactKey/Label/Value**（模型命名字段，无问句 regex 词表）
+2. **userFact 节点**（`compile.ts`）→ Mem0 `addStructuredUserFact` / `searchUserFactMemories`
+3. 召回值提取：`extractByFactKey(qq)`、`validateFactValueForKey`；Mem0 行 `QQ号是734858469` + label `QQ号` → **734858469**（非「码」）
+4. `verify:user-fact` 跨 conversationId 验收；Web 复测须 **重启 agents**
+
+**验证：**
+
+```bash
+pnpm --filter @fambrain/agents run verify:user-fact
+```
+
+Web：对话 A「我的qq是734858469」→ 确认；**新建**对话 B「我的qq是多少」→ `您记录的QQ号是 734858469。`
+
+**临时 workaround（非主路径）：** 将 QQ 写入 `data/doc/users/<corpusUserId>/corpus/personal/` 对应 md → `pnpm run index:corpus`。
 
 ### 2.7 同会话综合履历问 vs 编号子问 — 答案退化（✅ 2026-06 · `verify:r6-no-cache`）
 
@@ -748,7 +761,7 @@ pnpm run verify:fact-checker
 - [x] **P0-14**（Golden Day 2）：corpus/Mem0 不矛盾 ← KM 优化 ✅ 2026-06
 - [x] **P0-15**（Golden Day 2 实录）：无赵一/陈明、复合问法稳定 ← `verify:r6-no-cache` ✅ 2026-06
 - [x] **P0-19 / P0-20 / P0-21**（Analyst + enumeration 分流）← §2.5.5 · `verify:analyst-empty-hits` + `verify:composite-route` ✅ 2026-06
-- [ ] **P0-16**（Web 联调）：对话 A 记 QQ → 对话 B 问 QQ 可召回 ← §2.6
+- [x] **P0-16**（Web 联调）：对话 A 记 QQ → 对话 B 问 QQ 可召回 ← §2.6 · `verify:user-fact` ✅（含「码」误提取修复）
 - [x] R6-1：「哪几家公司上过班」类问题 → answer 枚举 **4 家**且同句再问一致 ← `verify:r6-no-cache` ✅ 2026-06
 - [x] **R6-3**：同会话「综合履历 → 编号子问」公司 **4 家** ← eval **`G-履历综合` 4/4** + `verify:r6-no-cache` ✅ 2026-06
 - [x] R6-2：同会话表格/格式化追问 → **不得否定**上一轮已 grounded 的公司 ← `verify:r6-no-cache` ✅ 2026-06
@@ -773,3 +786,4 @@ pnpm run verify:fact-checker
 - [x] **列举型问题**（「哪几家公司」）：同句再问 answer 仍 **4 家** ← R6-1 ✅ · `verify:r6-no-cache`
 - [x] **综合履历 → 编号子问**（同会话）：编号「1. 我在哪几家公司…」仍 **4 家** ← R6-3 ✅ · `verify:r6-no-cache`
 - [x] **格式化追问**（「用表格列出来」）：表格追问仍保留已确认公司 ← R6-2 ✅ · `verify:r6-no-cache`
+- [x] **跨会话 userFact**（A 记 QQ → B 问）：step 为 `user_fact`；answer 含完整号码；Mem0 行 `QQ号是…` 勿误提取「码」← P0-16 ✅ · `verify:user-fact`

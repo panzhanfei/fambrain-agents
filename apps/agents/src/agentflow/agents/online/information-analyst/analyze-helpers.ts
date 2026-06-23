@@ -13,6 +13,9 @@ import type {
   InformationAnalystInput,
   InformationAnalystResult,
 } from "./prompt";
+import {
+    memoryBlockHasStructuredUserFacts,
+} from "@/agentflow/agents/online/intake-coordinator/user-fact";
 import { parseAnalystResult } from "./schema";
 export { parseAnalystResult as normalizeAnalystResult };
 
@@ -66,9 +69,12 @@ export const shouldSkipSubQuestionLlm = (
   input: SubQuestionAnalyzeInput
 ): boolean => input.hits.length === 0 || input.coverage === "none";
 
-/** P0-12：FC 二次放行后 hits 仍空时跳过 Analyst LLM，避免编造终稿 */
-export const shouldSkipAnalystLlm = (input: InformationAnalystInput): boolean =>
-  input.hits.length === 0 || input.coverage === "none";
+/** P0-12：FC 二次放行后 hits 仍空时跳过 Analyst LLM；Mem0 有结构化 user_fact 时不 skip */
+export const shouldSkipAnalystLlm = (input: InformationAnalystInput): boolean => {
+    if (input.hits.length > 0 && input.coverage !== "none") return false;
+    if (memoryBlockHasStructuredUserFacts(input.memoryBlock)) return false;
+    return input.hits.length === 0 || input.coverage === "none";
+};
 
 export const formatSubQuestionSection = (
   index: number,

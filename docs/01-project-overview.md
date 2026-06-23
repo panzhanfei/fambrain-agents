@@ -6,7 +6,7 @@
 
 基于 **Next.js（App Router）** 的家庭协作型对话应用：注册登录、成员审核、会话与消息持久化，以及 **P0 多 Agent 聊天闭环**（意图路由 → 知识库检索 → 归纳回答，SSE 流式）。
 
-**当前进度（2026-06）：** 在线 LangGraph 多 Agent 闭环 ✅；`@fambrain/corpus` / `@fambrain/agent-memory` / `@fambrain/infra` 已抽包；**`pnpm dev` 一键起 Chroma + Redis + Web + Agents** ✅；**P0-15 composite 分槽 + L3/L4** ✅；**P0-18 年龄 + 多轮 cache** ✅；**R6 枚举/追问** ✅（`verify:r6-no-cache`）；**P0-19 / P0-20 Analyst 纯文本流 + 项目/公司 enumeration 分流** ✅（`verify:composite-route` · `verify:analyst-empty-hits`）；**SLO 耗时** 🔄 部分。详见 [路线图](./03-roadmap.md) · [流程图](./02-agent-flows.md) · [坑点 §2.5.3～§2.5.5](./04-pitfalls.md#253-p0-15--r6-3--composite-分槽检索-2026-06)。
+**当前进度（2026-06）：** 在线 LangGraph 多 Agent 闭环 ✅；`@fambrain/corpus` / `@fambrain/agent-memory` / `@fambrain/infra` 已抽包；**`pnpm dev` 一键起 Chroma + Redis + Web + Agents** ✅；**P0-15 composite 分槽 + L3/L4** ✅；**P0-18 年龄 + 多轮 cache** ✅；**R6 枚举/追问** ✅（`verify:r6-no-cache`）；**P0-19 / P0-20 Analyst 纯文本流 + 项目/公司 enumeration 分流** ✅；**P0-16 跨会话用户自述事实（QQ 等）** ✅（Intake schema + `userFact` 节点 · `verify:user-fact`）；**SLO 耗时** 🔄 部分。详见 [路线图](./03-roadmap.md) · [流程图 §2.5 userFact](./02-agent-flows.md#25-跨会话用户事实-userfact--p0-16-) · [坑点 §2.6](./04-pitfalls.md#26-跨会话用户自述事实未召回2026-06--web-联调)。
 
 ## 应用层技术栈
 
@@ -34,7 +34,7 @@
 | Pino | 知识入库师结构化日志 |
 | p-limit | 入库 embed 并发控制；**DocParser** 批量解析并发（`DOC_PARSE_CONCURRENCY`） |
 | Redis + BullMQ | `@fambrain/infra`：检索 cache L2（D5-2）、pipeline 异步队列（可选 `PIPELINE_QUEUE_ENABLED`） |
-| Mem0 | 跨会话语义记忆检索，注入 Intake / Analyst prompt |
+| Mem0 | 跨会话语义记忆检索，注入 Intake / Analyst prompt；**P0-16** 结构化 `remember_user_fact` / `recall_user_fact` 经 **userFact 节点**显式读写 |
 | LangMem | 单会话摘要压缩（`data/memory/sessions/`），配合 DB 历史裁剪 Intake 上下文 |
 | MCP SDK | 实验：`experiment:mcp-vault` 只读列 vault |
 | Recall（BM25 sparse） | `recallSparseRetrieve` / `recallKeywordRetrieve`；`verify:sparse-recall`；对比 `experiment:recall-compare` |
@@ -92,6 +92,7 @@ pnpm run dev
 | `pnpm run index:corpus` | **知识入库师**：全量扫描 `corpus/*.md` → embed → 写入 Chroma（语料变更后手动重跑） |
 | `pnpm run parse:documents` | **文档解析师**：CLI 批量解析本地文件 → corpus md（可选入库） |
 | `cd apps/agents && pnpm run verify:memory` | Mem0 / LangMem 本地验证（LangMem 可不依赖 Mem0） |
+| `cd apps/agents && pnpm run verify:user-fact` | P0-16：Intake 结构化 remember/recall + Mem0 跨 conversationId |
 | `cd apps/agents && pnpm run verify:doc-parser` | DocParser 格式与路径单测 |
 | `pnpm run summarize:document -- <file.md>` | 内容摘要师（需 Ollama） |
 | `pnpm run experiment:mcp-vault` | MCP stdio 服务（列 vault） |
@@ -170,7 +171,9 @@ pnpm run dev
 | 技能点 | 代码位置 | 用途 |
 |--------|----------|------|
 | `runAgentStream` + `runPipelineStream` | `apps/agents/src/agentflow/`、`pipeline/graph/stream.ts` | LangGraph 编排 + SSE |
-| `getCompiledPipelineGraph` | `pipeline/graph/compile.ts` | Intake → KM → FactChecker → **ContentOrganizer** → Analyst |
+| `getCompiledPipelineGraph` | `pipeline/graph/compile.ts` | Intake → **userFact**（可选）→ KM → FactChecker → **ContentOrganizer** → Analyst |
+| `userFactNode` / `routeUserFactFromIntake` | `pipeline/graph/user-fact-node.ts`、`intake-coordinator/user-fact.ts` | P0-16：跨会话 remember/recall；绕过 KM / FC / Analyst |
+| `addStructuredUserFact` / `searchUserFactMemories` | `packages/agent-memory/src/mem0/store.ts` | Mem0 结构化写入 + 按 factKey 语义检索 |
 | `parseIntakeDecision` / `defaultIntakeDecision` | `pipeline/parse-intake.ts` | 解析 Intake 路由 JSON |
 | `completeIntakeCoordinator` | `agentflow/agents/online/intake-coordinator/` | 一次 `invoke` → 路由 JSON |
 | `retrieveKnowledge` | `agentflow/agents/online/knowledge-manager/` | 向量 + 关键词扫盘 + **规则精排**（无 LLM）；v3 业界对标见 [km-retrieval-design.md](./km-retrieval-design.md) |
@@ -198,6 +201,7 @@ pnpm run dev
 | `verify:intake-chitchat` | `apps/agents/scripts/` | P0-13：chitchat briefReply 模板兜底 + live ×10 |
 | `verify:composite-route` | `apps/agents/scripts/` | P0-15/R6-3：composite 路由 guard + merge + 单问年龄 slot 单测 |
 | `verify:composite-incremental` | `apps/agents/scripts/` | P0-15：L3 facet 终稿 cache + L4 增量 composite 单测 |
+| `verify:user-fact` | `apps/agents/scripts/` | P0-16：Intake schema + Mem0 跨会话 QQ remember/recall |
 | `resolveEnumerationTarget` | `intake-coordinator/enumeration-target.ts` | plan label/topics → project \| experience 列举分流（P0-21） |
 | `maxAnalystHitsForProfile` | `information-analyst/analyst-recall-limits.ts` | Analyst hits 上限与 KM profile 对齐（P0-20） |
 | `clear-pipeline-cache.ts` | `apps/agents/scripts/` | 清空 L2/L3 Redis + 进程 memory；见 `.env.example` 三层 cache 开关 |

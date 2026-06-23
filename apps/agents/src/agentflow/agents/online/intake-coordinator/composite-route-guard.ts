@@ -9,6 +9,7 @@ import {
 } from "./composite-routing";
 import type { CompositeRetrievalSlot } from "./composite-slot-queries";
 import type { IntakeRoutingDecision } from "./prompt";
+import type { UserFactRoute } from "./user-fact";
 
 export type IntakeRouteMode = "single" | "composite" | "slot";
 
@@ -25,6 +26,8 @@ export type RoutedIntakeDecision = IntakeRoutingDecision & {
     compositeSlots: CompositeRetrievalSlot[];
     routeReason?: CompositeRouteReason;
     routePlanSource?: CompositeRoutePlanSource;
+    /** P0-16：用户自述联系方式 remember/recall，不经 KM */
+    userFact?: UserFactRoute | null;
 };
 
 const sourceToReason = (
@@ -86,6 +89,8 @@ export const applyCompositeRouteGuard = (
         decision.intent === "chitchat" ||
         decision.intent === "out_of_scope" ||
         decision.intent === "clarify" ||
+        decision.intent === "remember_user_fact" ||
+        decision.intent === "recall_user_fact" ||
         !decision.needsRetrieval ||
         decision.intent === "summarize_content"
     ) {

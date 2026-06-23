@@ -38,6 +38,8 @@ export const PipelineGraphAnnotation = Annotation.Root({
     retryCount: Annotation<number>,
     /** Mem0 + LangMem 注入块（供 Intake / Analyst） */
     memoryBlock: Annotation<string | null>,
+    /** Mem0 语义检索原始条目（P0-16 user fact recall） */
+    userMemories: Annotation<string[]>,
     /** Intake 使用的截断历史（LangMem 保留最近 N 轮） */
     intakeHistory: Annotation<DbChatTurn[]>,
     /** D5-2：同会话字面重复问，Intake 入口复用 history 答 */
