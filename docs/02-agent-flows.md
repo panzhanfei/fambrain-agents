@@ -160,11 +160,11 @@ flowchart TD
 |------|--------|------|------|------|
 | 1 | 拼 prompt | 系统指令定义 intent / searchQuery 等 | `IntakeCoordinator/prompt.ts` | `prompt` |
 | 2 | 调模型 | 一次 `invoke`；模型见 `OLLAMA_MODEL_INTAKE_COORDINATOR` | `IntakeCoordinator/ollama-chat.ts` | `completeIntakeCoordinator()` |
-| 3 | 解析 JSON | 抠 JSON → **Zod parse**；失败不抛给用户 | `parse-intake.ts`, `schema.ts` | `parseIntakeDecision()`, `intakeRoutingSchema` |
-| 4 | 兜底 | 解析失败 → `needsRetrieval=true` 保守查库 | `pipeline/parse-intake.ts` | `defaultIntakeDecision()` |
+| 3 | 解析 JSON | 抠 JSON → **Zod parse**；`userFact*` 缺省视为 `null`（勿误 fallback 检索） | `parse-intake.ts`, `schema.ts` | `parseIntakeDecision()`, `intakeRoutingSchema` |
+| 4 | 兜底 | 解析失败 → `needsRetrieval=true` 保守查库（Golden G1 曾因缺字段触发） | `pipeline/parse-intake.ts` | `defaultIntakeDecision()` |
 | 5 | 编排 | LangGraph 条件边 | `pipeline/graph/compile.ts` | `getCompiledPipelineGraph()` |
 
-**Guard 链（compile intake 节点内）：** coreference → chitchat → **retrievalPlan guard** → **`applyCompositeRouteGuard`**（P0-15）→ **`routeUserFactFromIntake`**（P0-16，优先于 composite）。多问输出 `retrievalPlan`；无 plan 时结构/subTasks 兜底；单问「今年多大」等 identity → `slot` + canonical `searchQuery`。详见 [坑点 §2.5.3](./04-pitfalls.md#253-p0-15--r6-3--composite-分槽检索-2026-06) · [§2.6 userFact](./04-pitfalls.md#26-跨会话用户自述事实未召回2026-06--web-联调)。
+**Guard 链（compile intake 节点内）：** **coreference**（无上下文指代 → clarify；有上文 → `enrichSearchQueryFromHistory` 补全 searchQuery，如 G5b 城管）→ chitchat → **retrievalPlan guard** → **`routeUserFactFromIntake`**（P0-16，优先于 composite）→ **`applyCompositeRouteGuard`**（P0-15）。详见 [坑点 §2.5.3](./04-pitfalls.md#253-p0-15--r6-3--composite-分槽检索-2026-06) · [§2.5.6 Golden](./04-pitfalls.md#256-golden-回归-g1gmem--2026-06) · [§2.6 userFact](./04-pitfalls.md#26-跨会话用户自述事实未召回2026-06--web-联调)。
 
 ### 2.5 跨会话用户事实 userFact — P0-16 ✅
 

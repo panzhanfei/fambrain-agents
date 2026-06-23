@@ -76,7 +76,8 @@
       "question": "那个项目呢？",
       "assert": {
         "mustIncludeSteps": ["retrieval"],
-        "answerMustNotRe": "哪|哪个|请说明|指的是|哪一段|哪一家|什么项目|能否说明"
+        "answerMustNotRe": "哪|哪个|请说明|指的是|哪一段|哪一家|什么项目|能否说明",
+        "answerRe": "城管|城市管理|React|UniApp|TypeScript|Vite"
       }
     },
     {
@@ -188,6 +189,29 @@
       }
     }
   ],
+  "memProbe": {
+    "id": "G-跨会话记忆",
+    "label": "P0-16 对话 A 记 QQ → 新对话 B 问",
+    "qq": "734858469",
+    "turns": [
+      {
+        "conversationSuffix": "a",
+        "question": "我的qq是734858469",
+        "assert": {
+          "answerRe": "734858469",
+          "mustIncludeSteps": ["user_fact"]
+        }
+      },
+      {
+        "conversationSuffix": "b",
+        "question": "我的qq是多少",
+        "assert": {
+          "answerRe": "734858469",
+          "mustIncludeSteps": ["user_fact"]
+        }
+      }
+    ]
+  },
   "cacheProbe": {
     "id": "CACHE-G4-repeat",
     "label": "同问重复（cache 探测）",

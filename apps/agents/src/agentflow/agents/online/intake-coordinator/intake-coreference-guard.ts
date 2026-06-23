@@ -32,6 +32,39 @@ export const isVagueReferentialQuestion = (question: string): boolean => {
 const DEFAULT_CLARIFY =
     "你指的是哪一段经历或哪个项目？例如城市管理平台、E-HR 或 Sentinel？";
 
+/** 上文已出现项目实体时，补全 searchQuery（D3-9 / G5b） */
+const enrichSearchQueryFromHistory = (
+    decision: IntakeRoutingDecision,
+    history: DbChatTurn[]
+): IntakeRoutingDecision => {
+    if (
+        decision.intent !== "retrieve_and_answer" ||
+        !decision.needsRetrieval
+    ) {
+        return decision;
+    }
+    const prior = history.slice(0, -1);
+    if (prior.length === 0) return decision;
+    const priorText = joinHistoryText(prior);
+    const lastUser =
+        [...history].reverse().find((t) => t.role === "user")?.content.trim() ??
+        "";
+    if (!isVagueReferentialQuestion(lastUser)) return decision;
+
+    if (/城管|城市管理平台|urban-governance/i.test(priorText)) {
+        const sq = decision.searchQuery.trim();
+        if (!/城管|城市管理/.test(sq)) {
+            return {
+                ...decision,
+                searchQuery: "城市管理平台 城管平台 技术栈",
+                queryType: decision.queryType ?? "tech",
+                topics: decision.topics.length > 0 ? decision.topics : ["project"],
+            };
+        }
+    }
+    return decision;
+};
+
 /**
  * 单轮或无实体上文 + 指代问法 → clarify；
  * 有上文实体 → 保留 Intake 决策（含 retrieve）。
@@ -47,7 +80,7 @@ export const applyIntakeCoreferenceGuard = (
         return decision;
     }
     if (hasCoreferenceContext(history)) {
-        return decision;
+        return enrichSearchQueryFromHistory(decision, history);
     }
     return {
         intent: "clarify",

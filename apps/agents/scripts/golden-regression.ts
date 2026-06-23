@@ -1,5 +1,5 @@
 /**
- * Golden G1～G5：在线 Agent 全链路标准回归（最终验收用）。
+ * Golden G1～G5 + GMem：在线 Agent 全链路标准回归（最终验收用）。
  *
  * 覆盖 Intake → KM → FactChecker → ContentOrganizer → Analyst；
  * 用固定问法 + steps/answer 断言建立基线，填坑前后对比通过率。
@@ -19,7 +19,10 @@ import { bootstrapAgentsRuntime } from "@/config";
 /** 默认连跑遍数；也可用环境变量 GOLDEN_RUNS 或 CLI 参数覆盖 */
 const DEFAULT_GOLDEN_RUNS = 3;
 
-type GoldenId = "G1" | "G2" | "G3" | "G4" | "G5" | "G5b";
+type GoldenId = "G1" | "G2" | "G3" | "G4" | "G5" | "G5b" | "GMem";
+
+/** 跨会话记忆探测用 QQ（与 verify:user-fact 一致） */
+const GOLDEN_QQ = "734858469";
 
 type PipelineCaseResult = {
   id: GoldenId;
@@ -44,6 +47,7 @@ type GoldenCase = {
   label: string;
   question: string;
   history?: DbChatTurn[];
+  contextOverrides?: Partial<AgentPipelineContext>;
   assert: (
     result: Omit<
       PipelineCaseResult,
@@ -88,12 +92,14 @@ const resolveCorpusUserId = async (): Promise<string> => {
 const buildContext = (
   corpusUserId: string,
   caseId: GoldenId,
-  runIndex: number
+  runIndex: number,
+  overrides: Partial<AgentPipelineContext> = {}
 ): AgentPipelineContext => ({
   actorUserId: corpusUserId,
   corpusUserId,
   displayName: "Golden 回归",
   conversationId: `golden-r${runIndex}-${caseId}-${Date.now()}`,
+  ...overrides,
 });
 
 const runPipelineCase = async (
@@ -111,7 +117,7 @@ const runPipelineCase = async (
   ];
   const gen = runPipelineStream(
     history,
-    buildContext(corpusUserId, spec.id, runIndex)
+    buildContext(corpusUserId, spec.id, runIndex, spec.contextOverrides)
   );
   while (true) {
     const next = await gen.next();
@@ -212,12 +218,103 @@ const GOLDEN_CASES: GoldenCase[] = [
     assert: ({ steps, answer }) => {
       if (!hasStep(steps, "retrieval"))
         return "有上文时应走 retrieval，不应 clarify";
-      if (CLARIFY_ANSWER.test(answer))
-        return "answer 不应再澄清「哪个项目」";
+      if (CLARIFY_ANSWER.test(answer)) return "answer 不应再澄清「哪个项目」";
+      if (!/城管|城市管理|React|UniApp|TypeScript|Vite/i.test(answer))
+        return "应延续上文城市管理平台主题，而非无关项目";
       return null;
     },
   },
 ];
+
+const runPipelineTurn = async (
+  history: DbChatTurn[],
+  context: AgentPipelineContext
+): Promise<{ steps: string[]; answer: string; error?: string }> => {
+  const steps: string[] = [];
+  let answer = "";
+  let error: string | undefined;
+  const gen = runPipelineStream(history, context);
+  while (true) {
+    const next = await gen.next();
+    if (next.done) {
+      answer = next.value.answer;
+      break;
+    }
+    const ev = next.value;
+    if (ev.type === "step" && ev.status === "running") steps.push(ev.name);
+    if (ev.type === "error") error = ev.message;
+  }
+  return { steps, answer, error };
+};
+
+/** 对话 A 记 QQ → 新 conversationId B 问 QQ */
+const runCrossSessionMemCase = async (
+  corpusUserId: string,
+  runIndex: number
+): Promise<PipelineCaseResult> => {
+  const started = Date.now();
+  const actorUserId = `golden-gmem-r${runIndex}-${Date.now()}`;
+  const rememberQ = `我的qq是${GOLDEN_QQ}`;
+  const recallQ = "我的qq是多少";
+
+  const remember = await runPipelineTurn(
+    [{ role: "user", content: rememberQ }],
+    {
+      actorUserId,
+      corpusUserId,
+      displayName: "Golden 回归",
+      conversationId: `golden-gmem-a-r${runIndex}`,
+    }
+  );
+  if (remember.error) {
+    return {
+      id: "GMem",
+      label: "跨会话记忆 QQ（P0-16）",
+      question: `${rememberQ} → ${recallQ}`,
+      steps: remember.steps,
+      answer: remember.answer,
+      error: remember.error,
+      latencyMs: Date.now() - started,
+      pass: false,
+      reason: `remember 阶段 pipeline error: ${remember.error}`,
+    };
+  }
+
+  const recall = await runPipelineTurn(
+    [{ role: "user", content: recallQ }],
+    {
+      actorUserId,
+      corpusUserId,
+      displayName: "Golden 回归",
+      conversationId: `golden-gmem-b-r${runIndex}`,
+    }
+  );
+  const latencyMs = Date.now() - started;
+  const base = {
+    steps: recall.steps,
+    answer: recall.answer,
+    error: recall.error,
+    latencyMs,
+  };
+
+  let failReason: string | null = null;
+  if (recall.error) failReason = `recall 阶段 pipeline error: ${recall.error}`;
+  else if (!recall.answer.includes(GOLDEN_QQ))
+    failReason = `recall answer 应含 QQ ${GOLDEN_QQ}`;
+  else if (!hasStep(recall.steps, "user_fact"))
+    failReason = "recall 应走 user_fact 节点";
+
+  return {
+    id: "GMem",
+    label: "跨会话记忆 QQ（P0-16）",
+    question: `${rememberQ} → ${recallQ}`,
+    ...base,
+    pass: failReason === null && !recall.error,
+    reason: recall.error
+      ? `pipeline error: ${recall.error}`
+      : (failReason ?? "ok"),
+  };
+};
 
 const ANSWER_PREVIEW_CHARS = 320;
 
@@ -230,7 +327,7 @@ const runGoldenSuite = async (
 ): Promise<GoldenRunResult> => {
   const started = Date.now();
   const results: PipelineCaseResult[] = [];
-  const caseTotal = GOLDEN_CASES.length;
+  const caseTotal = GOLDEN_CASES.length + 1;
   console.log(`\n── 第 ${runIndex}/${totalRuns} 遍 ──`);
   for (let i = 0; i < GOLDEN_CASES.length; i++) {
     const spec = GOLDEN_CASES[i]!;
@@ -241,6 +338,12 @@ const runGoldenSuite = async (
     );
     results.push(result);
   }
+  console.log(`  [${caseTotal}/${caseTotal}] GMem · 跨会话 QQ…`);
+  const memResult = await runCrossSessionMemCase(corpusUserId, runIndex);
+  console.log(
+    `       → ${memResult.pass ? "PASS" : "FAIL"} ${formatDuration(memResult.latencyMs)}`
+  );
+  results.push(memResult);
   return { runIndex, results, durationMs: Date.now() - started };
 };
 
@@ -279,7 +382,9 @@ const printOneRunBlock = (run: GoldenRunResult): void => {
   }
 
   console.log(line);
-  console.log(`通过率：${passed.length}/${run.results.length}（目标 ≥4/5）`);
+  console.log(
+    `通过率：${passed.length}/${run.results.length}（目标 ≥5/7，G1～G5 核心 ≥4/5）`
+  );
   console.log(
     `通过：${passed.length ? passed.map((r) => r.id).join("、") : "（无）"}`
   );
@@ -324,7 +429,7 @@ const printMultiRunReport = (
     );
   }
   console.log(`\n各遍通过率：${passRates.join(" · ")}`);
-  console.log(`全轮 G1～G5 均通过：${fullyPassedRuns}/${totalRuns} 遍`);
+  console.log(`全轮 G1～GMem 均通过：${fullyPassedRuns}/${totalRuns} 遍`);
   console.log(`${"═".repeat(72)}`);
 };
 
@@ -333,7 +438,7 @@ const main = async (): Promise<void> => {
   const totalRuns = parseGoldenRuns();
   const corpusUserId = await resolveCorpusUserId();
   console.log(
-    `Golden G1～G5 全链路回归（corpusUserId=${corpusUserId}，连跑 ${totalRuns} 遍）`
+    `Golden G1～G5 + GMem 全链路回归（corpusUserId=${corpusUserId}，连跑 ${totalRuns} 遍）`
   );
   console.log("运行中仅显示进度；问/答/评判与各遍汇总将在全部结束后统一展示…");
 

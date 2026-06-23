@@ -42,6 +42,21 @@ const testIntake = () => {
     });
     assert.equal(summarize?.intent, "summarize_content");
     assert.equal(parseIntakeRoutingDecision({ intent: "invalid" }), null);
+    const chitchat = parseIntakeRoutingDecision({
+        intent: "chitchat",
+        needsRetrieval: false,
+        searchQuery: "",
+        subTasks: [],
+        topics: [],
+        language: "zh",
+        confidence: 0.98,
+        queryType: null,
+        clarifyingQuestion: null,
+        briefReply: "你好，我是 FamBrain 助手。",
+        retrievalPlan: [],
+    });
+    assert.equal(chitchat?.intent, "chitchat");
+    assert.equal(chitchat?.userFactKey, null);
 };
 const testKnowledgeManager = () => {
     const fallback = {

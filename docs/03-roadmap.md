@@ -33,6 +33,10 @@
 | G3 | 我做过的项目和掌握的技术 | vector hits ≥2，回答分点（D3 后） |
 | G4 | 城管平台用了什么技术 | hits 含对应 project md，有 citation |
 | G5 | 那个项目呢？（无上下文） | clarify，且不进入 Analyst 编造 |
+| G5b | 那个项目呢？（上文已聊城管平台） | retrieval，answer 延续城管/React 等 |
+| GMem | 对话 A 记 QQ → 新对话 B 问 QQ | `user_fact` 节点，answer 含号码 |
+
+**验收（2026-06）：** `GOLDEN_RUNS=3 pnpm run golden:regression` → **7/7×3 遍** 全通过。
 
 ---
 
@@ -85,7 +89,7 @@
 | D7 | 解析触达 | 文档解析师 | pdf-parse / officeparser / Ollama OCR；批量上传 API | **✅ 完成** |
 | D8 | 记忆/对比触达 | — | **Mem0 / LangMem** 注入 Pipeline | **✅ 完成** |
 | D9 | 扩展触达 | 内容摘要师；MCP；Recall；Vercel AI | 离线摘要 + `experiments/` 脚本 | **✅ 完成** |
-| D10 | 回归 + 文档 | 全链路 | A1～T2、G1～G5（**不含消坑**） | **进行中** |
+| D10 | 回归 + 文档 | 全链路 | A1～T2、G1～GMem | **✅ Golden 7/7×3**（2026-06） |
 
 > **风险：** 10 天内 17 项全 ✅ 不现实；**验收以 A1～A6、T1 必做项、T2 为准**。
 >
@@ -130,9 +134,9 @@
 
 | 交付 | 说明 |
 |------|------|
-| 脚本 | `scripts/golden-regression.ts`，自动跑 G1～G5 |
-| 扩展用例 | **G-工作经历**（4 家公司枚举）；**G4-重复问**（同句再问，为 cache 验收预留）；**G-跨会话记忆**（A 记 QQ → B 问，见 [P0-16 §2.6](./04-pitfalls.md#26-跨会话用户自述事实未召回2026-06--web-联调)） |
-| 基线 | 记录首次通过率（目标：**≥4/5**）；**现象先记入** [坑点 §2.5](./04-pitfalls.md#25-golden-day-2-联调实录--问题记录与解决顺序2026-06) / [§2.6](./04-pitfalls.md#26-跨会话用户自述事实未召回2026-06--web-联调)，消坑后再收紧 Golden 断言 |
+| 脚本 | `scripts/golden-regression.ts`，自动跑 **G1～G5b + GMem**（7 项） |
+| 扩展用例 | **G-工作经历**（4 家公司枚举）；**G4-重复问**（cache）；**GMem** 跨会话 QQ ← 已并入 golden |
+| 基线 | **`GOLDEN_RUNS=3` 连跑 7/7×3 通过**（2026-06）；G-跨会话记忆 strict 断言已并入 GMem |
 
 **参考问法：** 见上文 [Golden 问法（回归）](#golden-问法回归)。
 
@@ -140,7 +144,7 @@
 
 ```bash
 cd apps/agents
-pnpm run golden:regression   # G1～G5 全链路标准回归
+GOLDEN_RUNS=3 pnpm run golden:regression   # G1～G5b + GMem，稳定性 3 遍
 ```
 
 ### 第 4～5 天 — 检索 cache + 跨轮重复（消坑 D5-消坑）
@@ -234,7 +238,7 @@ EVAL_WRITE_REPORT=1 pnpm --filter @fambrain/agents run eval:run  # 写入 data/e
 ### 10 日冲刺 — 完成标准（勾选）
 
 - [ ] 离线 Agent 复盘笔记（KnowledgeIndexer + DocParser + corpus 包）
-- [ ] Golden **G1～G5 ≥4 条稳定通过**（脚本可重复跑）
+- [x] Golden **G1～G5b + GMem ≥7 条稳定通过**（`GOLDEN_RUNS=3` → **7/7×3** ✅ 2026-06）
 - [ ] **D3-2 不可复现**（12 candidates → hits ≥1）
 - [x] **D5-2**：同会话 G4 连续两问，第二次命中 L2 cache 或 L1 Intake 复用（两层 ✅ 2026-06-18）
 - [x] **R6-1**：列举型「哪几家公司」→ 4 家且同句再问一致 ← `verify:r6-no-cache` ✅ 2026-06
@@ -271,7 +275,7 @@ EVAL_WRITE_REPORT=1 pnpm --filter @fambrain/agents run eval:run  # 写入 data/e
 | A3 | Agent | 事实核查员 | 无 hits 不编造；打回后最多再检索 1 次；`retryCount≥1` 强制放行 | **🔄** 脚本 `verify:fact-checker` / `verify:fact-checker:pipeline` 已通过；**Golden** `golden:regression` 基线建立中 |
 | A4 | Agent | 内容整理师 | hits path 去重；`dedupeCitations`；脚本 `verify:content-organizer` | **✅** 脚本已通过；Golden 待回归 |
 | A5 | 编排 | LangGraph | 节点 ≥6（含 factChecker、**contentOrganizer**）；checker→retrieval 条件边；SSE `fact_checker` / **`content_organizer`** | **✅** 图与 step 已接 |
-| A6 | 回归 | P0 能力 | [P0 自测 3 条](#p0-自测) + G1～G5 共 8 条，**≥7 条通过** | 进行中 |
+| A6 | 回归 | P0 能力 | [P0 自测 3 条](#p0-自测) + G1～G5b + GMem，**≥7 条通过** | **✅** Golden 7/7×3（2026-06） |
 | A7 | Agent | 文档解析师 | 批量上传 PDF/Word/PPT/图片 → corpus md + 可选 Chroma；`verify:doc-parser` | **✅** 脚本已通过 |
 | A8 | 技术 | 记忆触达 | Mem0 跨会话检索 + LangMem 会话摘要注入 Intake/Analyst；`verify:memory` | **✅** 脚本已通过 |
 | A9 | Agent | 内容摘要师 | `summarizeContent` + CLI；`verify:content-summarizer` | **✅** 脚本已通过 |

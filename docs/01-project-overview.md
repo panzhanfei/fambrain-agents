@@ -6,7 +6,7 @@
 
 基于 **Next.js（App Router）** 的家庭协作型对话应用：注册登录、成员审核、会话与消息持久化，以及 **P0 多 Agent 聊天闭环**（意图路由 → 知识库检索 → 归纳回答，SSE 流式）。
 
-**当前进度（2026-06）：** 在线 LangGraph 多 Agent 闭环 ✅；`@fambrain/corpus` / `@fambrain/agent-memory` / `@fambrain/infra` 已抽包；**`pnpm dev` 一键起 Chroma + Redis + Web + Agents** ✅；**P0-15 composite 分槽 + L3/L4** ✅；**P0-18 年龄 + 多轮 cache** ✅；**R6 枚举/追问** ✅（`verify:r6-no-cache`）；**P0-19 / P0-20 Analyst 纯文本流 + 项目/公司 enumeration 分流** ✅；**P0-16 跨会话用户自述事实（QQ 等）** ✅（Intake schema + `userFact` 节点 · `verify:user-fact`）；**SLO 耗时** 🔄 部分。详见 [路线图](./03-roadmap.md) · [流程图 §2.5 userFact](./02-agent-flows.md#25-跨会话用户事实-userfact--p0-16-) · [坑点 §2.6](./04-pitfalls.md#26-跨会话用户自述事实未召回2026-06--web-联调)。
+**当前进度（2026-06）：** 在线 LangGraph 多 Agent 闭环 ✅；`@fambrain/corpus` / `@fambrain/agent-memory` / `@fambrain/infra` 已抽包；**`pnpm dev` 一键起 Chroma + Redis + Web + Agents** ✅；**P0-15 composite 分槽 + L3/L4** ✅；**P0-18 年龄 + 多轮 cache** ✅；**R6 枚举/追问** ✅（`verify:r6-no-cache`）；**P0-19 / P0-20 Analyst 纯文本流 + 项目/公司 enumeration 分流** ✅；**P0-16 跨会话用户自述事实（QQ 等）** ✅；**Golden G1～G5b + GMem** ✅（`GOLDEN_RUNS=3` 连跑 **7/7×3**）；**SLO 耗时** 🔄 部分。详见 [路线图](./03-roadmap.md) · [流程图](./02-agent-flows.md) · [坑点 §2.5.6](./04-pitfalls.md#256-golden-回归-g1gmem--2026-06)。
 
 ## 应用层技术栈
 
@@ -180,7 +180,7 @@ pnpm run dev
 | `completeFactCheck` | `agentflow/agents/online/fact-checker/` | 证据包核查；打回再检索 |
 | `organizeKnowledge` | `agentflow/agents/online/content-organizer/` | hits Zod 规范化 + path 去重 |
 | `streamAnalyzeInformation` | `agentflow/agents/online/information-analyst/` | 流式 thinking + assistant |
-| `golden:regression` | `apps/agents/scripts/golden-regression.ts` | 在线 Agent **G1～G5 全链路标准回归**（最终验收） |
+| `golden:regression` | `apps/agents/scripts/golden-regression.ts` | 在线 Agent **G1～G5b + GMem** 全链路回归（`GOLDEN_RUNS=3` 稳定性） |
 | `verify:fact-checker` / `verify:fact-checker:pipeline` | `apps/agents/scripts/` | FactChecker 规则 + 轻量全链路冒烟 |
 | `verify:content-organizer` / `verify:agent-schemas` | `apps/agents/scripts/` | ContentOrganizer / 全 Agent Zod |
 | `verify:embed-batches` | `apps/agents/scripts/` | Indexer p-limit 分批逻辑 |
