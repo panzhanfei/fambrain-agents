@@ -15,12 +15,24 @@ const findMonorepoRoot = (startDir = process.cwd()): string => {
     }
 };
 dotenv.config({ path: path.join(findMonorepoRoot(), ".env") });
+const resolveDatabaseUrl = (): string => {
+    const raw = process.env["DATABASE_URL"];
+    if (!raw)
+        return `file:${path.join(findMonorepoRoot(), "packages/db/prisma/dev.db")}`;
+    if (!raw.startsWith("file:"))
+        return raw;
+    const relativeOrAbsolute = raw.slice("file:".length);
+    const absolute = path.isAbsolute(relativeOrAbsolute)
+        ? relativeOrAbsolute
+        : path.resolve(findMonorepoRoot(), relativeOrAbsolute);
+    return `file:${absolute}`;
+};
 export default defineConfig({
     schema: "prisma/schema.prisma",
     migrations: {
         path: "prisma/migrations",
     },
     datasource: {
-        url: process.env["DATABASE_URL"],
+        url: resolveDatabaseUrl(),
     },
 });
