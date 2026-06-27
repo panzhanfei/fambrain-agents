@@ -31,10 +31,16 @@ const nextConfig: NextConfig = {
         "@fambrain/agent-types",
         "@fambrain/agent-config",
         "@fambrain/agent-shared",
+        "@fambrain/corpus",
         "@fambrain/db",
         "@fambrain/auth",
     ],
-    serverExternalPackages: ["@prisma/client", "better-sqlite3"],
+    serverExternalPackages: [
+        "@prisma/client",
+        "better-sqlite3",
+        "chromadb",
+        "@langchain/community",
+    ],
     poweredByHeader: false,
     headers: async () => [
         {

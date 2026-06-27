@@ -1,7 +1,7 @@
 import { readFile, stat } from "node:fs/promises";
 import path from "node:path";
 import { getAuthSession } from "@fambrain/auth";
-import { getCorpusLearnedDir, listMarkdownFiles, toRepoPath } from "@fambrain/corpus";
+import { getCorpusLearnedDir, listMarkdownFiles, toRepoPath } from "@fambrain/corpus/paths";
 import { resolveCorpusUserId } from "@/server/knowledge/resolve-corpus-user";
 import { NextResponse } from "next/server";
 
