@@ -755,6 +755,35 @@ export const ChatShell = ({ initialConversations, viewer }: ChatShellProps) => {
     setEditSidebarTitleDraft("");
     setDraft("");
   }, []);
+  const updateLogsForConversation = useCallback(
+    (
+      conversationId: string,
+      updater: (bundle: ConversationLogBundle) => ConversationLogBundle
+    ) => {
+      setConversationLogsById((prev) => {
+        const next = new Map(prev);
+        const existing = next.get(conversationId) ?? {
+          conversationId,
+          turns: [],
+        };
+        next.set(conversationId, updater(existing));
+        return next;
+      });
+    },
+    []
+  );
+  const patchActiveTurnLog = useCallback(
+    (
+      conversationId: string,
+      turnId: string,
+      patch: (turn: ConversationTurnLog) => ConversationTurnLog
+    ) => {
+      updateLogsForConversation(conversationId, (bundle) =>
+        patchTurnLog(bundle, turnId, patch)
+      );
+    },
+    [updateLogsForConversation]
+  );
   const sendMessage = useCallback(async () => {
     const trimmed = draft.trim();
     if (!trimmed || sendBusy) return;
@@ -1091,35 +1120,6 @@ export const ChatShell = ({ initialConversations, viewer }: ChatShellProps) => {
     setDraft(text);
     setSendError(null);
   };
-  const updateLogsForConversation = useCallback(
-    (
-      conversationId: string,
-      updater: (bundle: ConversationLogBundle) => ConversationLogBundle
-    ) => {
-      setConversationLogsById((prev) => {
-        const next = new Map(prev);
-        const existing = next.get(conversationId) ?? {
-          conversationId,
-          turns: [],
-        };
-        next.set(conversationId, updater(existing));
-        return next;
-      });
-    },
-    []
-  );
-  const patchActiveTurnLog = useCallback(
-    (
-      conversationId: string,
-      turnId: string,
-      patch: (turn: ConversationTurnLog) => ConversationTurnLog
-    ) => {
-      updateLogsForConversation(conversationId, (bundle) =>
-        patchTurnLog(bundle, turnId, patch)
-      );
-    },
-    [updateLogsForConversation]
-  );
   const handleAttachUpload = useCallback(async (fileList: FileList | null) => {
     if (!fileList?.length || uploadBusy || sendBusy)
       return;
