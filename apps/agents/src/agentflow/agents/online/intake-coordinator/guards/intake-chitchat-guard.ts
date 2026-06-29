@@ -1,7 +1,7 @@
 /**
  * P0-13：`chitchat` 的 briefReply 模板兜底，禁止未定义称呼（如「大表哥」）。
  */
-import type { IntakeRoutingDecision } from "./prompt";
+import type { IntakeRoutingDecision } from "../contract/prompt";
 
 export const DEFAULT_CHITCHAT_BRIEF_REPLY =
     "你好，我是 FamBrain 助手。可以问我关于工作经历、项目或技术栈的问题。";

@@ -14,8 +14,8 @@ import {
   PROJECTS_SLOT,
   resolveCompositeRoute,
   splitQuestionUnits,
+  type IntakeRoutingDecision,
 } from "../src/agentflow/agents/online/intake-coordinator/index";
-import type { IntakeRoutingDecision } from "../src/agentflow/agents/online/intake-coordinator/prompt";
 import {
   mergeCompositeHits,
   mergeCompositeRetrieval,

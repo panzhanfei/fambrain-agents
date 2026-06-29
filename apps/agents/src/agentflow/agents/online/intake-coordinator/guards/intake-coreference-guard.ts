@@ -3,7 +3,7 @@
  * 有 history 实体线索时交给 Intake LLM 补全 searchQuery。
  */
 import type { DbChatTurn } from "@fambrain/agent-types";
-import type { IntakeRoutingDecision } from "./prompt";
+import type { IntakeRoutingDecision } from "../contract/prompt";
 
 /** 本轮仅指代、未自带实体 */
 const VAGUE_REF_RE =
@@ -94,5 +94,8 @@ export const applyIntakeCoreferenceGuard = (
         clarifyingQuestion: decision.clarifyingQuestion ?? DEFAULT_CLARIFY,
         briefReply: null,
         retrievalPlan: [],
+        userFactKey: null,
+        userFactLabel: null,
+        userFactValue: null,
     };
 };

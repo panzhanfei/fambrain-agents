@@ -12,10 +12,8 @@ import {
     EMPLOYERS_SLOT,
 } from "./composite-slot-queries";
 import { resolveEnumerationTarget } from "./enumeration-target";
-import type {
-    IntakeRetrievalPlanItem,
-    IntakeRoutingDecision,
-} from "./prompt";
+import type { IntakeRetrievalPlanItem } from "../contract/prompt";
+import type { IntakeRoutingDecision } from "../contract/prompt";
 
 export type CompositeRoutePlanSource =
     | "intake_retrieval_plan"

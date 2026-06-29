@@ -2,10 +2,12 @@ import type {
   KnowledgeHit,
   KnowledgeRetrievalResult,
 } from "@/agentflow/agents/online/knowledge-manager";
-import type { IntakeRouteMode } from "@/agentflow/agents/online/intake-coordinator/composite-route-guard";
+import type {
+    CompositeSlotId,
+    CompositeSlotPlan,
+    IntakeRouteMode,
+} from "@/agentflow/agents/online/intake-coordinator";
 import type { QueryProfile } from "@/agentflow/agents/online/knowledge-manager/query-profile";
-import type { CompositeSlotPlan } from "@/agentflow/agents/online/intake-coordinator/composite-incremental";
-import type { CompositeSlotId } from "@/agentflow/agents/online/intake-coordinator/composite-slot-queries";
 import type { CompositeSessionKey } from "@fambrain/infra";
 /**
  * InformationAnalyst 系统指令（P0）。

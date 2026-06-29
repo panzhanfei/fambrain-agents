@@ -5,7 +5,7 @@
  */
 import { readFile } from "node:fs/promises";
 import { getRetrievalFromCache } from "@fambrain/infra";
-import { applyCompositeRouteGuard } from "../src/agentflow/agents/online/intake-coordinator/composite-route-guard";
+import { applyCompositeRouteGuard } from "../src/agentflow/agents/online/intake-coordinator";
 import { defaultIntakeDecision } from "../src/agentflow/pipeline/parse-intake";
 import { retrieveKnowledge } from "../src/agentflow/agents/online/knowledge-manager/retrieve";
 import { listCorpusUserIds } from "../src/agentflow/agents/offline/knowledge-indexer/list-corpus-users";

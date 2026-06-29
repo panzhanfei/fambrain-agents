@@ -34,8 +34,10 @@ import {
     SCAN_BODY_MAX,
 } from "./km-config";
 import { resolveQueryProfile } from "./query-profile";
-import { resolveEnumerationTarget } from "@/agentflow/agents/online/intake-coordinator/enumeration-target";
-import type { EnumerationTarget } from "@/agentflow/agents/online/intake-coordinator/enumeration-target";
+import {
+    resolveEnumerationTarget,
+    type EnumerationTarget,
+} from "@/agentflow/agents/online/intake-coordinator";
 import {
     applyEnumerationFill,
     applyIdentityGuard,

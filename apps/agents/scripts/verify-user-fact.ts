@@ -10,16 +10,14 @@ import path from "node:path";
 import {
     applyUserFactFromIntake,
     buildUserFactRoutedDecision,
-} from "../src/agentflow/agents/online/intake-coordinator/intake-user-fact-guard";
-import {
     findUserFactValueInTexts,
     parseUserFactRecord,
     routeUserFactFromIntake,
     serializeUserFactRecord,
-} from "../src/agentflow/agents/online/intake-coordinator/user-fact";
+    type IntakeRoutingDecision,
+} from "../src/agentflow/agents/online/intake-coordinator";
 import { userFactNode } from "../src/agentflow/pipeline/graph/user-fact-node";
 import type { PipelineGraphState } from "../src/agentflow/pipeline/graph/state";
-import type { IntakeRoutingDecision } from "../src/agentflow/agents/online/intake-coordinator/prompt";
 
 const QQ = "734858469";
 const WECHAT = "panzf_wx";

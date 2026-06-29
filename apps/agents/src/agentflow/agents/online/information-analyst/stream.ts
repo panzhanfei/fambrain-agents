@@ -20,7 +20,7 @@ import {
     type InformationAnalystInput,
     type InformationAnalystResult,
 } from "./prompt";
-import { cachedFacetToAnalystResult } from "@/agentflow/agents/online/intake-coordinator/composite-incremental";
+import { cachedFacetToAnalystResult } from "@/agentflow/agents/online/intake-coordinator";
 import { streamCompositeAnalyze } from "./stream-composite";
 
 type AnalystStreamChunk =

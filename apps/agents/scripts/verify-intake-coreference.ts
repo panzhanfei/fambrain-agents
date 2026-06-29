@@ -12,7 +12,7 @@ import {
     isVagueReferentialQuestion,
     type IntakeRoutingDecision,
 } from "../src/agentflow/agents/online/intake-coordinator/index";
-import { findRepeatAnswerInHistory } from "../src/agentflow/agents/online/intake-coordinator/intake-repeat-guard";
+import { findRepeatAnswerInHistory } from "../src/agentflow/agents/online/intake-coordinator";
 import { parseIntakeDecision } from "../src/agentflow/pipeline/parse-intake";
 import { bootstrapAgentsRuntime } from "../src/config/index";
 import { enableRepeatGuardForVerify } from "./verify-test-env";

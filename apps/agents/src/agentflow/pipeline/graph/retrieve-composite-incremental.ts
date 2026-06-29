@@ -1,5 +1,5 @@
 import type { CachedFacetAnswer } from "@fambrain/infra";
-import type { IncrementalCompositePlan } from "@/agentflow/agents/online/intake-coordinator/composite-incremental";
+import type { IncrementalCompositePlan } from "@/agentflow/agents/online/intake-coordinator";
 import type { KnowledgeHit } from "@/agentflow/agents/online/knowledge-manager";
 import { retrieveCompositeSlotsParallel } from "./retrieve-slots-parallel";
 import {

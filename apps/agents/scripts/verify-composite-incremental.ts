@@ -8,12 +8,12 @@ import {
     resetInfraConfigForTests,
     upsertFacetAnswers,
 } from "@fambrain/infra";
-import { buildFacetKey } from "../src/agentflow/agents/online/intake-coordinator/composite-facet-key";
 import {
     analystResultToCachedFacet,
+    buildFacetKey,
+    planItemToSlot,
     resolveIncrementalCompositePlan,
-} from "../src/agentflow/agents/online/intake-coordinator/composite-incremental";
-import { planItemToSlot } from "../src/agentflow/agents/online/intake-coordinator/composite-slot-queries";
+} from "../src/agentflow/agents/online/intake-coordinator";
 
 process.env.REDIS_ENABLED = "0";
 process.env.COMPOSITE_ANSWER_CACHE_DISABLED = "0";

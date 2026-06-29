@@ -4,15 +4,12 @@ import { organizeKnowledge } from "@/agentflow/agents/online/content-organizer";
 import { resolveQueryProfile } from "@/agentflow/agents/online/knowledge-manager/query-profile";
 import { buildSummarizeSourceText, formatSummaryAsAnswer, summarizeContent, } from "@/agentflow/agents/online/content-summarizer";
 import { completeFactCheck } from "@/agentflow/agents/online/fact-checker";
-import { completeIntakeCoordinator } from "@/agentflow/agents/online/intake-coordinator";
-import { applyIntakeChitchatGuard } from "@/agentflow/agents/online/intake-coordinator/intake-chitchat-guard";
-import { applyCompositeRouteGuard } from "@/agentflow/agents/online/intake-coordinator/composite-route-guard";
-import { applyIntakeCoreferenceGuard } from "@/agentflow/agents/online/intake-coordinator/intake-coreference-guard";
-import { applyIntakeRetrievalPlanGuard } from "@/agentflow/agents/online/intake-coordinator/intake-retrieval-plan-guard";
-import { findRepeatAnswerInHistory } from "@/agentflow/agents/online/intake-coordinator/intake-repeat-guard";
-import { applyUserFactFromIntake } from "@/agentflow/agents/online/intake-coordinator/intake-user-fact-guard";
-import { routeUserFactFromIntake } from "@/agentflow/agents/online/intake-coordinator/user-fact";
-import { resolveIncrementalCompositePlan } from "@/agentflow/agents/online/intake-coordinator/composite-incremental";
+import {
+    completeIntakeCoordinator,
+    findRepeatAnswerInHistory,
+    resolveIncrementalCompositePlan,
+    runIntakePipeline,
+} from "@/agentflow/agents/online/intake-coordinator";
 import { streamAnalyzeInformation } from "@/agentflow/agents/online/information-analyst";
 import { retrieveKnowledge } from "@/agentflow/agents/online/knowledge-manager";
 import { retrieveCompositeIncremental } from "./retrieve-composite-incremental";
@@ -21,7 +18,7 @@ import {
     getRetrievalFromCache,
     setRetrievalCache,
 } from "@fambrain/infra";
-import { defaultIntakeDecision, parseIntakeDecision } from "../parse-intake";
+import { logAgentOut } from "@fambrain/agent-shared/agent-log";
 import { PipelineGraphAnnotation, type PipelineGraphState } from "./state";
 const routeAfterIntake = (state: PipelineGraphState): "respondEarly" | "userFact" | "retrieval" | "factChecker" | "contentSummarizer" => {
     if (state.exitEarly || state.error)
@@ -69,6 +66,14 @@ const intakeNode = async (state: PipelineGraphState): Promise<Partial<PipelineGr
         state.userQuestion
     );
     if (repeatAnswer) {
+        logAgentOut("IntakeCoordinator", "L1_重复问", {
+            hit: true,
+            userQuestion: state.userQuestion,
+            answerPreview:
+                repeatAnswer.length > 200
+                    ? `${repeatAnswer.slice(0, 200)}…`
+                    : repeatAnswer,
+        });
         return {
             answer: repeatAnswer,
             exitEarly: true,
@@ -80,17 +85,11 @@ const intakeNode = async (state: PipelineGraphState): Promise<Partial<PipelineGr
             memoryBlock: state.memoryBlock,
             intakeHistory: state.intakeHistory,
         });
-        const parsed = parseIntakeDecision(intakeRaw) ??
-            defaultIntakeDecision(state.userQuestion);
-        let guarded = applyIntakeCoreferenceGuard(parsed, state.intakeHistory);
-        guarded = applyIntakeChitchatGuard(guarded);
-        const userFactRoute = routeUserFactFromIntake(guarded);
-        const decision = userFactRoute
-            ? applyUserFactFromIntake(guarded, userFactRoute)
-            : applyCompositeRouteGuard(
-                  applyIntakeRetrievalPlanGuard(guarded, state.userQuestion),
-                  state.userQuestion
-              );
+        const { decision } = runIntakePipeline({
+            intakeRaw,
+            userQuestion: state.userQuestion,
+            intakeHistory: state.intakeHistory,
+        });
         return { decision };
     }
     catch (e) {

@@ -1,7 +1,9 @@
 import { Annotation } from "@langchain/langgraph";
 import type { AgentPipelineContext, DbChatTurn, } from "@fambrain/agent-types";
-import type { RoutedIntakeDecision } from "@/agentflow/agents/online/intake-coordinator/composite-route-guard";
-import type { IncrementalCompositePlan } from "@/agentflow/agents/online/intake-coordinator/composite-incremental";
+import type {
+    IncrementalCompositePlan,
+    RoutedIntakeDecision,
+} from "@/agentflow/agents/online/intake-coordinator";
 import type { InformationAnalystInput } from "@/agentflow/agents/online/information-analyst";
 import type { ConfidenceTier } from "@/agentflow/agents/online/knowledge-manager/types";
 import type { CompositeSubRetrieval } from "./merge-composite-retrieval";

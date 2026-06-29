@@ -2,8 +2,8 @@
  * Composite 检索槽：canonical 模板 + Intake retrievalPlan 动态项。
  * L2 cache key = corpusUserId + searchQuery + queryType（按槽独立）。
  */
-import type { IntakeRetrievalPlanItem } from "./prompt";
-import type { IntakeRoutingDecision } from "./prompt";
+import type { IntakeRetrievalPlanItem } from "../contract/prompt";
+import type { IntakeRoutingDecision } from "../contract/prompt";
 import {
     isProjectEnumeration,
     resolveEnumerationTarget,

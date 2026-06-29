@@ -4,7 +4,7 @@ import {
     searchUserFactMemories,
 } from "@fambrain/agent-memory";
 import { z } from "zod";
-import { findUserFactValueInTexts } from "@/agentflow/agents/online/intake-coordinator/user-fact";
+import { findUserFactValueInTexts } from "@/agentflow/agents/online/intake-coordinator";
 import { getToolContext } from "./context";
 
 export const rememberUserFactTool = tool(

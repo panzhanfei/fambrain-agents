@@ -13,7 +13,7 @@ import {
     findUserFactValueInMemoryBlock,
     findUserFactValueInTexts,
     validateFactValue,
-} from "@/agentflow/agents/online/intake-coordinator/user-fact";
+} from "@/agentflow/agents/online/intake-coordinator";
 
 const resolveRecallValue = async (
     state: PipelineGraphState

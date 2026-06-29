@@ -4,7 +4,7 @@
  *   pnpm run verify:agent-schemas
  */
 import assert from "node:assert/strict";
-import { parseIntakeRoutingDecision } from "../src/agentflow/agents/online/intake-coordinator/schema";
+import { parseIntakeRoutingDecision } from "../src/agentflow/agents/online/intake-coordinator";
 import { parseFactCheckerResult } from "../src/agentflow/agents/online/fact-checker/schema";
 import { parseKnowledgeRetrievalResult } from "../src/agentflow/agents/online/knowledge-manager/schema";
 import { parseAnalystResult } from "../src/agentflow/agents/online/information-analyst/schema";

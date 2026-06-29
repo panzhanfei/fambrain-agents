@@ -7,15 +7,15 @@ import type { QueryProfile } from "@/agentflow/agents/online/knowledge-manager/q
 import {
   resolveAnalystQueryProfile,
 } from "./analyst-recall-limits";
-import { isProjectEnumeration } from "@/agentflow/agents/online/intake-coordinator/enumeration-target";
+import {
+    isProjectEnumeration,
+    memoryBlockHasStructuredUserFacts,
+} from "@/agentflow/agents/online/intake-coordinator";
 import type {
   Citation,
   InformationAnalystInput,
   InformationAnalystResult,
 } from "./prompt";
-import {
-    memoryBlockHasStructuredUserFacts,
-} from "@/agentflow/agents/online/intake-coordinator/user-fact";
 import { parseAnalystResult } from "./schema";
 export { parseAnalystResult as normalizeAnalystResult };
 

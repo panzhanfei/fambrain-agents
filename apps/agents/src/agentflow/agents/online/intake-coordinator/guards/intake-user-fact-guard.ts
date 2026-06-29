@@ -1,9 +1,9 @@
 /**
  * P0-16：Intake 结构化 remember_user_fact / recall_user_fact → userFact 编排分支。
  */
-import type { IntakeRoutingDecision } from "./prompt";
-import type { RoutedIntakeDecision } from "./composite-route-guard";
-import type { UserFactRoute } from "./user-fact";
+import type { IntakeRoutingDecision } from "../contract/prompt";
+import type { RoutedIntakeDecision } from "../composite/composite-route-guard";
+import type { UserFactRoute } from "../user-fact/user-fact";
 
 export type { UserFactRoute };
 

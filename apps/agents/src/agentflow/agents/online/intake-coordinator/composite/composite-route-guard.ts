@@ -8,8 +8,8 @@ import {
     type CompositeRoutePlanSource,
 } from "./composite-routing";
 import type { CompositeRetrievalSlot } from "./composite-slot-queries";
-import type { IntakeRoutingDecision } from "./prompt";
-import type { UserFactRoute } from "./user-fact";
+import type { IntakeRoutingDecision } from "../contract/prompt";
+import type { UserFactRoute } from "../user-fact/user-fact";
 
 export type IntakeRouteMode = "single" | "composite" | "slot";
 

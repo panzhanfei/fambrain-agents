@@ -1,5 +1,5 @@
 import type { DbChatTurn } from "@fambrain/agent-types";
-import type { IntakeRoutingDecision } from "./prompt";
+import type { IntakeRoutingDecision } from "../contract/prompt";
 
 /** 编排器 user_fact 分支路由（来自 Intake JSON，非问句 regex） */
 export type UserFactRoute = {

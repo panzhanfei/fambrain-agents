@@ -1,4 +1,4 @@
-import type { CompositeRetrievalSlot } from "@/agentflow/agents/online/intake-coordinator/composite-slot-queries";
+import type { CompositeRetrievalSlot } from "@/agentflow/agents/online/intake-coordinator";
 import { retrieveSlotWithCache } from "./retrieve-with-cache";
 import {
     mergeCompositeRetrieval,

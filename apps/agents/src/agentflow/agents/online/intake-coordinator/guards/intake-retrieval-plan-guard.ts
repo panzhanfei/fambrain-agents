@@ -6,9 +6,9 @@ import {
     buildFallbackRetrievalPlan,
     looksLikeMultiPartQuestion,
     normalizePlanItems,
-} from "./composite-routing";
-import { canonicalizePlanItem } from "./composite-slot-queries";
-import type { IntakeRoutingDecision } from "./prompt";
+} from "../composite/composite-routing";
+import { canonicalizePlanItem } from "../composite/composite-slot-queries";
+import type { IntakeRoutingDecision } from "../contract/prompt";
 
 export type IntakeRetrievalPlanGuardReason =
     | "noop"

@@ -1,7 +1,7 @@
 import type {
     CompositeSlotId,
     CompositeRetrievalSlot,
-} from "@/agentflow/agents/online/intake-coordinator/composite-slot-queries";
+} from "@/agentflow/agents/online/intake-coordinator";
 import type {
     ConfidenceTier,
     KnowledgeHit,

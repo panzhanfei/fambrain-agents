@@ -2,11 +2,11 @@ import { logAgentIn, logAgentOut } from "@fambrain/agent-shared/agent-log";
 import { upsertFacetAnswers } from "@fambrain/infra";
 import { organizeKnowledge } from "@/agentflow/agents/online/content-organizer";
 import { resolveQueryProfile } from "@/agentflow/agents/online/knowledge-manager/query-profile";
-import type { CompositeSlotPlan } from "@/agentflow/agents/online/intake-coordinator/composite-incremental";
 import {
     analystResultToCachedFacet,
     cachedFacetToAnalystResult,
-} from "@/agentflow/agents/online/intake-coordinator/composite-incremental";
+    type CompositeSlotPlan,
+} from "@/agentflow/agents/online/intake-coordinator";
 import {
     mergeSubQuestionAnswers,
     type SubQuestionAnalyzeInput,

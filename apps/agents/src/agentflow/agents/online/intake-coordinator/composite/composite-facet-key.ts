@@ -6,7 +6,7 @@ import { inferQueryProfile } from "@/agentflow/agents/online/knowledge-manager/q
 import { canonicalizePlanItem } from "./composite-slot-queries";
 import { resolveEnumerationTarget } from "./enumeration-target";
 import type { CompositeRetrievalSlot } from "./composite-slot-queries";
-import type { IntakeRetrievalPlanItem } from "./prompt";
+import type { IntakeRetrievalPlanItem } from "../contract/prompt";
 
 type FacetSource =
     | Pick<

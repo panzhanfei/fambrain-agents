@@ -2,7 +2,7 @@
  * enumeration 二分类：项目列举 vs 公司/任职列举。
  * 信号来源：plan 项 label/searchQuery（优先，纠正 Intake 误标 topics）→ topics → 默认 experience。
  */
-import type { IntakeRetrievalPlanItem } from "./prompt";
+import type { IntakeRetrievalPlanItem } from "../contract/prompt";
 
 export type EnumerationTarget = "project" | "experience";
 

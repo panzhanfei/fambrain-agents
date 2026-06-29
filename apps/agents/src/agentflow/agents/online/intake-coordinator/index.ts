@@ -1,30 +1,47 @@
-export { completeIntakeCoordinator } from "./ollama-chat";
+/** IntakeCoordinator 对外 API；目录按 contract / llm / pipeline / guards / composite / user-fact 划分。 */
+
 export {
     prompt,
     type IntakeRetrievalPlanItem,
     type IntakeRoutingDecision,
-} from "./prompt";
+} from "./contract/prompt";
+export {
+    intakeRetrievalPlanItemSchema,
+    intakeRoutingDecisionSchema,
+    parseIntakeRoutingDecision,
+} from "./contract/schema";
+
+export { completeIntakeCoordinator } from "./llm/ollama-chat";
+
+export { runIntakePipeline, type RunIntakePipelineResult } from "./pipeline/intake-pipeline";
+
+export { findRepeatAnswerInHistory } from "./guards/intake-repeat-guard";
 export {
     applyIntakeCoreferenceGuard,
     hasCoreferenceContext,
     isVagueReferentialQuestion,
-} from "./intake-coreference-guard";
+} from "./guards/intake-coreference-guard";
 export {
     applyIntakeChitchatGuard,
     DEFAULT_CHITCHAT_BRIEF_REPLY,
     isAcceptableChitchatBriefReply,
-} from "./intake-chitchat-guard";
+} from "./guards/intake-chitchat-guard";
 export {
     applyIntakeRetrievalPlanGuard,
     type IntakeRetrievalPlanGuardReason,
-} from "./intake-retrieval-plan-guard";
+} from "./guards/intake-retrieval-plan-guard";
+export {
+    applyUserFactFromIntake,
+    buildUserFactRoutedDecision,
+} from "./guards/intake-user-fact-guard";
+
 export {
     applyCompositeRouteGuard,
     isCompositeProfileQuestion,
     type CompositeRouteReason,
     type IntakeRouteMode,
     type RoutedIntakeDecision,
-} from "./composite-route-guard";
+} from "./composite/composite-route-guard";
 export {
     buildFallbackRetrievalPlan,
     buildSingleQuestionPlanItem,
@@ -35,7 +52,7 @@ export {
     splitQuestionUnits,
     type CompositeRoutePlanSource,
     type ResolvedCompositeRoute,
-} from "./composite-routing";
+} from "./composite/composite-routing";
 export {
     COMPOSITE_FACET_IDS,
     COMPOSITE_PROFILE_SLOTS,
@@ -49,39 +66,40 @@ export {
     type CompositeFacetId,
     type CompositeRetrievalSlot,
     type CompositeSlotId,
-} from "./composite-slot-queries";
+} from "./composite/composite-slot-queries";
 export {
     isExperienceEnumeration,
     isProjectEnumeration,
     resolveEnumerationTarget,
     type EnumerationTarget,
-} from "./enumeration-target";
+} from "./composite/enumeration-target";
 export {
     buildFacetKey,
     detectCompositeRefreshIntent,
     attachFacetKey,
-} from "./composite-facet-key";
+} from "./composite/composite-facet-key";
 export {
     resolveIncrementalCompositePlan,
     cachedFacetToAnalystResult,
     analystResultToCachedFacet,
     type CompositeSlotPlan,
     type IncrementalCompositePlan,
-} from "./composite-incremental";
-export {
-    applyUserFactFromIntake,
-    buildUserFactRoutedDecision,
-} from "./intake-user-fact-guard";
+} from "./composite/composite-incremental";
+
 export {
     routeUserFactFromIntake,
     parseUserFactRecord,
     serializeUserFactRecord,
     memoryBlockHasStructuredUserFacts,
+    normalizeFactKey,
+    validateFactValue,
+    findUserFactValueInTexts,
+    findUserFactValueInMemoryBlock,
+    coalesceRememberValue,
+    buildRememberConfirmAnswer,
+    buildRememberMissingValueAnswer,
+    buildRecallAnswer,
+    buildRecallMissingAnswer,
     type UserFactRoute,
     type UserFactRecord,
-} from "./user-fact";
-export {
-    intakeRetrievalPlanItemSchema,
-    intakeRoutingDecisionSchema,
-    parseIntakeRoutingDecision,
-} from "./schema";
+} from "./user-fact/user-fact";
