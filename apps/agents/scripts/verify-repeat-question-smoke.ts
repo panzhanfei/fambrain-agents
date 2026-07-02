@@ -1,5 +1,5 @@
 /**
- * D5-2 repeat guard 冒烟：预置 history，不调用 Ollama。
+ * 同问短路冒烟：预置 history，不调用 Ollama。
  */
 import { runPipelineStream } from "@/agentflow/index";
 import { bootstrapAgentsRuntime } from "@/config";
@@ -48,7 +48,7 @@ while (true) {
 console.log(
     `repeatHit=${repeatHit} steps=[${steps.join(",")}] ${Date.now() - started}ms`
 );
-if (!repeatHit || steps.join(",") !== "intake") {
+if (!repeatHit || steps.join(",") !== "prepare_turn") {
     process.exit(1);
 }
 console.log("OK");

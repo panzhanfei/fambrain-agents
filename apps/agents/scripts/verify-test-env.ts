@@ -1,6 +1,6 @@
 import { resetInfraConfigForTests } from "@fambrain/infra";
 
-/** verify 脚本内覆盖 .env：开启 L1 同问短路（D5-2） */
+/** verify 脚本内覆盖 .env：开启同问短路（D5-2） */
 export const enableRepeatGuardForVerify = (): void => {
     process.env.REPEAT_QUESTION_CACHE_DISABLED = "0";
     resetInfraConfigForTests();

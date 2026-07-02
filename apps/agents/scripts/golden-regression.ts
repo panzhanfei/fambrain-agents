@@ -197,6 +197,7 @@ const GOLDEN_CASES: GoldenCase[] = [
     question: "那个项目呢？",
     assert: ({ steps, answer }) => {
       if (hasStep(steps, "analyst")) return "无上下文时不应进入 analyst 编造";
+      if (!hasStep(steps, "prepare_turn")) return "应至少经过 prepare_turn";
       if (!hasStep(steps, "intake")) return "应至少经过 intake";
       if (!CLARIFY_ANSWER.test(answer))
         return "answer 应像澄清问句（含「哪/哪个/指的是」等）";

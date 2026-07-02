@@ -14,6 +14,7 @@ export type AgentPipelineContext = {
     conversationId: string;
 };
 export type PipelineStepName =
+    | "prepare_turn"
     | "intake"
     | "user_fact"
     | "retrieval"

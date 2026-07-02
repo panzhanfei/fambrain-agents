@@ -17,7 +17,7 @@
 
 | 天 | 主题 | 核心交付 |
 |:--:|------|----------|
-| **D1** | 基线冻结 + 全链路复盘 | baseline 报告；一页纸架构图 |
+| **D1** | 基线冻结 + 全链路复盘 | baseline 报告；一页纸架构图（在线 LangGraph vs 离线脚本） |
 | **D2** | 离线链路复盘 | Indexer / DocParser / corpus 笔记 |
 | **D3** | **LLM 提供方可配置（设计 + 骨架）** | `LLM_PROVIDER`；chat 工厂接口 |
 | **D4** | **OpenAI 接入 + smoke** | Intake/FC/Analyst 走 OpenAI；`.env.example` |
@@ -53,7 +53,7 @@
 
 | 上午 | 下午 | 晚间 |
 |------|------|------|
-| 画全链路（离线 + 在线 + cache + Learning） | 跑 baseline | 记 3 行日志 |
+| 画全链路（**离线** Indexer/DocParser/Learning + **在线** prepareTurn→Intake→KM… + cache） | 跑 baseline | 记 3 行日志 |
 
 **命令：**
 
@@ -161,7 +161,7 @@ LLM_PROVIDER=openai pnpm run golden:regression    # 至少 G1/G2/G4 smoke 或通
 |------|------|------|
 | Agents `/health` | 日可用 ≥99% | cron curl |
 | 检索类 E2E p95 | ≤15s | eval + 线上 timing |
-| L1 repeat p95 | ≤3s | profileProbe t2 |
+| 同问短路 p95 | ≤3s | profileProbe t2 |
 | 5xx 率 | <1% | 日志 |
 | Golden / eval | 发版 100% | CI |
 

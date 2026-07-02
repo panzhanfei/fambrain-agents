@@ -402,7 +402,7 @@ const runProfileProbe = async (
             reason:
                 issues.length === 0
                     ? turn.expectRepeatHit
-                        ? `ok（L1 repeat：${repeatHit ? "hit" : "miss"}）`
+                        ? `ok（同问短路：${repeatHit ? "hit" : "miss"}）`
                         : "ok"
                     : issues.join("; "),
             latencyMs: snap.latencyMs,

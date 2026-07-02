@@ -6,7 +6,7 @@
 
 基于 **Next.js（App Router）** 的家庭协作型对话应用：注册登录、成员审核、会话与消息持久化，以及 **P0 多 Agent 聊天闭环**（意图路由 → 知识库检索 → 归纳回答，SSE 流式）。
 
-**当前进度（2026-06）：** 在线 LangGraph 多 Agent 闭环 ✅；`@fambrain/corpus` / `@fambrain/agent-memory` / `@fambrain/infra` 已抽包；**`pnpm dev` 一键起 Chroma + Redis + Web + Agents** ✅；**P0-15 composite 分槽 + L3/L4** ✅；**R6 / Golden / eval 13/13** ✅；**LangChain StructuredTool 层**（5 工具）✅；**LangSmith tracing**（配 API Key 即用）✅；**Learning Phase A–D** ✅；**SLO Token + Web 运行日志** ✅。详见 [路线图](./03-roadmap.md) · [流程图](./02-agent-flows.md)。
+**当前进度（2026-06）：** 在线 LangGraph 多 Agent 闭环 ✅（**PrepareTurn 首节点** + Intake → KM → FC → Analyst）；`@fambrain/corpus` / `@fambrain/agent-memory` / `@fambrain/infra` 已抽包；**`pnpm dev` 一键起 Chroma + Redis + Web + Agents** ✅；**P0-15 composite 分槽 + L3/L4** ✅；**R6 / Golden / eval 13/13** ✅；**LangChain StructuredTool 层**（5 工具）✅；**LangSmith tracing**（配 API Key 即用）✅；**Learning Phase A–D** ✅；**SLO Token + Web 运行日志** ✅。详见 [路线图](./03-roadmap.md) · [流程图](./02-agent-flows.md)。
 
 ## 应用层技术栈
 
@@ -139,7 +139,7 @@ pnpm run dev
 | `REDIS_KEY_PREFIX` | 否 | Redis key 根前缀，默认 `fambrain`（检索 cache / 限流 / 队列名派生） |
 | `DEV_REDIS_AUTO_START` | 否 | `pnpm dev` 时 Redis 不可达且端口空闲则 `docker compose up redis`，默认 `1` |
 | `RETRIEVAL_CACHE_DISABLED` / `RETRIEVAL_CACHE_TTL_MS` | 否 | **L2** 检索结果 cache（D5-2）；`=1` 关闭；Redis 不可用时 memory fallback |
-| `REPEAT_QUESTION_CACHE_DISABLED` | 否 | **L1** 同问短路（`intake-repeat-guard.ts`）；`=1` 关闭，同句再问走全链路 |
+| `REPEAT_QUESTION_CACHE_DISABLED` | 否 | **同问短路**（`prepare-turn/repeat-question-guard.ts`）；`=1` 关闭，同句再问走全链路 |
 | `COMPOSITE_ANSWER_CACHE_DISABLED` / `COMPOSITE_ANSWER_CACHE_TTL_MS` | 否 | **L3** composite facet 终稿 cache（P0-15）；`=1` 关闭 |
 | `PIPELINE_QUEUE_ENABLED` | 否 | `1` 时 `pnpm dev` 另起 BullMQ worker（web 入队接好后再开） |
 | `OLLAMA_STREAM_THINK` | 否 | 流式是否请求 thinking；不支持时服务端会自动降级重试 |
@@ -166,7 +166,9 @@ pnpm run dev
 | 路径 | 职责 |
 |------|------|
 | `apps/web/` | Next.js UI + BFF；`.next` 产物在此目录 |
-| `apps/agents/` | Agent 业务：orchestrator、pipeline、各 Worker、Indexer CLI |
+| `apps/agents/` | Agent 业务：orchestrator、**在线** LangGraph pipeline、**离线** Indexer/Learning CLI |
+| `apps/agents/src/agentflow/agents/online/` | 在线 Agent：`prepare-turn`、intake-coordinator、knowledge-manager… |
+| `apps/agents/src/agentflow/agents/offline/` | 离线：knowledge-indexer、doc-parser、learning |
 | `packages/db/` | Prisma schema、migrations、会话 repo |
 | `packages/auth/` | JWT、登录注册、会话 |
 | `packages/agent-types/` | `DbChatTurn`、`AgentPipelineContext` 等共享类型 |
@@ -182,8 +184,9 @@ pnpm run dev
 
 | 技能点 | 代码位置 | 用途 |
 |--------|----------|------|
-| `runAgentStream` + `runPipelineStream` | `apps/agents/src/agentflow/`、`pipeline/graph/stream.ts` | LangGraph 编排 + SSE |
-| `getCompiledPipelineGraph` | `pipeline/graph/compile.ts` | Intake → **userFact**（可选）→ KM → FactChecker → **ContentOrganizer** → Analyst |
+| `runAgentStream` + `runPipelineStream` | `apps/agents/src/agentflow/`、`pipeline/graph/stream.ts` | LangGraph SSE 壳（消费 stream；同问短路/Mem0 在图内） |
+| `runPrepareTurn` | `agentflow/agents/online/prepare-turn/` | 图首节点：ALS、同问短路、Mem0/LangMem 注入 |
+| `getCompiledPipelineGraph` | `pipeline/graph/compile.ts` | **prepareTurn** → Intake → **userFact**（可选）→ KM → FactChecker → **ContentOrganizer** → Analyst |
 | `userFactNode` / `routeUserFactFromIntake` | `pipeline/graph/user-fact-node.ts`、`intake-coordinator/user-fact.ts` | P0-16：跨会话 remember/recall；绕过 KM / FC / Analyst |
 | `addStructuredUserFact` / `searchUserFactMemories` | `packages/agent-memory/src/mem0/store.ts` | Mem0 结构化写入 + 按 factKey 语义检索 |
 | `parseIntakeDecision` / `defaultIntakeDecision` | `pipeline/parse-intake.ts` | 解析 Intake 路由 JSON |
@@ -197,7 +200,7 @@ pnpm run dev
 | `verify:content-organizer` / `verify:agent-schemas` | `apps/agents/scripts/` | ContentOrganizer / 全 Agent Zod |
 | `verify:embed-batches` | `apps/agents/scripts/` | Indexer p-limit 分批逻辑 |
 | `verify:memory` / `verify:doc-parser` | `apps/agents/scripts/` | Mem0+LangMem / DocParser |
-| `preparePipelineMemory` | `agentflow/memory/` | 每轮加载 Mem0 + LangMem → `memoryBlock` |
+| `preparePipelineMemory` | `packages/agent-memory/`（由 **prepare-turn** 调用） | 每轮加载 Mem0 + LangMem → `memoryBlock` |
 | `ingestDocumentBatch` | `agentflow/agents/offline/doc-parser/` | 批量上传解析 → corpus + 可选入库 |
 | `summarizeContent` | `agentflow/agents/online/content-summarizer/` | 在线摘要分支 + CLI（D9） |
 | `listVaultFiles` | `agentflow/knowledge/list-vault-files.ts` | vault 只读列举（MCP 共用） |
@@ -205,7 +208,7 @@ pnpm run dev
 | `hybridRecall` / `fuseRrf` | `knowledge-manager/hybrid-recall.ts`、`fusion-rrf.ts` | 并行 Hybrid + RRF（HY-02～03） |
 | `@fambrain/infra` | `packages/infra/` | Redis 连接、L2/L3 cache、BullMQ 队列、限流；相对 import **不带 `.ts` 后缀**（`packages/infra/tsconfig.json`） |
 | `verify:retrieval-cache` | `apps/agents/scripts/` | D5-2 L2 cache normalize + memory/Redis |
-| `verify:intake-repeat-smoke` | `apps/agents/scripts/` | D5-2 L1 同问短路冒烟（无 Ollama） |
+| `verify:repeat-question-smoke` | `apps/agents/scripts/` | D5-2 同问短路冒烟（无 Ollama） |
 | `verify:recall-compare` | `apps/agents/scripts/` | HY-07 三问 vector/sparse/RRF（需 Chroma） |
 | `verify:confidence-tier` | `apps/agents/scripts/` | Wave D：assessConfidence 单测 + KM live tier |
 | `verify:analyst-empty-hits` | `apps/agents/scripts/` | P0-12 / D5-5：空 hits skip LLM + insufficientEvidence |
@@ -220,7 +223,7 @@ pnpm run dev
 | `diagnose-age-query.ts` | `apps/agents/scripts/` | 年龄单问：路由 + KM 检索 + 语料字段诊断（需 Chroma） |
 | `eval:run` | `apps/agents/scripts/eval/` | Eval MVP：G1～G5b + KM + E2E + **memProbe/cacheProbe/profileProbe**；`--mem-only` → **GMem**；`--profile-only` → **G-履历综合** |
 | `verify:learning-extract` | `apps/agents/scripts/` | 自主学习候选抽取（Phase A 前置） |
-| `verify-test-env.ts` | `apps/agents/scripts/` | verify 脚本内覆盖 `.env` cache 开关（L1/L2）；**勿**在生产入口引用 |
+| `verify-test-env.ts` | `apps/agents/scripts/` | verify 脚本内覆盖 `.env` cache 开关；**勿**在生产入口引用 |
 | `createFambrainTools` | `agentflow/tools/` | LangChain **StructuredTool**：`retrieve_corpus` / `remember_user_fact` / `recall_user_fact` / `list_vault_files` / `summarize_text` |
 | `configureLangSmithTracing` | `packages/agent-config/langsmith.ts` | 启动时启用 tracing；`stream.ts` 附加 conversationId 等 metadata |
 | `verify:langchain-tools` | `apps/agents/scripts/` | Tool 注册 + retrieve / Mem0 / vault invoke 冒烟 |

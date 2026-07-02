@@ -165,10 +165,10 @@ GOLDEN_RUNS=3 pnpm run golden:regression   # G1～G5b + GMem，稳定性 3 遍
 | 交付 | 改动面 | 通过标准 |
 |------|--------|----------|
 | **检索结果 cache** | `@fambrain/infra` `retrievalNode`；key = `{REDIS_KEY_PREFIX}:retrieval:v1:{corpusUserId}:{queryType}:{query}`；TTL 可配 | 同会话连续两问 G4 原文，第二次不全量走向量检索 |
-| **Intake 重复问识别** | `intake-repeat-guard.ts`；`stream.ts` 入口 + `intakeNode` 开头 | 归一化 user 问与本会话 history 相同 → 复用上轮 assistant 答，跳过 KM/FC/Analyst |
+| **同问短路** | `prepare-turn/repeat-question-guard.ts`；LangGraph **`prepareTurn` 节点** | 归一化 user 问与本会话 history 相同 → 复用上轮 assistant 答，跳过 Intake/KM/FC/Analyst |
 | **FactChecker cache hit** | cache hit 时规则快检（`cache_hit_skip_llm`） | 日志 / SSE 可见 `retrievalCacheHit` |
 
-**状态（2026-06-18）：** ✅ 检索 cache（L2）已接入 pipeline（Redis db=`REDIS_DB` 或 URL `/N`；未配 Redis 时 memory fallback）；✅ FC cache hit 快检；✅ `verify:retrieval-cache` + eval `CACHE-G4-repeat` **1/1**；✅ **Intake 同问短路（L1）** — `findRepeatAnswerInHistory` + `repeatQuestionHit`；✅ `verify:intake-repeat-smoke` / `verify:intake-coreference` repeat 单测
+**状态（2026-06-18）：** ✅ 检索 cache 已接入 pipeline（Redis db=`REDIS_DB` 或 URL `/N`；未配 Redis 时 memory fallback）；✅ FC cache hit 快检；✅ `verify:retrieval-cache` + eval `CACHE-G4-repeat` **1/1**；✅ **同问短路** — `findRepeatAnswerInHistory` + `repeatQuestionHit`；✅ `verify:repeat-question-smoke` / `verify:intake-coreference` repeat 单测
 
 **本地开发（同日）：** ✅ `scripts/dev-all.sh` — `pnpm dev` 自动起/等 Chroma、Redis（`DEV_REDIS_AUTO_START=1` → `docker compose up redis`）、Web、Agents；`REDIS_DB` / `REDIS_KEY_PREFIX` 环境变量化
 
@@ -218,7 +218,7 @@ GOLDEN_RUNS=3 pnpm run golden:regression   # G1～G5b + GMem，稳定性 3 遍
 | **memProbe（GMem）** | `golden.json` **memProbe** ↔ `golden:regression` **GMem**（conv A 记 QQ → conv B 问） |
 | **最少 4 项指标** | Golden 通过率；candidates>0 但 hits=0 率（→0）；cache 命中率；端到端 `latencyMs` |
 
-**状态：** ✅ 2026-06-23 — **13/13** Golden+KM+E2E；cache 探测 2/2；**profileProbe `G-履历综合`** 4/4（含 L1 repeat t2）；**memProbe GMem** 2/2；FactChecker **enumeration fast-pass** 避免二次 KM
+**状态：** ✅ 2026-06-23 — **13/13** Golden+KM+E2E；cache 探测 2/2；**profileProbe `G-履历综合`** 4/4（含同问短路 t2）；**memProbe GMem** 2/2；FactChecker **enumeration fast-pass** 避免二次 KM
 
 ```bash
 pnpm --filter @fambrain/agents run eval:run

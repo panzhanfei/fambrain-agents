@@ -1,6 +1,7 @@
 /** 各 Agent 控制台日志（服务端调试用）：每个 Agent 仅 📥 进入 / 📤 出去 */
 import { enqueuePipelineLog } from "./pipeline-run-context";
 export type AgentLogName =
+    | "TurnPrepare"
     | "IntakeCoordinator"
     | "KnowledgeManager"
     | "FactChecker"
@@ -16,6 +17,7 @@ export const AGENT_LOG_LABEL_IN = "进入";
 export const AGENT_LOG_LABEL_OUT = "出去";
 
 const AGENT_EMOJI: Record<AgentLogName, string> = {
+    TurnPrepare: "🗂️",
     IntakeCoordinator: "🎫",
     KnowledgeManager: "📚",
     FactChecker: "🔍",

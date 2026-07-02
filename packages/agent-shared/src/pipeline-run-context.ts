@@ -2,7 +2,7 @@
  * 单轮 Pipeline 运行的「隐式上下文」：token 统计 + Agent 日志队列。
  *
  * 为什么用 AsyncLocalStorage？
- * - 一轮对话从 runPipelineStream 进、到 Intake/KM/Analyst 多层 async 调用，若每层传 runStore 参数很啰嗦。
+ * - 一轮对话从 prepareTurn 节点 enterWith 起、到 Intake/KM/Analyst 多层 async 调用，若每层传 runStore 参数很啰嗦。
  * - enterWith(runStore) 后，同一条 async 链上的任意深度代码可通过 getStore() 拿到「本轮专属」仓库。
  * - 并发多用户时，每个 HTTP 请求各自 enterWith，互不串数据（类似其他语言的 thread-local，但是 async 版）。
  *
@@ -78,7 +78,7 @@ type PipelineRunStore = {
 
 /**
  * Node.js 内置：按 async 调用链隔离的键值存储。
- * runPipelineStream 开头 enterWith(runStore)，深层 getStore() 取本轮仓库。
+ * prepareTurn 节点开头 enterWith(runStore)，深层 getStore() 取本轮仓库。
  */
 export const pipelineRunStorage = new AsyncLocalStorage<PipelineRunStore>();
 

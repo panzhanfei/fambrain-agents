@@ -1,11 +1,11 @@
 /**
- * 清空 Pipeline cache（L1/L2/L3 均可在 .env 用 DISABLED=1 关闭）。
+ * 清空 Pipeline cache（同问短路 / 检索结果 / composite 终稿 cache 均可在 .env 用 DISABLED=1 关闭）。
  *
  *   pnpm --filter @fambrain/agents exec tsx --env-file=../../.env scripts/clear-pipeline-cache.ts
  *   CONVERSATION_ID=xxx CORPUS_USER_ID=yyy ...  # 可选，仅清该会话 L3
  *
  * Env 开关：
- *   REPEAT_QUESTION_CACHE_DISABLED=1   — L1 同问短路（需重启 agents）
+ *   REPEAT_QUESTION_CACHE_DISABLED=1   — 同问短路（需重启 agents）
  *   RETRIEVAL_CACHE_DISABLED=1         — L2 检索 cache
  *   COMPOSITE_ANSWER_CACHE_DISABLED=1  — L3 composite facet cache
  */

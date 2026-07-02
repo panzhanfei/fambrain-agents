@@ -129,7 +129,7 @@ assertSync("repeat：REPEAT_QUESTION_CACHE_DISABLED=1 时不命中", () => {
     const hit = findRepeatAnswerInHistory(history, q);
     delete process.env.REPEAT_QUESTION_CACHE_DISABLED;
     resetInfraConfigForTests();
-    if (hit) throw new Error("L1 关闭时不应命中");
+    if (hit) throw new Error("同问短路关闭时不应命中");
     enableRepeatGuardForVerify();
 });
 

@@ -6,10 +6,10 @@ import { buildSummarizeSourceText, formatSummaryAsAnswer, summarizeContent, } fr
 import { completeFactCheck } from "@/agentflow/agents/online/fact-checker";
 import {
     completeIntakeCoordinator,
-    findRepeatAnswerInHistory,
     resolveIncrementalCompositePlan,
     runIntakePipeline,
 } from "@/agentflow/agents/online/intake-coordinator";
+import { runPrepareTurn } from "@/agentflow/agents/online/prepare-turn";
 import { streamAnalyzeInformation } from "@/agentflow/agents/online/information-analyst";
 import { retrieveKnowledge } from "@/agentflow/agents/online/knowledge-manager";
 import { retrieveCompositeIncremental } from "./retrieve-composite-incremental";
@@ -18,8 +18,12 @@ import {
     getRetrievalFromCache,
     setRetrievalCache,
 } from "@fambrain/infra";
-import { logAgentOut } from "@fambrain/agent-shared/agent-log";
 import { PipelineGraphAnnotation, type PipelineGraphState } from "./state";
+const routeAfterPrepare = (state: PipelineGraphState): "respondEarly" | "intake" => {
+    if (state.exitEarly || state.error || state.repeatQuestionHit)
+        return "respondEarly";
+    return "intake";
+};
 const routeAfterIntake = (state: PipelineGraphState): "respondEarly" | "userFact" | "retrieval" | "factChecker" | "contentSummarizer" => {
     if (state.exitEarly || state.error)
         return "respondEarly";
@@ -60,26 +64,10 @@ const routeAfterFactChecker = (state: PipelineGraphState): "retrieval" | "conten
     }
     return "contentOrganizer";
 };
+const prepareTurnNode = async (state: PipelineGraphState): Promise<Partial<PipelineGraphState>> => {
+    return runPrepareTurn(state);
+};
 const intakeNode = async (state: PipelineGraphState): Promise<Partial<PipelineGraphState>> => {
-    const repeatAnswer = findRepeatAnswerInHistory(
-        state.intakeHistory,
-        state.userQuestion
-    );
-    if (repeatAnswer) {
-        logAgentOut("IntakeCoordinator", "L1_重复问", {
-            hit: true,
-            userQuestion: state.userQuestion,
-            answerPreview:
-                repeatAnswer.length > 200
-                    ? `${repeatAnswer.slice(0, 200)}…`
-                    : repeatAnswer,
-        });
-        return {
-            answer: repeatAnswer,
-            exitEarly: true,
-            repeatQuestionHit: true,
-        };
-    }
     try {
         const intakeRaw = await completeIntakeCoordinator(state.intakeHistory, {
             memoryBlock: state.memoryBlock,
@@ -388,6 +376,7 @@ const respondEarlyNode = (state: PipelineGraphState): Partial<PipelineGraphState
 };
 const buildPipelineGraph = () => {
     return new StateGraph(PipelineGraphAnnotation)
+        .addNode("prepareTurn", prepareTurnNode)
         .addNode("intake", intakeNode)
         .addNode("retrieval", retrievalNode)
         .addNode("factChecker", factCheckerNode)
@@ -396,7 +385,8 @@ const buildPipelineGraph = () => {
         .addNode("analyst", analystNode)
         .addNode("userFact", userFactNode)
         .addNode("respondEarly", respondEarlyNode)
-        .addEdge(START, "intake")
+        .addEdge(START, "prepareTurn")
+        .addConditionalEdges("prepareTurn", routeAfterPrepare)
         .addConditionalEdges("intake", routeAfterIntake)
         .addEdge("userFact", END)
         .addConditionalEdges("retrieval", routeAfterRetrieval)

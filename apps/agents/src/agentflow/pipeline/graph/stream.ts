@@ -1,15 +1,15 @@
 /**
- * Pipeline 在线编排入口（图外 + LangGraph 图内）。
+ * Pipeline 在线编排 SSE 壳（LangGraph 消费 + 轮次后持久化）。
  *
  * 职责划分：
- * - 本文件（stream.ts）：Mem0 准备、L1 重复问、SSE 事件、耗时统计、轮次后持久化
- * - compile.ts：LangGraph 节点定义与路由（intake → KM → FC → …）
+ * - prepare-turn / intake / …：LangGraph 图内在线 Agent（compile.ts）
+ * - 本文件：SSE 事件、耗时统计、图结束后 Mem0/Learning 持久化
  *
  * 对外入口：runPipelineStream()，由 HTTP routes / eval / golden 调用。
  */
 import { ensureAgentsRuntime } from "@/config";
 import { buildLangGraphRunConfig } from "@fambrain/agent-config/langsmith";
-import { logAgentIn, logAgentOut } from "@fambrain/agent-shared/agent-log";
+import { logAgentOut } from "@fambrain/agent-shared/agent-log";
 import type {
   AgentPipelineContext,
   AgentPipelineResult,
@@ -19,7 +19,6 @@ import type {
   PipelineTiming,
 } from "@fambrain/agent-types";
 import {
-  createPipelineRunStore,
   drainPipelineLogQueue,
   pipelineRunStorage,
   setPipelineActiveNode,
@@ -27,10 +26,8 @@ import {
 import { getCompiledPipelineGraph } from "./compile";
 import { PipelineTimingTracker } from "./pipeline-timing";
 import type { PipelineGraphState } from "./state";
-import { findRepeatAnswerInHistory } from "@/agentflow/agents/online/intake-coordinator";
 import {
   persistPipelineMemory,
-  preparePipelineMemory,
 } from "@fambrain/agent-memory";
 import { persistLearningAfterTurn } from "@/agentflow/agents/offline/learning";
 
@@ -58,17 +55,11 @@ function* emitAssistant(answer: string): Generator<AgentStreamEvent> {
   yield { type: "assistant", text: answer };
 }
 
-/**
- * 构造 LangGraph 初始状态（空 decision / 空 hits）。
- * memoryBlock、intakeHistory、userMemories 来自 preparePipelineMemory（图外 Mem0/LangMem）。
- */
+/** 构造 LangGraph 初始状态；memory 字段由 prepareTurn 节点填充 */
 const buildInitialState = (
   history: DbChatTurn[],
   context: AgentPipelineContext,
-  userQuestion: string,
-  memoryBlock: string | null,
-  intakeHistory: DbChatTurn[],
-  userMemories: string[]
+  userQuestion: string
 ): PipelineGraphState => {
   return {
     history,
@@ -83,9 +74,9 @@ const buildInitialState = (
     exitEarly: false,
     checkerPassed: true,
     retryCount: 0,
-    memoryBlock,
-    userMemories,
-    intakeHistory,
+    memoryBlock: null,
+    userMemories: [],
+    intakeHistory: history,
     confidenceTier: null,
     repeatQuestionHit: false,
     retrievalCacheHit: false,
@@ -127,7 +118,7 @@ const retrievalPathsFromState = (state: PipelineGraphState): string[] => {
  * 图结束后的副作用（不在 LangGraph 节点内）：
  * - persistPipelineMemory：Mem0 抽记忆 + LangMem 摘要
  * - persistLearningAfterTurn：Learning 候选（userFact 轮次跳过）
- * L1 重复问短路时不写。
+ * 同问短路时不写。
  */
 const persistTurnSideEffects = async (input: {
   context: AgentPipelineContext;
@@ -213,80 +204,17 @@ function* flushPipelineLogs(): Generator<AgentStreamEvent> {
   }
 }
 
-/**
- * L1 同问短路：history 中已有相同 normalize 问法 → 直接复用 assistant 答。
- *
- * 开关：`REPEAT_QUESTION_CACHE_DISABLED=1` 时 findRepeatAnswerInHistory 恒为 null，不会进入本分支。
- * 跳过 Mem0 / LangGraph / Intake LLM / KM；UI 仍 emit intake step 以保持步骤条一致。
- */
-async function* runL1RepeatQuestionShortCircuit(input: {
-  history: DbChatTurn[];
-  context: AgentPipelineContext;
-  userQuestion: string;
-  repeatAnswer: string;
-  timing: PipelineTimingTracker;
-}): AsyncGenerator<AgentStreamEvent, AgentPipelineResult> {
-  input.timing.markNodeStart("intake");
-  yield { type: "step", name: "intake", status: "running" };
-  input.timing.markFirstToken();
-  const intakeMs = input.timing.markNodeEnd("intake");
-  yield {
-    type: "step",
-    name: "intake",
-    status: "done",
-    ...(intakeMs !== undefined ? { durationMs: intakeMs } : {}),
-  };
-  const pipelineTiming = yield* finishPipeline(input.timing);
-  const repeatState: PipelineGraphState = {
-    ...buildInitialState(
-      input.history,
-      input.context,
-      input.userQuestion,
-      null,
-      input.history,
-      []
-    ),
-    answer: input.repeatAnswer,
-    exitEarly: true,
-    repeatQuestionHit: true,
-  };
-  logAgentOut(
-    "Pipeline",
-    "出去",
-    summarizePipelineOut(repeatState, input.repeatAnswer, pipelineTiming)
-  );
-  yield* flushPipelineLogs();
-  yield* emitAssistant(input.repeatAnswer);
-  return {
-    answer: input.repeatAnswer,
-    repeatQuestionHit: true,
-    retrievalCacheHit: false,
-    timing: pipelineTiming,
-  };
-}
-
-/**
- * 在线 Pipeline 对外入口。
- * 为本轮创建 pipelineRunStorage（token 统计、日志队列、当前 node），再委托 runPipelineStreamInner。
- */
+/** 在线 Pipeline 对外入口 */
 export async function* runPipelineStream(
   history: DbChatTurn[],
   context: AgentPipelineContext
 ): AsyncGenerator<AgentStreamEvent, AgentPipelineResult> {
-  const runStore = createPipelineRunStore();
-  pipelineRunStorage.enterWith(runStore);
   return yield* runPipelineStreamInner(history, context);
 }
 
 /**
- * Pipeline 主流程（图外 + LangGraph stream 消费循环）。
- *
- * 顺序：
- * 1. Pipeline 进入日志
- * 2. L1 重复问短路（可选，跳过 LLM/KM）
- * 3. preparePipelineMemory（Mem0 + LangMem，图外）
- * 4. graph.stream：按 node 更新 yield step / pipeline_log / thinking / assistant
- * 5. exitEarly 或 analyst 完成 → persistTurnSideEffects → Pipeline 出去
+ * Pipeline 主流程：LangGraph stream 消费循环 + 轮次后持久化。
+ * ALS / 同问短路 / Mem0 在图内 prepareTurn 节点完成。
  */
 async function* runPipelineStreamInner(
   history: DbChatTurn[],
@@ -295,54 +223,13 @@ async function* runPipelineStreamInner(
   ensureAgentsRuntime();
   const userQuestion = lastUserQuestion(history);
   const timing = new PipelineTimingTracker();
-  logAgentIn("Pipeline", "进入", {
-    userQuestion,
-    historyTurns: history.length,
-    actorUserId: context.actorUserId,
-    corpusUserId: context.corpusUserId,
-    displayName: context.displayName,
-    conversationId: context.conversationId,
-  });
-  yield* flushPipelineLogs();
-
-  const repeatAnswer = findRepeatAnswerInHistory(history, userQuestion);
-  /**
-   *  L1 重复问短路（跳过 LLM/KM）
-   */
-  if (repeatAnswer) {
-    return yield* runL1RepeatQuestionShortCircuit({
-      history,
-      context,
-      userQuestion,
-      repeatAnswer,
-      timing,
-    });
-  }
-
-  /**
-   *  常规 Pipeline 流程
-   */
-
-  const memory = await preparePipelineMemory({
-    context,
-    history,
-    userQuestion,
-  });
-  yield* flushPipelineLogs();
   const graph = getCompiledPipelineGraph();
-  const input = buildInitialState(
-    history,
-    context,
-    userQuestion,
-    memory.promptBlock,
-    memory.intakeHistory,
-    memory.userMemories
-  );
+  const input = buildInitialState(history, context, userQuestion);
   let finalState: PipelineGraphState = input;
-  let activeStep: PipelineStepName | null = "intake";
-  timing.markNodeStart("intake");
-  setPipelineActiveNode("intake");
-  yield { type: "step", name: "intake", status: "running" };
+  let activeStep: PipelineStepName | null = "prepare_turn";
+  timing.markNodeStart("prepare_turn");
+  setPipelineActiveNode("prepare_turn");
+  yield { type: "step", name: "prepare_turn", status: "running" };
   const stream = await graph.stream(
     input as Parameters<typeof graph.stream>[0],
     {
@@ -398,6 +285,33 @@ async function* runPipelineStreamInner(
     const nodePatch = update[nodeName];
     if (nodePatch) {
       finalState = { ...finalState, ...nodePatch };
+    }
+    if (nodeName === "prepareTurn") {
+      yield* finishStep("prepare_turn");
+      yield* flushPipelineLogs();
+      if (finalState.error && finalState.exitEarly) {
+        yield { type: "error", message: finalState.error };
+        const answer =
+          finalState.answer ?? "（准备对话上下文失败，请稍后重试）";
+        timing.markFirstToken();
+        const pipelineTiming = yield* finishPipeline(timing);
+        logAgentOut(
+          "Pipeline",
+          "出去",
+          summarizePipelineOut(finalState, answer, pipelineTiming)
+        );
+        yield* emitAssistant(answer);
+        return {
+          answer,
+          repeatQuestionHit: false,
+          retrievalCacheHit: false,
+          timing: pipelineTiming,
+        };
+      }
+      if (!finalState.exitEarly && !finalState.repeatQuestionHit) {
+        yield* startStep("intake");
+      }
+      continue;
     }
     if (nodeName === "intake") {
       yield* finishStep("intake");

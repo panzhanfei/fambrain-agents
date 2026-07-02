@@ -1,5 +1,5 @@
 /**
- * R6-1 / R6-3 / P0-15 / R6-2 全链路验收（L1/L2/L3 cache 全关）。
+ * R6-1 / R6-3 / P0-15 / R6-2 全链路验收（同问短路 + 检索结果 + composite 终稿 cache 全关）。
  *
  *   pnpm --filter @fambrain/agents run verify:r6-no-cache
  *
@@ -113,7 +113,7 @@ const check = (
         ...extra,
     ];
     if (snap.cacheHit) issues.push("unexpected cacheHit（cache 应已关闭）");
-    if (snap.repeatHit) issues.push("unexpected repeatHit（L1 应已关闭）");
+    if (snap.repeatHit) issues.push("unexpected repeatHit（同问短路应已关闭）");
     return {
         id,
         label,
@@ -199,7 +199,7 @@ const runR63 = async (corpusUserId: string): Promise<ScenarioResult[]> => {
             },
             {
                 id: "R6-3-t2",
-                label: "综合履历同句再问（无 L1）",
+                label: "综合履历同句再问（无同问短路）",
                 q: "我叫什么，我做过什么项目，我在那几家公司上过班，近两年在干什么？",
                 assert: {
                     mustIncludeSteps: ["retrieval", "analyst"],
@@ -282,7 +282,7 @@ const main = async () => {
     console.log("verify-r6-no-cache");
     console.log(`  corpusUserId: ${corpusUserId}`);
     console.log(
-        "  cache: L1/L2/L3 OFF (REPEAT/RETRIEVAL/COMPOSITE_ANSWER *_DISABLED=1)\n"
+        "  cache: repeat/retrieval/composite OFF (REPEAT/RETRIEVAL/COMPOSITE_ANSWER *_DISABLED=1)\n"
     );
 
     const sections: Array<{ title: string; results: ScenarioResult[] }> = [

@@ -1,7 +1,9 @@
 /**
- * D5-2：同会话字面重复问 — 复用 history 中已有 assistant 答，跳过 Intake LLM / KM / FC / Analyst。
- * Key = normalize(userQuestion)，与 retrieval cache（searchQuery + queryType）互补。
- * 开关：REPEAT_QUESTION_CACHE_DISABLED=1 关闭 L1。
+ * 同问短路（repeat question guard）— 同会话字面重复问时复用 history 中已有 assistant 答，
+ * 跳过 Intake LLM / KM / FC / Analyst。
+ *
+ * Key = normalize(userQuestion)，与检索结果 cache（searchQuery + queryType）互补。
+ * 开关：REPEAT_QUESTION_CACHE_DISABLED=1 关闭。
  */
 import type { DbChatTurn } from "@fambrain/agent-types";
 import { isRepeatQuestionCacheEnabled, normalizeSearchQuery } from "@fambrain/infra";

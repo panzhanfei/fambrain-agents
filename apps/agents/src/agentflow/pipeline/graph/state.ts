@@ -9,7 +9,7 @@ import type { ConfidenceTier } from "@/agentflow/agents/online/knowledge-manager
 import type { CompositeSubRetrieval } from "./merge-composite-retrieval";
 /**
  * LangGraph 编排共享状态（Intake → KM → FactChecker → ContentOrganizer → Analyst；摘要分支 Intake → KM → ContentSummarizer）。
- * 初始值由 `stream.ts` 的 `buildInitialState()` 注入；节点只返回需要更新的字段。
+ * 初始值由 `stream.ts` 的 `buildInitialState()` 注入；prepareTurn 填充 memory 字段；节点只返回需要更新的字段。
  */
 export const PipelineGraphAnnotation = Annotation.Root({
     /** 本轮及历史对话轮次，供 IntakeCoordinator 理解上下文 */
@@ -44,7 +44,7 @@ export const PipelineGraphAnnotation = Annotation.Root({
     userMemories: Annotation<string[]>,
     /** Intake 使用的截断历史（LangMem 保留最近 N 轮） */
     intakeHistory: Annotation<DbChatTurn[]>,
-    /** D5-2：同会话字面重复问，Intake 入口复用 history 答 */
+    /** D5-2：同会话字面重复问，prepareTurn 复用 history 答 */
     repeatQuestionHit: Annotation<boolean>,
     /** D5-2：本轮 retrieval 是否命中 KM cache */
     retrievalCacheHit: Annotation<boolean>,
