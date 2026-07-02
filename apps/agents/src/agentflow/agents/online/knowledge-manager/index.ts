@@ -21,6 +21,16 @@ export {
     type ConfidenceTier,
 } from "./types";
 export {
+    mergeCompositeHits,
+    mergeCompositeRetrieval,
+    retrieveCompositeIncremental,
+    retrieveCompositeSlotsParallel,
+    retrieveSlotWithCache,
+    runRetrievalNode,
+    type CompositeRetrievePlan,
+    type CompositeSubRetrieval,
+} from "./pipeline-retrieval";
+export {
     assessConfidence,
     deriveCoverageFromTier,
     shouldCoalesceEmptyHits,

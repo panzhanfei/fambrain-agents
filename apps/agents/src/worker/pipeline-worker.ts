@@ -4,7 +4,7 @@
  *   pnpm --filter @fambrain/agents run dev:worker
  */
 import { startPipelineWorker, stopPipelineWorker } from "@fambrain/infra";
-import { runPipelineStream } from "@/agentflow/pipeline/graph/stream";
+import { runPipelineStream } from "@/agentflow/pipeline";
 import { bootstrapAgentsRuntime } from "@/config/index";
 
 await bootstrapAgentsRuntime();

@@ -19,7 +19,7 @@ import {
 import {
   mergeCompositeHits,
   mergeCompositeRetrieval,
-} from "../src/agentflow/pipeline/graph/merge-composite-retrieval";
+} from "../src/agentflow/agents/online/knowledge-manager/pipeline-retrieval/merge-composite-retrieval";
 import { mergeSubQuestionAnswers } from "../src/agentflow/agents/online/information-analyst/analyze-helpers";
 
 const retrieveStub: IntakeRoutingDecision = {

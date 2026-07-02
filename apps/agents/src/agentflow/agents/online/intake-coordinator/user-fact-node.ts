@@ -3,7 +3,7 @@ import {
     addStructuredUserFact,
     searchUserFactMemories,
 } from "@fambrain/agent-memory";
-import type { PipelineGraphState } from "./state";
+import type { PipelineGraphState } from "@/agentflow/pipeline/graph/state";
 import {
     buildRecallAnswer,
     buildRecallMissingAnswer,
@@ -13,7 +13,7 @@ import {
     findUserFactValueInMemoryBlock,
     findUserFactValueInTexts,
     validateFactValue,
-} from "@/agentflow/agents/online/intake-coordinator";
+} from "./user-fact/user-fact";
 
 const resolveRecallValue = async (
     state: PipelineGraphState
@@ -56,6 +56,7 @@ const resolveRecallValue = async (
     return null;
 };
 
+/** LangGraph userFact 节点：跨会话 remember / recall */
 export const userFactNode = async (
     state: PipelineGraphState
 ): Promise<Partial<PipelineGraphState>> => {

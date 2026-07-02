@@ -15,6 +15,11 @@ export { completeIntakeCoordinator } from "./llm/ollama-chat";
 
 export { runIntakePipeline, type RunIntakePipelineResult } from "./pipeline/intake-pipeline";
 
+export { parseIntakeDecision, defaultIntakeDecision } from "./parse-intake";
+export { runIntakeNode } from "./intake-node";
+export { runRespondEarlyNode } from "./respond-early-node";
+export { userFactNode } from "./user-fact-node";
+
 /** @deprecated 实现已迁至 prepare-turn-start/repeat-question-guard；保留 re-export 兼容旧 import */
 export { findRepeatAnswerInHistory } from "../prepare-turn-start";
 export {

@@ -167,9 +167,10 @@ pnpm run dev
 |------|------|
 | `apps/web/` | Next.js UI + BFF；`.next` 产物在此目录 |
 | `apps/agents/` | Agent 业务：orchestrator、**在线** LangGraph pipeline、**离线** Indexer/Learning CLI |
-| `apps/agents/src/agentflow/agents/online/` | 在线 Agent：`prepare-turn-start`、intake-coordinator、`persist-turn-end`、knowledge-manager… |
+| `apps/agents/src/agentflow/pipeline/graph/` | LangGraph 骨架：`state.ts`、`routes.ts`、`compile.ts` |
+| `apps/agents/src/agentflow/pipeline/runtime/` | SSE 运行时：`stream.ts`、`pipeline-timing.ts`、`initial-state.ts` |
+| `apps/agents/src/agentflow/agents/online/` | 在线 Agent + 各 `*-node.ts` 图节点实现 |
 | `apps/agents/src/agentflow/agents/offline/` | 离线：knowledge-indexer、doc-parser、learning |
-| `packages/db/` | Prisma schema、migrations、会话 repo |
 | `packages/auth/` | JWT、登录注册、会话 |
 | `packages/agent-types/` | `DbChatTurn`、`AgentPipelineContext` 等共享类型 |
 | `packages/agent-config/` | Ollama / Chroma 环境配置 |
@@ -184,13 +185,14 @@ pnpm run dev
 
 | 技能点 | 代码位置 | 用途 |
 |--------|----------|------|
-| `runAgentStream` + `runPipelineStream` | `apps/agents/src/agentflow/`、`pipeline/graph/stream.ts` | LangGraph SSE 壳（步骤耗时 + SSE；业务在图内） |
+| `runAgentStream` + `runPipelineStream` | `agentflow/`、`pipeline/runtime/stream.ts` | SSE 运行时（步骤耗时 + SSE；业务在 agents/online） |
 | `runPrepareTurnStart` | `agentflow/agents/online/prepare-turn-start/` | 图首节点：ALS、同问短路、Mem0/LangMem **读** |
 | `runPersistTurnEnd` | `agentflow/agents/online/persist-turn-end/` | 图末节点：Mem0/LangMem **写**、Learning 候选 |
-| `getCompiledPipelineGraph` | `pipeline/graph/compile.ts` | **prepareTurnStart** → Intake → … → **persistTurnEnd** → END |
-| `userFactNode` / `routeUserFactFromIntake` | `pipeline/graph/user-fact-node.ts`、`intake-coordinator/user-fact.ts` | P0-16：跨会话 remember/recall；绕过 KM / FC / Analyst |
+| `getCompiledPipelineGraph` | `pipeline/graph/compile.ts` + `routes.ts` | **prepareTurnStart** → Intake → … → **persistTurnEnd** → END |
+| `userFactNode` / `routeUserFactFromIntake` | `intake-coordinator/user-fact-node.ts`、`user-fact.ts` | P0-16：跨会话 remember/recall；绕过 KM / FC / Analyst |
+| `parseIntakeDecision` / `defaultIntakeDecision` | `intake-coordinator/parse-intake.ts` | 解析 Intake 路由 JSON |
+| `runRetrievalNode` | `knowledge-manager/pipeline-retrieval/` | L2/L3 cache + composite 增量检索 |
 | `addStructuredUserFact` / `searchUserFactMemories` | `packages/agent-memory/src/mem0/store.ts` | Mem0 结构化写入 + 按 factKey 语义检索 |
-| `parseIntakeDecision` / `defaultIntakeDecision` | `pipeline/parse-intake.ts` | 解析 Intake 路由 JSON |
 | `completeIntakeCoordinator` | `agentflow/agents/online/intake-coordinator/` | 一次 `invoke` → 路由 JSON |
 | `retrieveKnowledge` | `agentflow/agents/online/knowledge-manager/` | 向量 + 关键词扫盘 + **规则精排**（无 LLM）；v3 业界对标见 [km-retrieval-design.md](./km-retrieval-design.md) |
 | `completeFactCheck` | `agentflow/agents/online/fact-checker/` | 证据包核查；打回再检索 |

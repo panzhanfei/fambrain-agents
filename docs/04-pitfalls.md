@@ -78,7 +78,7 @@
 | P0-11 | FactChecker / 编排 | 用户以为「核查过一次，同句再问不应再进 FactChecker」 | **两类现象混为一谈：**（A）同轮打回再检索 → FactChecker 跑 2 次是 Corrective RAG 设计；（B）**新一条用户消息** = 新 pipeline，`checkerPassed`/`retryCount` 重置，无跨轮 cache | 见 §2.2；消坑 sprint **D5-消坑** | ⬜ 待做 |
 | P0-12 | Analyst + FC | **路径 B：** FC **二次 force_pass** 后 KM 仍 `hits=[]` / `coverage=none`，Analyst 编造终稿（陈明 / Charlie） | `streamAnalyzeInformation` hits 空仍调 LLM | **`shouldSkipAnalystLlm`** → `rules_empty_hits_skip_llm` 直出 fallback；`insufficientEvidence=true` | ✅ **已解决**（2026-06-18） |
 | P0-17 | FactChecker + 编排 | **路径 A：** KM₁ 有 hits，FC 产出 meta 式 `refinedSearchQuery`（如「姓名 **全名 完整称呼**」），编排覆盖 `searchQuery` → KM₂ 变差 | FC LLM 把「怎么查」写成检索词；编排无条件覆盖；无 refined 有效性校验 | `personal/` + 姓名类 → **跳过 FC LLM 直接 pass**；`mergeRetrySearchQuery` meta  strip + 无增量不重检；见 **§2.2.2** | ✅ **已解决**（2026-06） |
-| P0-18 | Intake / Cache / Analyst | 单问「今年多大」→ Intake `clarify`；composite 单槽空 hits 走「未标注年龄」；同问 1ms 复用错答 | Mem0 工作年限≠出生日期；终稿 cache 跳过 KM 但 merge 空；repeat 复用兜底文案 | Intake **示例 9**；`retrieve-composite-incremental` citations→hits；`stream.ts` 单槽回放；三层 cache **env 可关**；`clear-pipeline-cache` | ✅ **已解决**（2026-06 · Web 复测）← §2.5.4 |
+| P0-18 | Intake / Cache / Analyst | 单问「今年多大」→ Intake `clarify`；composite 单槽空 hits 走「未标注年龄」；同问 1ms 复用错答 | Mem0 工作年限≠出生日期；终稿 cache 跳过 KM 但 merge 空；repeat 复用兜底文案 | Intake **示例 9**；`pipeline-retrieval/retrieve-composite-incremental.ts` citations→hits；`runtime/stream.ts` 单槽回放；三层 cache **env 可关**；`clear-pipeline-cache` | ✅ **已解决**（2026-06 · Web 复测）← §2.5.4 |
 | P0-13 | Intake | Golden / Web「你好」→ `briefReply` 出现 **「大表哥」** 等未定义称呼；prompt 示例为「FamBrain 助手」 | `chitchat` 路径不经 Analyst；Intake 小模型在 `briefReply` 自由发挥 | **`applyIntakeChitchatGuard`** 模板兜底 + 禁用称呼后检；Intake JSON snake_case 归一 | ✅ **已解决**（2026-06-18）← `verify:intake-chitchat` |
 | P0-14 | Analyst + Mem0 | Golden / Web「我的名字」→ 同句 **「知识库没有记录」+「长期记忆已知潘展飞」** 自相矛盾 | hits 弱时走 insufficientEvidence 话术，Mem0 又补姓名；**corpus 与 memory 优先级未定义** | **KM 优化**后 `personal/` 姓名类检索稳定 → hits 含简历，Analyst 直答 corpus；不再触发「空 hits + Mem0 补履历」路径 | ✅ **已解决**（KM 优化 · Web/G2 复测 2026-06） |
 | P0-15 | Analyst | 同问「**我叫什么 年龄 职业 从业经历**」→ 一次答 **赵一 / 28 岁 / 秦汉新城智慧园林**（语料无此人），一次答 **潘展飞** + 简历引用（正确） | KM hits 波动 + Analyst 在 weak hits 下用训练数据填「完整简历模板」；复合问法单 queryType 单检索 | **Intake retrievalPlan** 主路由 + 动态槽 KM + merge；结构/subTasks 兜底；Analyst 禁推算年龄、enumeration 逐条列 | ✅ **已解决**（2026-06 · `verify:r6-no-cache` 综合履历 3 遍）← §2.5.3 |
@@ -214,8 +214,8 @@ pnpm --filter @fambrain/agents run verify:r6-no-cache   # R6-1：同句再问 4 
 | **P0** | Intake：`briefReply` 模板或后检（禁昵称；宜含 FamBrain/助手） | 大表哥 | Day 3 | `intake-chitchat-guard.ts` + `compile.ts` ✅ |
 | **P0** | KM：`personal/` 姓名类检索稳定（identity query）→ hits 含简历，消除 corpus/Mem0 同句矛盾 | P0-14 | KM 优化 | `knowledge-manager/retrieve.ts` 等 ✅ |
 | **P0** | Analyst：Mem0 **不得**与「知识库无记录」同句补履历（**兜底**；主因已由 KM 解决） | P0-14 | Day 3 + D3-9 | 暂不必改；若 KM 再波动可补 prompt |
-| **P0** | 单问年龄：Intake 示例 9 + L3/slot Analyst 路径 + cache env / 清 cache 脚本 | P0-18 | 2026-06 | `prompt.ts`、`stream.ts`、`retrieve-composite-incremental.ts`、`infra/config.ts` ✅ |
-| **P0** | 跨会话 **remember_user_fact / recall_user_fact** Intake schema + userFact 节点 + Mem0 结构化读写 | P0-16 | 2026-06 ✅ | `user-fact.ts`、`user-fact-node.ts`、`mem0/store.ts` |
+| **P0** | 单问年龄：Intake 示例 9 + L3/slot Analyst 路径 + cache env / 清 cache 脚本 | P0-18 | 2026-06 | `prompt.ts`、`runtime/stream.ts`、`pipeline-retrieval/`、`infra/config.ts` ✅ |
+| **P0** | 跨会话 **remember_user_fact / recall_user_fact** Intake schema + userFact 节点 + Mem0 结构化读写 | P0-16 | 2026-06 ✅ | `user-fact.ts`、`intake-coordinator/user-fact-node.ts`、`mem0/store.ts` |
 | **P0** | KM 规则精排 + `personal/` 加权；复合问拆 subTasks | 赵一 / 潘展飞波动 | **Day 6～7** | `retrieve.ts`、Intake |
 | **P1** | 生成后 citation / 姓名校验（answer 人名 ∈ hits excerpt） | P0-15 | Day 8～9 eval | D5-3 |
 | **P1** | Golden 加 **G-个人档案**（非仅 G2 单句）；`GOLDEN_RUNS=3` 稳定性 | 回归验收 | Day 2～3 记坑后 **消坑后再收紧断言** | `golden-regression.ts` |
@@ -270,8 +270,8 @@ pnpm --filter @fambrain/agents run verify:r6-no-cache   # R6-1：同句再问 4 
 |------|------|------|
 | **同问短路** | `prepare-turn-start/repeat-question-guard.ts` | 同会话**字面相同**问 → 复用 history 整答；`REPEAT_QUESTION_CACHE_DISABLED=1` 关闭 |
 | **检索结果 cache** | `retrieval-cache.ts` | 单槽 KM 结果 cache（`searchQuery+queryType`）；`RETRIEVAL_CACHE_DISABLED=1` 关闭 |
-| **composite 终稿 cache** | `composite-answer-cache.ts` + `stream-composite.ts` / `stream.ts` | 同 `conversationId` + `corpusUserId` 下按 **facetKey** 缓存子问终稿；slot 单槽命中时 `retrieve-composite-incremental` 从 citations 还原 hits |
-| **增量 composite** | `composite-incremental.ts` + `retrieve-composite-incremental.ts` | Q2 = Q1 + 邮箱/电话：**终稿 cache 命中槽跳过 KM**，仅对新 facet 检索/流式；「全部重来」→ `clearCompositeSession` |
+| **composite 终稿 cache** | `composite-answer-cache.ts` + `stream-composite.ts` / `runtime/stream.ts` | 同 `conversationId` + `corpusUserId` 下按 **facetKey** 缓存子问终稿；slot 单槽命中时 `pipeline-retrieval/` 从 citations 还原 hits |
+| **增量 composite** | `composite-incremental.ts` + `knowledge-manager/pipeline-retrieval/` | Q2 = Q1 + 邮箱/电话：**终稿 cache 命中槽跳过 KM**，仅对新 facet 检索/流式；「全部重来」→ `clearCompositeSession` |
 
 **环境变量：** 见 `.env.example` 中 **Pipeline cache 开关**；未配 Redis 时检索/composite cache 用 memory fallback（清 cache 须重启 agents）。
 
@@ -296,7 +296,7 @@ Web：Q1 综合履历 → Q2 加邮箱/电话应见 `compositeFacetCacheHits > 0
 | 现象 | 根因 | 对策 | 状态 |
 |------|------|------|------|
 | 「我今年多大了」→ Intake `clarify` | LLM 见 Mem0 仅工作年限、误判信息不足 | Intake prompt **示例 9**：档案/年龄单问禁止 clarify，须 `retrieve_and_answer` + identity | ✅ |
-| L3 命中 + `routeMode=slot` →「未标注年龄」 | L3 跳过 KM，`merge.hits` 空 → `rules_empty_hits_skip_llm` | `retrieve-composite-incremental`：citations→hits；`stream.ts` 单槽 L3 直出 | ✅ |
+| L3 命中 + `routeMode=slot` →「未标注年龄」 | L3 跳过 KM，`merge.hits` 空 → `rules_empty_hits_skip_llm` | `pipeline-retrieval/retrieve-composite-incremental.ts`：citations→hits；`runtime/stream.ts` 单槽 L3 直出 | ✅ |
 | 同句再问 1ms 复用错误兜底 | 同问短路复用 history 中 insufficient 答 | `REPEAT_QUESTION_CACHE_DISABLED=1` 可关；清 cache + 重启 agents | ✅ |
 
 **改动摘要：** `5c4f89b` — Intake 示例 9；L3+slot Analyst 路径；`REPEAT_QUESTION_CACHE_DISABLED` / L2 / L3 env 开关；`clear-pipeline-cache.ts`、`diagnose-age-query.ts`。路由以 Intake `retrievalPlan` / `queryType` 为主（**无**问句 regex guard）。

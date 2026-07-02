@@ -7,7 +7,7 @@ import type { DbChatTurn } from "@fambrain/agent-types";
 import {
   defaultIntakeDecision,
   parseIntakeDecision,
-} from "@/agentflow/pipeline/parse-intake";
+} from "@/agentflow/agents/online/intake-coordinator/parse-intake";
 import { applyCompositeRouteGuard } from "../composite/composite-route-guard";
 import type { RoutedIntakeDecision } from "../composite/composite-route-guard";
 import { applyIntakeChitchatGuard } from "../guards/intake-chitchat-guard";

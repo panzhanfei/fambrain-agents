@@ -6,10 +6,10 @@ import type {
 } from "@/agentflow/agents/online/intake-coordinator";
 import type { InformationAnalystInput } from "@/agentflow/agents/online/information-analyst";
 import type { ConfidenceTier } from "@/agentflow/agents/online/knowledge-manager/types";
-import type { CompositeSubRetrieval } from "./merge-composite-retrieval";
+import type { CompositeSubRetrieval } from "@/agentflow/agents/online/knowledge-manager/pipeline-retrieval";
 /**
  * LangGraph 编排共享状态（Intake → KM → FactChecker → ContentOrganizer → Analyst；摘要分支 Intake → KM → ContentSummarizer）。
- * 初始值由 `stream.ts` 的 `buildInitialState()` 注入；prepareTurnStart 填充 memory 字段；节点只返回需要更新的字段。
+ * 初始值由 `runtime/initial-state.ts` 的 `buildInitialState()` 注入；prepareTurnStart 填充 memory 字段；节点只返回需要更新的字段。
  */
 export const PipelineGraphAnnotation = Annotation.Root({
     /** 本轮及历史对话轮次，供 IntakeCoordinator 理解上下文 */

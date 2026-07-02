@@ -2,8 +2,9 @@
  * Pipeline 在线编排 SSE 壳（LangGraph 消费 + 耗时统计）。
  *
  * 职责划分：
- * - prepare-turn-start / intake / persist-turn-end / …：LangGraph 图内在线节点（compile.ts）
- * - 本文件：SSE 事件、步骤耗时、Pipeline 出去日志
+ * - graph/：LangGraph 状态、路由、节点注册（compile.ts）
+ * - agents/online/*：各节点业务实现
+ * - 本目录：SSE 事件、步骤耗时、Pipeline 出去日志
  *
  * 对外入口：runPipelineStream()，由 HTTP routes / eval / golden 调用。
  */
@@ -23,9 +24,10 @@ import {
   pipelineRunStorage,
   setPipelineActiveNode,
 } from "@fambrain/agent-shared/pipeline-run-context";
-import { getCompiledPipelineGraph } from "./compile";
+import { getCompiledPipelineGraph } from "../graph/compile";
+import type { PipelineGraphState } from "../graph/state";
+import { buildInitialState, lastUserQuestion } from "./initial-state";
 import { PipelineTimingTracker } from "./pipeline-timing";
-import type { PipelineGraphState } from "./state";
 
 /** Analyst 经 LangGraph custom 通道推送的流式 chunk 形状 */
 type AnalystStreamChunk =
@@ -38,50 +40,10 @@ type AnalystStreamChunk =
       text: string;
     };
 
-/** 从 history 末尾向前取最后一条 user 消息，作为本轮 userQuestion */
-const lastUserQuestion = (history: DbChatTurn[]): string => {
-  for (let i = history.length - 1; i >= 0; i--) {
-    if (history[i].role === "user") return history[i].content.trim();
-  }
-  return "";
-};
-
 /** 向 SSE 推送一条 assistant 终稿/流式文本事件 */
 function* emitAssistant(answer: string): Generator<AgentStreamEvent> {
   yield { type: "assistant", text: answer };
 }
-
-/** 构造 LangGraph 初始状态；memory 字段由 prepareTurnStart 节点填充 */
-const buildInitialState = (
-  history: DbChatTurn[],
-  context: AgentPipelineContext,
-  userQuestion: string
-): PipelineGraphState => {
-  return {
-    history,
-    context,
-    userQuestion,
-    decision: null,
-    hits: [],
-    coverage: "none",
-    notes: null,
-    answer: null,
-    error: null,
-    exitEarly: false,
-    checkerPassed: true,
-    retryCount: 0,
-    memoryBlock: null,
-    userMemories: [],
-    intakeHistory: history,
-    confidenceTier: null,
-    repeatQuestionHit: false,
-    retrievalCacheHit: false,
-    retrievalCacheSlotHits: null,
-    compositeSubResults: null,
-    compositeIncrementalPlan: null,
-    compositeFacetCacheHits: null,
-  };
-};
 
 /** 类型守卫：判断 LangGraph custom 流 payload 是否为 Analyst 的 thinking/assistant chunk */
 const isAnalystStreamChunk = (value: unknown): value is AnalystStreamChunk => {
@@ -174,7 +136,7 @@ export async function* runPipelineStream(
 
 /**
  * Pipeline 主流程：LangGraph stream 消费循环。
- * 业务节点（含 prepareTurnStart / persistTurnEnd）在 compile.ts 图内执行。
+ * 业务节点在 agents/online/*；图拓扑在 graph/compile.ts。
  */
 async function* runPipelineStreamInner(
   history: DbChatTurn[],

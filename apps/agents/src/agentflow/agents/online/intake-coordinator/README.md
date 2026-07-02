@@ -89,16 +89,16 @@ intake-coordinator/
 Web 用户消息
     │
     ▼
-pipeline/graph/stream.ts          ← SSE 壳（消费 LangGraph stream）
+pipeline/runtime/stream.ts          ← SSE 壳（消费 LangGraph stream）
     │
     ▼
-pipeline/graph/compile.ts  →  prepareTurnStartNode()     ../prepare-turn-start/
+pipeline/graph/compile.ts  →  runPrepareTurnStart()     ../prepare-turn-start/
     ├─ ALS enterWith + 同问短路 findRepeatAnswerInHistory
     ├─ preparePipelineMemory()  → memoryBlock, intakeHistory, userMemories
     │         同问命中 → respondEarly → END
     │
     ▼
-intakeNode()
+intake-coordinator/intake-node.ts   runIntakeNode()
     │
     ├─ completeIntakeCoordinator()          llm/ollama-chat.ts
     │       输入: intakeHistory + memoryBlock + contract/prompt
@@ -111,10 +111,10 @@ intakeNode()
 state.decision 写入 PipelineGraphState
     │
     ▼
-routeAfterIntake()                        compile.ts
+routeAfterIntake()                        pipeline/graph/routes.ts
     ├─ userFact        → user-fact-node.ts → persistTurnEnd
-    ├─ respondEarly    → clarify / chitchat 短答 → persistTurnEnd
-    ├─ retrieval       → KnowledgeManager → … → analyst → persistTurnEnd
+    ├─ respondEarly    → respond-early-node.ts → persistTurnEnd
+    ├─ retrieval       → knowledge-manager/pipeline-retrieval → … → analyst → persistTurnEnd
     ├─ contentSummarizer
     └─ factChecker     → （无检索的 direct_answer 等）
 ```
@@ -125,7 +125,7 @@ routeAfterIntake()                        compile.ts
 LLM 原始 JSON
     │
     ▼ parseIntakeDecision() / defaultIntakeDecision()
-    │   contract/schema.ts + pipeline/parse-intake.ts
+    │   contract/schema.ts + parse-intake.ts
     │
     ▼ applyIntakeCoreferenceGuard()      guards/intake-coreference-guard.ts
     │
@@ -496,11 +496,11 @@ Pipeline 内主要调用点：
 
 | 调用方 | 使用的 Intake / Prepare 导出 |
 |--------|---------------------------|
-| `pipeline/graph/compile.ts` | `runPrepareTurnStart`（prepare-turn-start）；`completeIntakeCoordinator`, `runIntakePipeline`, `resolveIncrementalCompositePlan` |
-| `pipeline/graph/stream.ts` | SSE 消费；**不**再直接调同问短路/Mem0 |
+| `pipeline/graph/compile.ts` | `runPrepareTurnStart`（prepare-turn-start）；`runIntakeNode` 等节点委托 |
+| `pipeline/runtime/stream.ts` | SSE 消费；**不**再直接调同问短路/Mem0 |
 | `pipeline/graph/state.ts` | `RoutedIntakeDecision`, `IncrementalCompositePlan` |
-| `pipeline/graph/user-fact-node.ts` | user-fact 话术 / 查找函数 |
-| `pipeline/parse-intake.ts` | `parseIntakeRoutingDecision`, `buildFallbackRetrievalPlan`, `canonicalizePlanItem` |
+| `intake-coordinator/user-fact-node.ts` | userFact 图节点 |
+| `intake-coordinator/parse-intake.ts` | `parseIntakeDecision`, `defaultIntakeDecision` |
 | `knowledge-manager/retrieve.ts` | `resolveEnumerationTarget` |
 | `information-analyst/*` | composite 槽类型、enumeration 辅助 |
 

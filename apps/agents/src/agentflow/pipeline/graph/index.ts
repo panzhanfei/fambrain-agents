@@ -1,4 +1,4 @@
 export { getCompiledPipelineGraph } from "./compile";
-export { runPipelineStream } from "./stream";
+export { routeAfterFactChecker, routeAfterIntake, routeAfterPrepare, routeAfterRetrieval } from "./routes";
 export type { PipelineGraphState } from "./state";
 export { PipelineGraphAnnotation } from "./state";
