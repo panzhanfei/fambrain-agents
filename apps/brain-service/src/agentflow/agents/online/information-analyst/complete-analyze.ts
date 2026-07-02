@@ -1,11 +1,11 @@
 import { HumanMessage, SystemMessage } from "@langchain/core/messages";
 import { ChatOllama } from "@langchain/ollama";
-import { getAgentsConfig } from "@fambrain/agent-config";
-import { logAgentOut } from "@fambrain/agent-shared/agent-log";
-import { estimateTokenUsage, recordLangChainOllamaUsage, recordPipelineTokenUsage, } from "@fambrain/agent-shared/pipeline-run-context";
-import { streamOllamaNative } from "@fambrain/agent-shared/ollama-native-stream";
-import { dedupeCitations } from "@/agentflow/agents/online/content-organizer";
-import type { KnowledgeHit } from "@/agentflow/agents/online/knowledge-manager";
+import { getBrainServiceConfig } from "@fambrain/brain-config";
+import { logAgentOut } from "@fambrain/brain-shared/agent-log";
+import { estimateTokenUsage, recordLangChainOllamaUsage, recordPipelineTokenUsage, } from "@fambrain/brain-shared/pipeline-run-context";
+import { streamOllamaNative } from "@fambrain/brain-shared/ollama-native-stream";
+import { dedupeCitations } from "@/agentflow/brain-service/online/content-organizer";
+import type { KnowledgeHit } from "@/agentflow/brain-service/online/knowledge-manager";
 import { parseJsonObject, textFromResponse } from "@/agentflow/utils";
 import {
     maxAnalystHitsForProfile,
@@ -25,7 +25,7 @@ import type { InformationAnalystResult } from "./prompt";
 
 type SubQuestionStreamChunk = { type: "assistant"; text: string };
 
-const { ollama } = getAgentsConfig();
+const { ollama } = getBrainServiceConfig();
 const llm = new ChatOllama({
     baseUrl: ollama.baseUrl,
     model: ollama.models.intakeCoordinator,

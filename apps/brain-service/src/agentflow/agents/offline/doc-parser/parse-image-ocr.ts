@@ -1,9 +1,9 @@
-import { getAgentsConfig } from "@fambrain/agent-config";
+import { getBrainServiceConfig } from "@fambrain/brain-config";
 const visionModel = (): string => {
     const fromEnv = process.env.OLLAMA_MODEL_VISION?.trim();
     if (fromEnv)
         return fromEnv;
-    return process.env.OLLAMA_MODEL?.trim() || getAgentsConfig().ollama.models.default;
+    return process.env.OLLAMA_MODEL?.trim() || getBrainServiceConfig().ollama.models.default;
 };
 type OllamaChatResponse = {
     message?: {
@@ -12,7 +12,7 @@ type OllamaChatResponse = {
     error?: string;
 };
 export const parseImageWithOllamaOcr = async (buffer: Buffer, fileName: string): Promise<string> => {
-    const { chatEndpoint } = getAgentsConfig().ollama;
+    const { chatEndpoint } = getBrainServiceConfig().ollama;
     const model = visionModel();
     const base64 = buffer.toString("base64");
     const res = await fetch(chatEndpoint, {

@@ -1,13 +1,13 @@
 import type {
   KnowledgeHit,
   KnowledgeRetrievalResult,
-} from "@/agentflow/agents/online/knowledge-manager";
+} from "@/agentflow/brain-service/online/knowledge-manager";
 import type {
     CompositeSlotId,
     CompositeSlotPlan,
     IntakeRouteMode,
-} from "@/agentflow/agents/online/intake-coordinator";
-import type { QueryProfile } from "@/agentflow/agents/online/knowledge-manager/query-profile";
+} from "@/agentflow/brain-service/online/intake-coordinator";
+import type { QueryProfile } from "@/agentflow/brain-service/online/knowledge-manager/query-profile";
 import type { CompositeSessionKey } from "@fambrain/infra";
 /**
  * InformationAnalyst 系统指令（P0）。

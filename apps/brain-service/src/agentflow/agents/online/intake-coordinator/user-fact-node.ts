@@ -1,8 +1,8 @@
-import { logAgentIn, logAgentOut } from "@fambrain/agent-shared/agent-log";
+import { logAgentIn, logAgentOut } from "@fambrain/brain-shared/agent-log";
 import {
     addStructuredUserFact,
     searchUserFactMemories,
-} from "@fambrain/agent-memory";
+} from "@fambrain/brain-memory";
 import type { PipelineGraphState } from "@/agentflow/pipeline/graph/state";
 import {
     buildRecallAnswer,

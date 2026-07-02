@@ -11,8 +11,8 @@ const main = async () => {
     const tmp = await mkdtemp(path.join(os.tmpdir(), "fambrain-mem-"));
     process.env.LANGMEM_SESSIONS_DIR = tmp;
     process.env.MEM0_ENABLED = "false";
-    const { buildMemoryPromptBlock, preparePipelineMemory, resetMemoryConfigCache, } = await import("@fambrain/agent-memory");
-    const { summarizeSessionTurns } = await import("@fambrain/agent-memory/langmem");
+    const { buildMemoryPromptBlock, preparePipelineMemory, resetMemoryConfigCache, } = await import("@fambrain/brain-memory");
+    const { summarizeSessionTurns } = await import("@fambrain/brain-memory/langmem");
     resetMemoryConfigCache();
     const block = buildMemoryPromptBlock({
         sessionSummary: "用户刚问过城管平台技术栈。",

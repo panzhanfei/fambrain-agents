@@ -1,4 +1,4 @@
-import { getAgentsConfig } from "@fambrain/agent-config";
+import { getBrainServiceConfig } from "@fambrain/brain-config";
 type ChatMessage = {
     role: string;
     content: string;
@@ -104,7 +104,7 @@ export async function* streamOllamaNative(options: {
     model?: string;
     signal?: AbortSignal;
 }): AsyncGenerator<OllamaStreamChunk, OllamaStreamUsage | undefined> {
-    const { ollama } = getAgentsConfig();
+    const { ollama } = getBrainServiceConfig();
     const baseUrl = ollama.baseUrl;
     const model = options.model ?? ollama.models.intakeCoordinator;
     const preferThink = options.think ?? ollama.streamThink;

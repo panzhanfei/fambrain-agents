@@ -1,5 +1,5 @@
 {
-  "name": "@fambrain/agent-types",
+  "name": "@fambrain/brain-types",
   "version": "0.1.0",
   "private": true,
   "type": "module",

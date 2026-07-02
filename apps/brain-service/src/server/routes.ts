@@ -1,11 +1,11 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
-import { getLangSmithStatus } from "@fambrain/agent-config/langsmith";
+import { getLangSmithStatus } from "@fambrain/brain-config/langsmith";
 import {
     getRetrievalCacheBackend,
     isRedisConfigured,
     pingRedis,
 } from "@fambrain/infra";
-import type { AgentStreamEvent } from "@fambrain/agent-types";
+import type { AgentStreamEvent } from "@fambrain/brain-types";
 import { runAgentStream } from "@/agentflow";
 import { requireAuth } from "@/server/auth-middleware";
 import { pipelineStreamBodySchema } from "@/server/schema";

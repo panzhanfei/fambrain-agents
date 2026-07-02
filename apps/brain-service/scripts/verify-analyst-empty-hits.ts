@@ -1,15 +1,15 @@
 /**
  * P0-12 / D5-5：Analyst 在 hits 空或 coverage=none 时跳过 LLM，直出 fallback。
  *
- *   pnpm --filter @fambrain/agents run verify:analyst-empty-hits
+ *   pnpm --filter @fambrain/brain-service run verify:analyst-empty-hits
  */
 import {
   buildFallbackAnswer,
   shouldSkipAnalystLlm,
   streamAnalyzeInformation,
   type InformationAnalystInput,
-} from "../src/agentflow/agents/online/information-analyst/index";
-import { bootstrapAgentsRuntime } from "../src/config/index";
+} from "../src/agentflow/brain-service/online/information-analyst/index";
+import { bootstrapBrainServiceRuntime } from "../src/config/index";
 
 const HALLUCINATION_NAMES = /陈明|Charlie|赵一|潘展飞/;
 
@@ -130,7 +130,7 @@ assertSync("enumeration 有 hits → 紧凑列表，非 excerpt 体", () => {
   }
 });
 
-await bootstrapAgentsRuntime();
+await bootstrapBrainServiceRuntime();
 
 console.log("\n— streamAnalyzeInformation（无 Ollama 调用）—");
 

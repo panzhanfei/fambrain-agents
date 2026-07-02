@@ -54,4 +54,4 @@ else
 fi
 
 cd "$ROOT"
-exec pnpm --filter @fambrain/agents index:corpus
+exec pnpm --filter @fambrain/brain-service index:corpus

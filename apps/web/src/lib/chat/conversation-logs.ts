@@ -2,7 +2,7 @@ import type {
     PipelineLogEntry,
     PipelineStepName,
     PipelineTiming,
-} from "@fambrain/agent-types";
+} from "@fambrain/brain-types";
 
 export type TurnStepEvent = {
     name: PipelineStepName;

@@ -2,7 +2,7 @@
  * QU-02 规则兜底：无上下文的多轮指代问法强制 clarify，避免 few-shot 误触发检索。
  * 有 history 实体线索时交给 Intake LLM 补全 searchQuery。
  */
-import type { DbChatTurn } from "@fambrain/agent-types";
+import type { DbChatTurn } from "@fambrain/brain-types";
 import type { IntakeRoutingDecision } from "../contract/prompt";
 
 /** 本轮仅指代、未自带实体 */

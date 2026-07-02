@@ -1,4 +1,4 @@
-import { normalizeFactKey } from "@/agentflow/agents/online/intake-coordinator";
+import { normalizeFactKey } from "@/agentflow/brain-service/online/intake-coordinator";
 
 export type LearnedCandidateTarget = "mem0" | "corpus" | "both";
 

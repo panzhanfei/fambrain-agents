@@ -9,8 +9,8 @@
     "lint": "eslint"
   },
   "dependencies": {
-    "@fambrain/agent-config": "workspace:*",
-    "@fambrain/agent-types": "workspace:*",
+    "@fambrain/brain-config": "workspace:*",
+    "@fambrain/brain-types": "workspace:*",
     "@fambrain/auth": "workspace:*",
     "@fambrain/corpus": "workspace:*",
     "@fambrain/db": "workspace:*",

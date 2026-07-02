@@ -1,6 +1,6 @@
 import pLimit from "p-limit";
 import type { Logger } from "pino";
-import { indexOneCorpusUser } from "@/agentflow/agents/offline/knowledge-indexer";
+import { indexOneCorpusUser } from "@/agentflow/brain-service/offline/knowledge-indexer";
 import type { CorpusCategory } from "@fambrain/corpus";
 import { ensureCorpusUserLayout } from "./ensure-corpus-layout";
 import { docParserLogger } from "./logger";

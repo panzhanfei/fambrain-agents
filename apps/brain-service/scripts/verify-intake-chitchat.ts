@@ -1,19 +1,19 @@
 /**
  * P0-13：Intake chitchat briefReply — guard 单测 + live 连跑 N 次「你好」。
  *
- *   pnpm --filter @fambrain/agents run verify:intake-chitchat
- *   CHITCHAT_RUNS=10 pnpm --filter @fambrain/agents run verify:intake-chitchat
+ *   pnpm --filter @fambrain/brain-service run verify:intake-chitchat
+ *   CHITCHAT_RUNS=10 pnpm --filter @fambrain/brain-service run verify:intake-chitchat
  */
-import type { DbChatTurn } from "@fambrain/agent-types";
+import type { DbChatTurn } from "@fambrain/brain-types";
 import {
     applyIntakeChitchatGuard,
     completeIntakeCoordinator,
     DEFAULT_CHITCHAT_BRIEF_REPLY,
     isAcceptableChitchatBriefReply,
     type IntakeRoutingDecision,
-} from "../src/agentflow/agents/online/intake-coordinator/index";
-import { parseIntakeDecision } from "../src/agentflow/agents/online/intake-coordinator/parse-intake";
-import { bootstrapAgentsRuntime } from "../src/config/index";
+} from "../src/agentflow/brain-service/online/intake-coordinator/index";
+import { parseIntakeDecision } from "../src/agentflow/brain-service/online/intake-coordinator/parse-intake";
+import { bootstrapBrainServiceRuntime } from "../src/config/index";
 
 const DEFAULT_RUNS = 10;
 
@@ -103,7 +103,7 @@ assertSync("guard：非 chitchat 不改动", () => {
     }
 });
 
-await bootstrapAgentsRuntime();
+await bootstrapBrainServiceRuntime();
 
 const runs = parseRuns();
 console.log(`\n— Intake live × ${runs}（「你好」）—`);

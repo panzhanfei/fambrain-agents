@@ -1,5 +1,5 @@
 import path from "node:path";
-import { getAgentsConfig } from "@fambrain/agent-config";
+import { getBrainServiceConfig } from "@fambrain/brain-config";
 import { findMonorepoRoot } from "@fambrain/corpus";
 const envFlag = (name: string, defaultOn = true): boolean => {
     const raw = process.env[name];
@@ -42,7 +42,7 @@ export const getMemoryConfig = (): MemoryConfig => {
     if (cached)
         return cached;
     const root = findMonorepoRoot();
-    const { ollama } = getAgentsConfig();
+    const { ollama } = getBrainServiceConfig();
     cached = {
         mem0Enabled: envFlag("MEM0_ENABLED", true),
         langMemEnabled: envFlag("LANGMEM_ENABLED", true),

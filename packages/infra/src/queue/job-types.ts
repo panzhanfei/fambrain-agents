@@ -1,4 +1,4 @@
-import type { AgentPipelineContext, DbChatTurn } from "@fambrain/agent-types";
+import type { AgentPipelineContext, DbChatTurn } from "@fambrain/brain-types";
 
 /** BullMQ pipeline 任务载荷 */
 export type PipelineJobPayload = {

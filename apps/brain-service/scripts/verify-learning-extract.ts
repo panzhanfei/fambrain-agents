@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { extractLearnedCandidates } from "@/agentflow/agents/offline/learning/extract-candidates";
+import { extractLearnedCandidates } from "@/agentflow/brain-service/offline/learning/extract-candidates";
 
 const rows = extractLearnedCandidates({
     userQuestion: "请记住我的QQ是123456789",

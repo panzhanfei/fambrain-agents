@@ -5,13 +5,13 @@ import {
   type BaseMessage,
 } from "@langchain/core/messages";
 import { ChatOllama } from "@langchain/ollama";
-import { getAgentsConfig } from "@fambrain/agent-config";
-import { logAgentIn, logAgentOut } from "@fambrain/agent-shared/agent-log";
-import { recordLangChainOllamaUsage } from "@fambrain/agent-shared/pipeline-run-context";
-import type { DbChatTurn } from "@fambrain/agent-types";
+import { getBrainServiceConfig } from "@fambrain/brain-config";
+import { logAgentIn, logAgentOut } from "@fambrain/brain-shared/agent-log";
+import { recordLangChainOllamaUsage } from "@fambrain/brain-shared/pipeline-run-context";
+import type { DbChatTurn } from "@fambrain/brain-types";
 import { textFromResponse } from "@/agentflow/utils";
 import { prompt } from "../contract/prompt";
-const { ollama } = getAgentsConfig();
+const { ollama } = getBrainServiceConfig();
 const llm = new ChatOllama({
   baseUrl: ollama.baseUrl,
   model: ollama.models.intakeCoordinator,

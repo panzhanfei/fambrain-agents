@@ -22,7 +22,7 @@
 1. 「你好」→ 短回复（闲聊 / `briefReply`）。
 2. 「城管平台用了什么技术」→ step「检索知识库…」→ **「核查证据…」** → **「整理证据…」** →「整理回答…」→ 最终回答；无语料时可能二次检索（见 [坑点 D5-1](./04-pitfalls.md)）。
 3. Ollama 未启动时应收到 `error` 事件，用户消息仍可能已保存。
-4. **（可选自动化）** `cd apps/agents && pnpm run golden:regression && pnpm run verify:fact-checker && pnpm run verify:fact-checker:pipeline && pnpm run verify:content-organizer && pnpm run verify:agent-schemas && pnpm run verify:embed-batches && pnpm run verify:doc-parser && pnpm run verify:memory && pnpm run verify:content-summarizer && pnpm run verify:vault-list`
+4. **（可选自动化）** `cd apps/brain-service && pnpm run golden:regression && pnpm run verify:fact-checker && pnpm run verify:fact-checker:pipeline && pnpm run verify:content-organizer && pnpm run verify:agent-schemas && pnpm run verify:embed-batches && pnpm run verify:doc-parser && pnpm run verify:memory && pnpm run verify:content-summarizer && pnpm run verify:vault-list`
 
 ### Golden 问法（回归）
 
@@ -156,7 +156,7 @@
 **命令（规划）：**
 
 ```bash
-cd apps/agents
+cd apps/brain-service
 GOLDEN_RUNS=3 pnpm run golden:regression   # G1～G5b + GMem，稳定性 3 遍
 ```
 
@@ -221,11 +221,11 @@ GOLDEN_RUNS=3 pnpm run golden:regression   # G1～G5b + GMem，稳定性 3 遍
 **状态：** ✅ 2026-06-23 — **13/13** Golden+KM+E2E；cache 探测 2/2；**profileProbe `G-履历综合`** 4/4（含同问短路 t2）；**memProbe GMem** 2/2；FactChecker **enumeration fast-pass** 避免二次 KM
 
 ```bash
-pnpm --filter @fambrain/agents run eval:run
-pnpm --filter @fambrain/agents run eval:run -- --mem-only      # 仅 GMem（~40s）
-pnpm --filter @fambrain/agents run eval:run -- --profile-only   # 仅 G-履历综合（~90s）
-EVAL_WRITE_REPORT=1 pnpm --filter @fambrain/agents run eval:run  # 写入 data/eval/reports/
-GOLDEN_RUNS=3 pnpm --filter @fambrain/agents run golden:regression  # G1～G5b + GMem，稳定性 3 遍
+pnpm --filter @fambrain/brain-service run eval:run
+pnpm --filter @fambrain/brain-service run eval:run -- --mem-only      # 仅 GMem（~40s）
+pnpm --filter @fambrain/brain-service run eval:run -- --profile-only   # 仅 G-履历综合（~90s）
+EVAL_WRITE_REPORT=1 pnpm --filter @fambrain/brain-service run eval:run  # 写入 data/eval/reports/
+GOLDEN_RUNS=3 pnpm --filter @fambrain/brain-service run golden:regression  # G1～G5b + GMem，稳定性 3 遍
 ```
 
 **与 A6 关系：** eval 脚本即 A6 的自动化延伸。

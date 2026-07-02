@@ -2,11 +2,11 @@
  * 同问短路冒烟：预置 history，不调用 Ollama。
  */
 import { runPipelineStream } from "@/agentflow/index";
-import { bootstrapAgentsRuntime } from "@/config";
-import { listCorpusUserIds } from "@/agentflow/agents/offline/knowledge-indexer/list-corpus-users";
+import { bootstrapBrainServiceRuntime } from "@/config";
+import { listCorpusUserIds } from "@/agentflow/brain-service/offline/knowledge-indexer/list-corpus-users";
 import { enableRepeatGuardForVerify } from "./verify-test-env";
 
-await bootstrapAgentsRuntime();
+await bootstrapBrainServiceRuntime();
 enableRepeatGuardForVerify();
 const corpusUserId =
     process.env.FAMBRAIN_CORPUS_USER_ID?.trim() ||

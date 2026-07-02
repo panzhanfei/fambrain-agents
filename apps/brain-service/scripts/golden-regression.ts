@@ -11,10 +11,10 @@
  * 需 Ollama + Chroma + 已入库语料；corpusUserId 见 FAMBRAIN_CORPUS_USER_ID
  * 或 data/doc/users/ 下首个有 corpus 的用户。
  */
-import type { AgentPipelineContext, DbChatTurn } from "@fambrain/agent-types";
-import { listCorpusUserIds } from "@/agentflow/agents/offline/knowledge-indexer/list-corpus-users";
+import type { AgentPipelineContext, DbChatTurn } from "@fambrain/brain-types";
+import { listCorpusUserIds } from "@/agentflow/brain-service/offline/knowledge-indexer/list-corpus-users";
 import { runPipelineStream } from "@/agentflow/index";
-import { bootstrapAgentsRuntime } from "@/config";
+import { bootstrapBrainServiceRuntime } from "@/config";
 
 /** 默认连跑遍数；也可用环境变量 GOLDEN_RUNS 或 CLI 参数覆盖 */
 const DEFAULT_GOLDEN_RUNS = 3;
@@ -435,7 +435,7 @@ const printMultiRunReport = (
 };
 
 const main = async (): Promise<void> => {
-  bootstrapAgentsRuntime();
+  bootstrapBrainServiceRuntime();
   const totalRuns = parseGoldenRuns();
   const corpusUserId = await resolveCorpusUserId();
   console.log(

@@ -4,9 +4,9 @@
  *
  *   pnpm run verify:fact-checker:pipeline
  */
-import type { AgentPipelineContext, DbChatTurn } from "@fambrain/agent-types";
+import type { AgentPipelineContext, DbChatTurn } from "@fambrain/brain-types";
 import { runPipelineStream } from "@/agentflow/index";
-import { bootstrapAgentsRuntime } from "@/config";
+import { bootstrapBrainServiceRuntime } from "@/config";
 
 const context: AgentPipelineContext = {
     actorUserId: "verify-fact-checker",
@@ -43,7 +43,7 @@ const runCase = async (label: string, userQuestion: string) => {
 };
 
 const main = async (): Promise<void> => {
-    bootstrapAgentsRuntime();
+    bootstrapBrainServiceRuntime();
     console.log("FactChecker 全链路冒烟（需 Ollama；语料可为空）\n");
     const chitchat = await runCase("G1 闲聊", "你好");
     const retrieve = await runCase("检索 + 核查", "城管平台用了什么技术？");

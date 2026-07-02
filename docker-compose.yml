@@ -1,7 +1,7 @@
-# FamBrain Docker 编排（web + agents + chroma）
+# FamBrain Docker 编排（web + brain-service + chroma）
 # Ollama 不在此编排内，请在 .env 配置外部地址（如局域网台式机）
 # 用法：pnpm docker:up
-# 端口从仓库根 .env 读取：PORT / AGENTS_PORT / CHROMA_PORT
+# 端口从仓库根 .env 读取：PORT / BRAIN_SERVICE_PORT / CHROMA_PORT
 
 services:
   web:
@@ -14,24 +14,24 @@ services:
     environment:
       PORT: ${PORT:-3000}
       DATABASE_URL: file:/app/packages/db/prisma/dev.db
-      AGENTS_SERVICE_URL: http://agents:${AGENTS_PORT:-3001}
+      BRAIN_SERVICE_URL: http://brain-service:${BRAIN_SERVICE_PORT:-3001}
       JWT_SECRET: ${JWT_SECRET:-fambrain-docker-dev-secret-change-me!!}
     volumes:
       - fambrain-db:/app/packages/db/prisma
     depends_on:
-      - agents
+      - brain-service
       - redis
     restart: unless-stopped
 
-  agents:
+  brain-service:
     build:
       context: .
-      dockerfile: Dockerfile.agents
+      dockerfile: Dockerfile.brain-service
     env_file: .env
     ports:
-      - "${AGENTS_PORT:-3001}:${AGENTS_PORT:-3001}"
+      - "${BRAIN_SERVICE_PORT:-3001}:${BRAIN_SERVICE_PORT:-3001}"
     environment:
-      AGENTS_PORT: ${AGENTS_PORT:-3001}
+      BRAIN_SERVICE_PORT: ${BRAIN_SERVICE_PORT:-3001}
       JWT_SECRET: ${JWT_SECRET:-fambrain-docker-dev-secret-change-me!!}
       CHROMA_SERVER_URL: http://chroma:8000
       REDIS_URL: redis://redis:6379

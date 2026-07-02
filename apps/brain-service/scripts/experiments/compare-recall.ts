@@ -6,7 +6,7 @@
  * 需 Ollama embed + Chroma 已入库。
  */
 import { recallSparseRetrieve, searchCorpusVectors } from "@fambrain/corpus";
-import { hybridRecall } from "../src/agentflow/agents/online/knowledge-manager/hybrid-recall";
+import { hybridRecall } from "../src/agentflow/brain-service/online/knowledge-manager/hybrid-recall";
 
 const printHits = (
     label: string,

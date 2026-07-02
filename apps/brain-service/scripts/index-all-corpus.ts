@@ -6,10 +6,10 @@
  *   pnpm run index:corpus
  *   LOG_LEVEL=debug pnpm run index:corpus
  */
-import { indexAllCorpora } from "@fambrain/agents";
-import { bootstrapAgentsRuntime, logLangSmithStartup, } from "@/config";
+import { indexAllCorpora } from "@fambrain/brain-service";
+import { bootstrapBrainServiceRuntime, logLangSmithStartup, } from "@/config";
 
-const { langSmith } = bootstrapAgentsRuntime();
+const { langSmith } = bootstrapBrainServiceRuntime();
 logLangSmithStartup(langSmith, console.log, "[index:corpus]");
 
 indexAllCorpora()

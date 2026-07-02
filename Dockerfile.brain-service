@@ -6,10 +6,10 @@ WORKDIR /app
 
 FROM base AS deps
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml .npmrc ./
-COPY apps/agents/package.json apps/agents/
-COPY packages/agent-types/package.json packages/agent-types/
-COPY packages/agent-config/package.json packages/agent-config/
-COPY packages/agent-shared/package.json packages/agent-shared/
+COPY apps/brain-service/package.json apps/brain-service/
+COPY packages/brain-types/package.json packages/brain-types/
+COPY packages/brain-config/package.json packages/brain-config/
+COPY packages/brain-shared/package.json packages/brain-shared/
 RUN pnpm install --frozen-lockfile
 
 FROM base AS runner
@@ -18,9 +18,9 @@ ENV NODE_ENV=production
 
 COPY --from=deps /app/node_modules ./node_modules
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml .npmrc ./
-COPY apps/agents ./apps/agents
+COPY apps/brain-service ./apps/brain-service
 COPY packages ./packages
 COPY data ./data
 
 EXPOSE 3001
-CMD ["pnpm", "--filter", "@fambrain/agents", "start"]
+CMD ["pnpm", "--filter", "@fambrain/brain-service", "start"]

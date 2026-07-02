@@ -8,7 +8,7 @@ import {
     type CachedFacetAnswer,
     type CompositeSessionKey,
 } from "@fambrain/infra";
-import type { InformationAnalystResult } from "@/agentflow/agents/online/information-analyst";
+import type { InformationAnalystResult } from "@/agentflow/brain-service/online/information-analyst";
 import {
     attachFacetKey,
     detectCompositeRefreshIntent,

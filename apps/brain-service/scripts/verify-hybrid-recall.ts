@@ -1,12 +1,12 @@
 /**
  * HY-02～03：RRF 融合 + Hybrid 并行召回验证。
  *
- *   pnpm --filter @fambrain/agents run verify:hybrid-recall
+ *   pnpm --filter @fambrain/brain-service run verify:hybrid-recall
  */
-import { fuseRrf } from "../src/agentflow/agents/online/knowledge-manager/fusion-rrf";
-import { hybridRecall } from "../src/agentflow/agents/online/knowledge-manager/hybrid-recall";
-import { sparseScoreToRelevance } from "../src/agentflow/agents/online/knowledge-manager/retrieve-helpers";
-import { listCorpusUserIds } from "../src/agentflow/agents/offline/knowledge-indexer/list-corpus-users";
+import { fuseRrf } from "../src/agentflow/brain-service/online/knowledge-manager/fusion-rrf";
+import { hybridRecall } from "../src/agentflow/brain-service/online/knowledge-manager/hybrid-recall";
+import { sparseScoreToRelevance } from "../src/agentflow/brain-service/online/knowledge-manager/retrieve-helpers";
+import { listCorpusUserIds } from "../src/agentflow/brain-service/offline/knowledge-indexer/list-corpus-users";
 
 const assert = (name: string, fn: () => void) => {
     try {

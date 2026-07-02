@@ -58,7 +58,7 @@
 **命令：**
 
 ```bash
-cd apps/agents
+cd apps/brain-service
 GOLDEN_RUNS=3 pnpm run golden:regression
 EVAL_WRITE_REPORT=1 pnpm run eval:run
 ```
@@ -86,7 +86,7 @@ EVAL_WRITE_REPORT=1 pnpm run eval:run
 **目标架构（规划，D3 落地骨架）：**
 
 ```text
-packages/agent-config/
+packages/brain-config/
   llm-provider.ts      # LLM_PROVIDER=ollama | openai
   createChatModel()    # 返回 LangChain BaseChatModel
 
@@ -107,7 +107,7 @@ packages/agent-config/
 | P0 | FactChecker | `fact-checker/check-facts.ts` |
 | P0 | Analyst 流式 | `information-analyst/stream*.ts` |
 | P1 | ContentSummarizer | `content-summarizer/summarize.ts` |
-| P1 | LangMem 摘要 | `packages/agent-memory/langmem/session.ts` |
+| P1 | LangMem 摘要 | `packages/brain-memory/langmem/session.ts` |
 | P2 | bindTools 实验 | `experiments/bind-tools-react.ts` |
 | — | Embed / 入库 | **保持 Ollama** 直至单独排期（避免 D3 范围爆炸） |
 
@@ -237,7 +237,7 @@ EVAL_WRITE_REPORT=1 pnpm run eval:run
 LLM_PROVIDER=openai
 OPENAI_API_KEY=sk-...
 OPENAI_MODEL=gpt-4o-mini
-AGENTS_SERVICE_URL=http://agents:3001
+BRAIN_SERVICE_URL=http://brain-service:3001
 CHROMA_SERVER_URL=http://chroma:8000
 REDIS_URL=redis://redis:6379
 LANGSMITH_API_KEY=...
@@ -301,11 +301,11 @@ LANGSMITH_API_KEY=...
 
 ```bash
 # 基线 / 回归
-GOLDEN_RUNS=3 pnpm --filter @fambrain/agents run golden:regression
-EVAL_WRITE_REPORT=1 pnpm --filter @fambrain/agents run eval:run
+GOLDEN_RUNS=3 pnpm --filter @fambrain/brain-service run golden:regression
+EVAL_WRITE_REPORT=1 pnpm --filter @fambrain/brain-service run eval:run
 
 # 治理
-pnpm --filter @fambrain/agents run verify:langchain-tools
+pnpm --filter @fambrain/brain-service run verify:langchain-tools
 pnpm run docker:up
 pnpm run pack:deploy
 

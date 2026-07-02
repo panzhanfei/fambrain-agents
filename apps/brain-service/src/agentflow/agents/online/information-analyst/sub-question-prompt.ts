@@ -1,5 +1,5 @@
-import type { QueryProfile } from "@/agentflow/agents/online/knowledge-manager/query-profile";
-import { isProjectEnumeration } from "@/agentflow/agents/online/intake-coordinator";
+import type { QueryProfile } from "@/agentflow/brain-service/online/knowledge-manager/query-profile";
+import { isProjectEnumeration } from "@/agentflow/brain-service/online/intake-coordinator";
 
 const streamRulesBase = `- 无 hits：只写一句「知识库未覆盖此点」。
 - 禁止编造 hits 中不存在的人名、公司、项目、日期。`;

@@ -9,7 +9,7 @@
     "./paths": "./src/paths.ts"
   },
   "dependencies": {
-    "@fambrain/agent-config": "workspace:*",
+    "@fambrain/brain-config": "workspace:*",
     "@langchain/community": "^1.1.28",
     "@langchain/core": "^1.1.46",
     "@langchain/ollama": "^1.2.7",

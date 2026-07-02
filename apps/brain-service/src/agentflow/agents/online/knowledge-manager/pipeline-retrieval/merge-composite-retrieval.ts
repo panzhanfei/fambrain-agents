@@ -1,12 +1,12 @@
 import type {
     CompositeSlotId,
     CompositeRetrievalSlot,
-} from "@/agentflow/agents/online/intake-coordinator";
+} from "@/agentflow/brain-service/online/intake-coordinator";
 import type {
     ConfidenceTier,
     KnowledgeHit,
     KnowledgeRetrievalResult,
-} from "@/agentflow/agents/online/knowledge-manager";
+} from "@/agentflow/brain-service/online/knowledge-manager";
 
 export type CompositeSubRetrieval = {
     slot: CompositeSlotId;

@@ -1,5 +1,5 @@
-import type { Citation } from "@/agentflow/agents/online/information-analyst/prompt";
-import type { KnowledgeHit } from "@/agentflow/agents/online/knowledge-manager";
+import type { Citation } from "@/agentflow/brain-service/online/information-analyst/prompt";
+import type { KnowledgeHit } from "@/agentflow/brain-service/online/knowledge-manager";
 const MAX_HITS = 5;
 const EXCERPT_MAX = 320;
 export const normalizeDocPath = (path: string): string => {

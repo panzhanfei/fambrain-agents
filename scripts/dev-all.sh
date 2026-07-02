@@ -15,7 +15,7 @@ if [[ -f "$ENV_FILE" ]]; then
 fi
 
 PORT="${PORT:-3000}"
-AGENTS_PORT="${AGENTS_PORT:-3001}"
+BRAIN_SERVICE_PORT="${BRAIN_SERVICE_PORT:-3001}"
 CHROMA_HOST="${CHROMA_HOST:-127.0.0.1}"
 CHROMA_PORT="${CHROMA_PORT:-8030}"
 CHROMA_URL="${CHROMA_SERVER_URL:-http://${CHROMA_HOST}:${CHROMA_PORT}}"
@@ -146,13 +146,13 @@ else
 fi
 
 # --- 应用进程 ---
-pnpm --filter @fambrain/agents dev &
-AGENTS_PID=$!
+pnpm --filter @fambrain/brain-service dev &
+BRAIN_SERVICE_PID=$!
 
 WORKER_PID=""
 if truthy "${PIPELINE_QUEUE_ENABLED:-0}"; then
   echo "[dev] PIPELINE_QUEUE_ENABLED=1 → 启动 BullMQ worker"
-  pnpm --filter @fambrain/agents dev:worker &
+  pnpm --filter @fambrain/brain-service dev:worker &
   WORKER_PID=$!
 fi
 
@@ -162,17 +162,17 @@ WEB_PID=$!
 echo ""
 echo "[dev] ── FamBrain 本地开发 ──"
 echo "  Web:    http://127.0.0.1:${PORT}"
-echo "  Agents: http://127.0.0.1:${AGENTS_PORT}"
+echo "  Brain:  http://127.0.0.1:${BRAIN_SERVICE_PORT}"
 echo "  Chroma: ${CHROMA_URL}"
 if [[ "$REDIS_STATUS" -ne 2 ]]; then
   echo "  Redis:  ${REDIS_HOST}:${REDIS_PORT} (db=${REDIS_DB:-0})"
 fi
 echo "  Ollama: ${OLLAMA_URL}"
-echo "[dev] Ctrl+C 停止 Web / Agents${WORKER_PID:+ / Worker}${CHROMA_PID:+ / Chroma}"
+echo "[dev] Ctrl+C 停止 Web / Brain${WORKER_PID:+ / Worker}${CHROMA_PID:+ / Chroma}"
 echo ""
 
 cleanup() {
-  kill "$AGENTS_PID" "$WEB_PID" 2>/dev/null || true
+  kill "$BRAIN_SERVICE_PID" "$WEB_PID" 2>/dev/null || true
   if [[ -n "$WORKER_PID" ]]; then
     kill "$WORKER_PID" 2>/dev/null || true
   fi

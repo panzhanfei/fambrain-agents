@@ -1,6 +1,6 @@
 import { tool } from "@langchain/core/tools";
 import { z } from "zod";
-import { summarizeContent } from "@/agentflow/agents/online/content-summarizer/summarize";
+import { summarizeContent } from "@/agentflow/brain-service/online/content-summarizer/summarize";
 
 export const summarizeTextTool = tool(
     async (input) => {

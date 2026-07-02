@@ -1,6 +1,6 @@
 import type { CachedFacetAnswer } from "@fambrain/infra";
-import type { IncrementalCompositePlan } from "@/agentflow/agents/online/intake-coordinator";
-import type { KnowledgeHit } from "@/agentflow/agents/online/knowledge-manager";
+import type { IncrementalCompositePlan } from "@/agentflow/brain-service/online/intake-coordinator";
+import type { KnowledgeHit } from "@/agentflow/brain-service/online/knowledge-manager";
 import { retrieveCompositeSlotsParallel } from "./retrieve-slots-parallel";
 import {
     mergeCompositeRetrieval,

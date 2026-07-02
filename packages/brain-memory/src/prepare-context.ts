@@ -1,4 +1,4 @@
-import type { AgentPipelineContext, DbChatTurn } from "@fambrain/agent-types";
+import type { AgentPipelineContext, DbChatTurn } from "@fambrain/brain-types";
 import { buildMemoryPromptBlock } from "./build-prompt-block";
 import { getMemoryConfig } from "./config";
 import { loadSessionSummary, trimHistoryForIntake } from "./langmem";

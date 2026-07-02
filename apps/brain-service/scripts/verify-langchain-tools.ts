@@ -1,7 +1,7 @@
 /**
  * LangChain StructuredTool 层验证（不替换主 pipeline）。
  *
- *   pnpm --filter @fambrain/agents run verify:langchain-tools
+ *   pnpm --filter @fambrain/brain-service run verify:langchain-tools
  */
 import assert from "node:assert/strict";
 import { mkdtemp, mkdir, writeFile, rm } from "node:fs/promises";
@@ -38,11 +38,11 @@ const main = async (): Promise<void> => {
 
     console.log("\n— retrieve_corpus (live, 需 Chroma) —");
 
-    const { bootstrapAgentsRuntime } = await import("@/config");
-    bootstrapAgentsRuntime();
+    const { bootstrapBrainServiceRuntime } = await import("@/config");
+    bootstrapBrainServiceRuntime();
 
     const { listCorpusUserIds } = await import(
-        "@/agentflow/agents/offline/knowledge-indexer/list-corpus-users"
+        "@/agentflow/brain-service/offline/knowledge-indexer/list-corpus-users"
     );
     const { getChromaServerUrl } = await import("@fambrain/corpus");
     const { retrieveCorpusTool, runWithToolContext } = await import(
@@ -83,7 +83,7 @@ const main = async (): Promise<void> => {
         const tmp = await mkdtemp(path.join(os.tmpdir(), "fambrain-lc-mem-"));
         process.env.MEM0_HISTORY_DB_PATH = path.join(tmp, "history.db");
         process.env.LANGMEM_ENABLED = "false";
-        const { resetMemoryConfigCache } = await import("@fambrain/agent-memory");
+        const { resetMemoryConfigCache } = await import("@fambrain/brain-memory");
         resetMemoryConfigCache();
 
         const {

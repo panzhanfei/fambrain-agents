@@ -1,15 +1,15 @@
-import type { AgentPipelineContext } from "@fambrain/agent-types";
-import { logAgentIn, logAgentOut } from "@fambrain/agent-shared/agent-log";
+import type { AgentPipelineContext } from "@fambrain/brain-types";
+import { logAgentIn, logAgentOut } from "@fambrain/brain-shared/agent-log";
 import {
     addStructuredUserFact,
-} from "@fambrain/agent-memory";
+} from "@fambrain/brain-memory";
 import {
     createPendingMemoryFact,
     MemoryCandidateTarget,
 } from "@fambrain/db";
 import { writeLearnedFactToCorpus } from "@fambrain/corpus";
 import pino from "pino";
-import { indexOneCorpusUser } from "@/agentflow/agents/offline/knowledge-indexer";
+import { indexOneCorpusUser } from "@/agentflow/brain-service/offline/knowledge-indexer";
 import { getLearningConfig } from "./config";
 import {
     extractLearnedCandidates,

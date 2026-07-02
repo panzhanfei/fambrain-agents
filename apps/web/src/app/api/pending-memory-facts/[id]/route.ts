@@ -1,5 +1,5 @@
 import { getAuthSession, getAuthToken } from "@fambrain/auth";
-import { resolveAgentsServiceUrl } from "@fambrain/agent-config/service-url";
+import { resolveBrainServiceUrl } from "@fambrain/brain-config/service-url";
 import {
     findPendingMemoryFactForUser,
     MemoryCandidateTarget,
@@ -63,7 +63,7 @@ export const PATCH = async (req: Request, ctx: RouteCtx) => {
     const citations = Array.isArray(row.citations) ?
         (row.citations as string[])
     :   undefined;
-    const baseUrl = resolveAgentsServiceUrl();
+    const baseUrl = resolveBrainServiceUrl();
     const res = await fetch(`${baseUrl}/learning/apply`, {
         method: "POST",
         headers: {
@@ -88,7 +88,7 @@ export const PATCH = async (req: Request, ctx: RouteCtx) => {
         payload = JSON.parse(text) as typeof payload;
     }
     catch {
-        payload = { error: text || `Agent 服务失败（HTTP ${res.status}）` };
+        payload = { error: text || `Brain 服务失败（HTTP ${res.status}）` };
     }
     if (!res.ok) {
         return NextResponse.json(

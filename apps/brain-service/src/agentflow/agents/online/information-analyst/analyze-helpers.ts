@@ -1,16 +1,16 @@
-import { dedupeCitations } from "@/agentflow/agents/online/content-organizer";
+import { dedupeCitations } from "@/agentflow/brain-service/online/content-organizer";
 import type {
   KnowledgeHit,
   KnowledgeRetrievalResult,
-} from "@/agentflow/agents/online/knowledge-manager";
-import type { QueryProfile } from "@/agentflow/agents/online/knowledge-manager/query-profile";
+} from "@/agentflow/brain-service/online/knowledge-manager";
+import type { QueryProfile } from "@/agentflow/brain-service/online/knowledge-manager/query-profile";
 import {
   resolveAnalystQueryProfile,
 } from "./analyst-recall-limits";
 import {
     isProjectEnumeration,
     memoryBlockHasStructuredUserFacts,
-} from "@/agentflow/agents/online/intake-coordinator";
+} from "@/agentflow/brain-service/online/intake-coordinator";
 import type {
   Citation,
   InformationAnalystInput,

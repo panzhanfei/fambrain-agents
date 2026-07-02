@@ -8,12 +8,12 @@ import {
 } from "@langchain/core/messages";
 import { ChatOllama } from "@langchain/ollama";
 
-import { getAgentsConfig } from "@fambrain/agent-config";
+import { getBrainServiceConfig } from "@fambrain/brain-config";
 import {
   logAgentIn,
   logAgentOut,
-} from "@fambrain/agent-shared/agent-log";
-import { recordLangChainOllamaUsage } from "@fambrain/agent-shared/pipeline-run-context";
+} from "@fambrain/brain-shared/agent-log";
+import { recordLangChainOllamaUsage } from "@fambrain/brain-shared/pipeline-run-context";
 
 import { parseJsonObject, textFromResponse } from "@/agentflow/utils";
 
@@ -29,7 +29,7 @@ import {
   type FactCheckerResult,
 } from "./prompt";
 
-const { ollama } = getAgentsConfig();
+const { ollama } = getBrainServiceConfig();
 
 const llm = new ChatOllama({
   baseUrl: ollama.baseUrl,

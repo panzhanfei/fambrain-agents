@@ -47,7 +47,7 @@ const envSchema = z.object({
         return true;
     }),
 });
-export type AgentsConfig = {
+export type BrainServiceConfig = {
     ollama: {
         /** 已去掉末尾 `/` 的根地址，如 `http://127.0.0.1:11434` */
         baseUrl: string;
@@ -66,8 +66,8 @@ export type AgentsConfig = {
         streamThink: boolean;
     };
 };
-let cached: AgentsConfig | null = null;
-const buildConfig = (parsed: z.infer<typeof envSchema>): AgentsConfig => {
+let cached: BrainServiceConfig | null = null;
+const buildConfig = (parsed: z.infer<typeof envSchema>): BrainServiceConfig => {
     const baseUrl = parsed.OLLAMA_BASE_URL.replace(/\/+$/, "");
     const defaultModel = parsed.OLLAMA_MODEL;
     const intake = parsed.OLLAMA_MODEL_INTAKE_COORDINATOR || defaultModel;
@@ -87,7 +87,7 @@ const buildConfig = (parsed: z.infer<typeof envSchema>): AgentsConfig => {
         },
     };
 };
-export const getAgentsConfig = (): AgentsConfig => {
+export const getBrainServiceConfig = (): BrainServiceConfig => {
     if (cached)
         return cached;
     process.env.OLLAMA_BASE_URL = resolveOllamaBaseUrl();
@@ -95,5 +95,5 @@ export const getAgentsConfig = (): AgentsConfig => {
     cached = buildConfig(parsed);
     return cached;
 };
-export { resolveOllamaBaseUrl, resolveChromaServerUrl, resolveAgentsPort, resolveAgentsServiceUrl, } from "./service-url";
+export { resolveOllamaBaseUrl, resolveChromaServerUrl, resolveBrainServicePort, resolveBrainServiceUrl, } from "./service-url";
 export { buildLangGraphRunConfig, configureLangSmithTracing, formatLangSmithStartupLine, getLangSmithStatus, type LangGraphRunConfig, type LangSmithStatus, } from "./langsmith";

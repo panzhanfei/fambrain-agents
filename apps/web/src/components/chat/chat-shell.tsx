@@ -1,6 +1,6 @@
 "use client";
 import type { ConversationListItem } from "@fambrain/db";
-import type { PipelineLogEntry, PipelineStepName, PipelineTiming } from "@fambrain/agent-types";
+import type { PipelineLogEntry, PipelineStepName, PipelineTiming } from "@fambrain/brain-types";
 import { ConversationLogPanel } from "@/components/chat/conversation-log-panel";
 import {
   createTurnLog,

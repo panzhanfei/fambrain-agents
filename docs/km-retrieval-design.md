@@ -34,7 +34,7 @@ Intake（L1）→ KM（L2～L5）→ FactChecker → ContentOrganizer → Analys
 | **packages/corpus** | 大 | Hybrid 稀疏路 / 向量 raw topK |
 | **intake-coordinator** | 中 | L1 查询理解上移（Wave C） |
 | **pipeline**（compile / parse-intake / state） | 小 | 传 `queryType`、retry 语义 |
-| **agent-shared**（agent-log） | 小 | 可观测字段 |
+| **brain-shared**（agent-log） | 小 | 可观测字段 |
 | **scripts** | 小 | verify / compare-recall |
 | **fact-checker** | 可选中小 | 高置信规则快检（Wave D） |
 | **content-organizer** | 可选小 | structuredFields（Wave E） |
@@ -259,17 +259,17 @@ Intake `queryType` 与上表 **同名枚举**（Wave C）。
 
 | 命令 | 说明 |
 |------|------|
-| `pnpm --filter @fambrain/agents run verify:sparse-recall` | HY-01：BM25 sparse 三问（不需 Chroma） |
-| `pnpm --filter @fambrain/agents run verify:intake-coreference` | QU-02：指代 guard 单测 + Intake live |
-| `pnpm --filter @fambrain/agents run eval:run` | Eval MVP：G1～G5b + KM + E2E + mem/cache/profile 探测 |
-| `pnpm --filter @fambrain/agents run eval:run -- --mem-only` | 仅 **GMem**（memProbe，跨会话 QQ） |
-| `pnpm --filter @fambrain/agents run verify:recall-compare` | HY-07：三问 vector/sparse/RRF（**需 Chroma**） |
-| `pnpm --filter @fambrain/agents run verify:hybrid-recall` | HY-02～03：RRF 单测 + hybridRecall live |
-| `pnpm --filter @fambrain/agents run verify:km-retrieve` | 规则单测：pathBoost、rank、queryProfile |
-| `pnpm --filter @fambrain/agents run verify:km-retrieve:live` | 真实语料 KM 五问（需 corpus） |
-| `pnpm --filter @fambrain/agents exec tsx --env-file=../../.env scripts/verify-km-e2e-identity.ts` | 全链路 spot check：「我的名字是什么？」 |
-| `pnpm --filter @fambrain/agents exec tsx --env-file=../../.env scripts/verify-km-e2e-enumeration.ts` | 全链路 spot check：「哪几家公司上过班？」 |
-| `pnpm --filter @fambrain/agents run verify:agent-schemas` | Intake `queryType` 等 Zod |
+| `pnpm --filter @fambrain/brain-service run verify:sparse-recall` | HY-01：BM25 sparse 三问（不需 Chroma） |
+| `pnpm --filter @fambrain/brain-service run verify:intake-coreference` | QU-02：指代 guard 单测 + Intake live |
+| `pnpm --filter @fambrain/brain-service run eval:run` | Eval MVP：G1～G5b + KM + E2E + mem/cache/profile 探测 |
+| `pnpm --filter @fambrain/brain-service run eval:run -- --mem-only` | 仅 **GMem**（memProbe，跨会话 QQ） |
+| `pnpm --filter @fambrain/brain-service run verify:recall-compare` | HY-07：三问 vector/sparse/RRF（**需 Chroma**） |
+| `pnpm --filter @fambrain/brain-service run verify:hybrid-recall` | HY-02～03：RRF 单测 + hybridRecall live |
+| `pnpm --filter @fambrain/brain-service run verify:km-retrieve` | 规则单测：pathBoost、rank、queryProfile |
+| `pnpm --filter @fambrain/brain-service run verify:km-retrieve:live` | 真实语料 KM 五问（需 corpus） |
+| `pnpm --filter @fambrain/brain-service exec tsx --env-file=../../.env scripts/verify-km-e2e-identity.ts` | 全链路 spot check：「我的名字是什么？」 |
+| `pnpm --filter @fambrain/brain-service exec tsx --env-file=../../.env scripts/verify-km-e2e-enumeration.ts` | 全链路 spot check：「哪几家公司上过班？」 |
+| `pnpm --filter @fambrain/brain-service run verify:agent-schemas` | Intake `queryType` 等 Zod |
 
 ### Chroma hybrid 模式（2026-06-17）
 

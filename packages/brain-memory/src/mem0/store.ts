@@ -1,6 +1,6 @@
 import { mkdir } from "node:fs/promises";
 import path from "node:path";
-import { logAgentIn, logAgentOut } from "@fambrain/agent-shared/agent-log";
+import { logAgentIn, logAgentOut } from "@fambrain/brain-shared/agent-log";
 import { Memory } from "mem0ai/oss";
 import { getMemoryConfig } from "../config";
 type Mem0SearchHit = {

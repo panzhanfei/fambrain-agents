@@ -1,5 +1,5 @@
 {
-  "name": "@fambrain/agents",
+  "name": "@fambrain/brain-service",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -49,11 +49,11 @@
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.25.2",
-    "@fambrain/agent-config": "workspace:*",
-    "@fambrain/agent-shared": "workspace:*",
-    "@fambrain/agent-types": "workspace:*",
+    "@fambrain/brain-config": "workspace:*",
+    "@fambrain/brain-shared": "workspace:*",
+    "@fambrain/brain-types": "workspace:*",
     "@fambrain/auth": "workspace:*",
-    "@fambrain/agent-memory": "workspace:*",
+    "@fambrain/brain-memory": "workspace:*",
     "@fambrain/corpus": "workspace:*",
     "@fambrain/db": "workspace:*",
     "@fambrain/infra": "workspace:*",

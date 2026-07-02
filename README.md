@@ -1,4 +1,4 @@
-# FamBrain / Agent
+# FamBrain
 
 基于 **Next.js（App Router）** 的家庭协作型对话应用：注册登录、成员审核、会话持久化，以及 **P0 多 Agent 聊天闭环**（意图路由 → 知识库检索 → 归纳回答，SSE 流式）。
 
@@ -14,7 +14,7 @@ cp .env.example .env
 pnpm run db:migrate
 pnpm run db:generate
 # 本地对话需 Ollama，例如：ollama pull qwen2.5:14b
-pnpm run dev    # 一键：Chroma + Redis + Web + Agents
+pnpm run dev    # 一键：Chroma + Redis + Web + Brain Service
 ```
 
 浏览器访问 [http://localhost:3000](http://localhost:3000)（端口由 `.env` 的 `PORT` 控制）。环境变量与代码结构见 [项目简介](docs/01-project-overview.md)。
@@ -34,15 +34,15 @@ pnpm run dev    # 一键：Chroma + Redis + Web + Agents
 ## 常用命令
 
 ```bash
-pnpm run dev              # 一键：Chroma + Redis + Web + Agents [+ Worker]
+pnpm run dev              # 一键：Chroma + Redis + Web + Brain Service [+ Worker]
 pnpm run dev:web          # 仅 Web BFF
-pnpm run dev:agents       # 仅 Agent 服务（默认 :3001）
+pnpm run dev:brain-service # 仅 Brain 服务（默认 :3001）
 pnpm run redis:server     # 单独 Docker 起 Redis
 pnpm run build            # db generate + standalone 打包
 pnpm run pack:deploy      # 本地构建并打 tar 部署包
-pnpm run docker:up        # Docker 一键启动 web + agents + ollama + chroma
+pnpm run docker:up        # Docker 一键启动 web + brain-service + chroma
 pnpm run chroma:server    # 启动 Chroma（向量库）
-pnpm run index:corpus     # 离线语料入库（apps/agents）
+pnpm run index:corpus     # 离线语料入库（apps/brain-service）
 pnpm run summarize:document -- path/to.md   # 内容摘要师 CLI
 pnpm run experiment:mcp-vault             # MCP 只读列 vault
 pnpm run experiment:recall-compare -- <userId> "query"
@@ -55,14 +55,10 @@ pnpm run experiment:bind-tools -- --schema-only
 
 ```text
 apps/web/           Next.js UI + BFF（output: standalone）
-apps/agents/        Agent HTTP 服务 + 业务（默认 AGENTS_PORT=3001）
+apps/brain-service/   Brain HTTP 服务 + 多 Agent 编排（默认 BRAIN_SERVICE_PORT=3001）
 packages/db/        Prisma + 会话 repo
 packages/auth/      JWT / 登录注册 / 会话
-packages/agent-*/   Agent 公共 types / config / shared
+packages/brain-*/   types / config / shared / memory 公共代码
 ```
 
 语料目录：`data/doc/users/<userId>/corpus/` · SQLite：`packages/db/prisma/dev.db`
-
----
-
-仓库包名为 `agent`，界面品牌为 **FamBrain**；二者指同一应用。

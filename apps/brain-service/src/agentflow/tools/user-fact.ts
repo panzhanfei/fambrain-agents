@@ -2,9 +2,9 @@ import { tool } from "@langchain/core/tools";
 import {
     addStructuredUserFact,
     searchUserFactMemories,
-} from "@fambrain/agent-memory";
+} from "@fambrain/brain-memory";
 import { z } from "zod";
-import { findUserFactValueInTexts } from "@/agentflow/agents/online/intake-coordinator";
+import { findUserFactValueInTexts } from "@/agentflow/brain-service/online/intake-coordinator";
 import { getToolContext } from "./context";
 
 export const rememberUserFactTool = tool(

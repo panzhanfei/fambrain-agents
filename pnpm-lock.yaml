@@ -11,20 +11,20 @@ importers:
 
   .: {}
 
-  apps/agents:
+  apps/brain-service:
     dependencies:
-      '@fambrain/agent-config':
+      '@fambrain/brain-config':
         specifier: workspace:*
-        version: link:../../packages/agent-config
-      '@fambrain/agent-memory':
+        version: link:../../packages/brain-config
+      '@fambrain/brain-memory':
         specifier: workspace:*
-        version: link:../../packages/agent-memory
-      '@fambrain/agent-shared':
+        version: link:../../packages/brain-memory
+      '@fambrain/brain-shared':
         specifier: workspace:*
-        version: link:../../packages/agent-shared
-      '@fambrain/agent-types':
+        version: link:../../packages/brain-shared
+      '@fambrain/brain-types':
         specifier: workspace:*
-        version: link:../../packages/agent-types
+        version: link:../../packages/brain-types
       '@fambrain/auth':
         specifier: workspace:*
         version: link:../../packages/auth
@@ -110,12 +110,12 @@ importers:
 
   apps/web:
     dependencies:
-      '@fambrain/agent-config':
+      '@fambrain/brain-config':
         specifier: workspace:*
-        version: link:../../packages/agent-config
-      '@fambrain/agent-types':
+        version: link:../../packages/brain-config
+      '@fambrain/brain-types':
         specifier: workspace:*
-        version: link:../../packages/agent-types
+        version: link:../../packages/brain-types
       '@fambrain/auth':
         specifier: workspace:*
         version: link:../../packages/auth
@@ -166,23 +166,23 @@ importers:
         specifier: ^5
         version: 5.9.3
 
-  packages/agent-config:
+  packages/brain-config:
     dependencies:
       zod:
         specifier: ^4.4.3
         version: 4.4.3
 
-  packages/agent-memory:
+  packages/brain-memory:
     dependencies:
-      '@fambrain/agent-config':
+      '@fambrain/brain-config':
         specifier: workspace:*
-        version: link:../agent-config
-      '@fambrain/agent-shared':
+        version: link:../brain-config
+      '@fambrain/brain-shared':
         specifier: workspace:*
-        version: link:../agent-shared
-      '@fambrain/agent-types':
+        version: link:../brain-shared
+      '@fambrain/brain-types':
         specifier: workspace:*
-        version: link:../agent-types
+        version: link:../brain-types
       '@fambrain/corpus':
         specifier: workspace:*
         version: link:../corpus
@@ -203,16 +203,16 @@ importers:
         specifier: ^5
         version: 5.9.3
 
-  packages/agent-shared:
+  packages/brain-shared:
     dependencies:
-      '@fambrain/agent-config':
+      '@fambrain/brain-config':
         specifier: workspace:*
-        version: link:../agent-config
-      '@fambrain/agent-types':
+        version: link:../brain-config
+      '@fambrain/brain-types':
         specifier: workspace:*
-        version: link:../agent-types
+        version: link:../brain-types
 
-  packages/agent-types: {}
+  packages/brain-types: {}
 
   packages/auth:
     dependencies:
@@ -234,9 +234,9 @@ importers:
 
   packages/corpus:
     dependencies:
-      '@fambrain/agent-config':
+      '@fambrain/brain-config':
         specifier: workspace:*
-        version: link:../agent-config
+        version: link:../brain-config
       '@langchain/community':
         specifier: ^1.1.28
         version: 1.1.28(eceeb65077d5b7b4ab50a094c38abf6a)
@@ -268,9 +268,9 @@ importers:
 
   packages/db:
     dependencies:
-      '@fambrain/agent-types':
+      '@fambrain/brain-types':
         specifier: workspace:*
-        version: link:../agent-types
+        version: link:../brain-types
       '@prisma/adapter-better-sqlite3':
         specifier: ^7.8.0
         version: 7.8.0

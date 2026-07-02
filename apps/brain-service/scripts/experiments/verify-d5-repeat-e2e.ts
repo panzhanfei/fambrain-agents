@@ -1,12 +1,12 @@
 /**
  * D5-2 + R6-3 抽检：同会话重复综合问 + 编号子问公司数。
  *
- *   pnpm --filter @fambrain/agents exec tsx --env-file=../../.env scripts/experiments/verify-d5-repeat-e2e.ts
+ *   pnpm --filter @fambrain/brain-service exec tsx --env-file=../../.env scripts/experiments/verify-d5-repeat-e2e.ts
  */
-import type { AgentPipelineContext, DbChatTurn } from "@fambrain/agent-types";
-import { listCorpusUserIds } from "@/agentflow/agents/offline/knowledge-indexer/list-corpus-users";
+import type { AgentPipelineContext, DbChatTurn } from "@fambrain/brain-types";
+import { listCorpusUserIds } from "@/agentflow/brain-service/offline/knowledge-indexer/list-corpus-users";
 import { runPipelineStream } from "@/agentflow/index";
-import { bootstrapAgentsRuntime } from "@/config";
+import { bootstrapBrainServiceRuntime } from "@/config";
 import { enableRepeatGuardForVerify } from "../verify-test-env";
 
 const COMPOSITE =
@@ -76,7 +76,7 @@ const fail = (msg: string) => {
 
 const ok = (msg: string) => console.log(`  ✓ ${msg}`);
 
-await bootstrapAgentsRuntime();
+await bootstrapBrainServiceRuntime();
 enableRepeatGuardForVerify();
 const corpusUserId =
     process.env.FAMBRAIN_CORPUS_USER_ID?.trim() ||

@@ -1,4 +1,4 @@
-import type { AgentPipelineContext, DbChatTurn } from "@fambrain/agent-types";
+import type { AgentPipelineContext, DbChatTurn } from "@fambrain/brain-types";
 import type { PipelineGraphState } from "../graph/state";
 
 /** 从 history 末尾向前取最后一条 user 消息，作为本轮 userQuestion */

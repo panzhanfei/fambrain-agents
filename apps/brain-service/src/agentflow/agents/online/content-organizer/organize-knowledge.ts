@@ -1,5 +1,5 @@
-import { logAgentIn, logAgentOut } from "@fambrain/agent-shared/agent-log";
-import { getProfileRecallParams } from "@/agentflow/agents/online/knowledge-manager/km-config";
+import { logAgentIn, logAgentOut } from "@fambrain/brain-shared/agent-log";
+import { getProfileRecallParams } from "@/agentflow/brain-service/online/knowledge-manager/km-config";
 import { organizeHits } from "./organize-hits";
 import type { ContentOrganizerInput, ContentOrganizerResult, } from "./prompt";
 import { parseKnowledgeHits } from "./schema";

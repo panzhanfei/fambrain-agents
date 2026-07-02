@@ -1,5 +1,5 @@
 import { getAuthSession, getAuthToken } from "@fambrain/auth";
-import { resolveAgentsServiceUrl } from "@fambrain/agent-config/service-url";
+import { resolveBrainServiceUrl } from "@fambrain/brain-config/service-url";
 import { forbiddenIfUntrustedMutation } from "@/lib/security/same-origin";
 import { resolveCorpusUserId } from "@/server/knowledge/resolve-corpus-user";
 import { NextResponse } from "next/server";
@@ -50,7 +50,7 @@ export const POST = async (req: Request) => {
     if (fileCount === 0) {
         return NextResponse.json({ error: "请至少上传 1 个文件" }, { status: 400 });
     }
-    const baseUrl = resolveAgentsServiceUrl();
+    const baseUrl = resolveBrainServiceUrl();
     const res = await fetch(`${baseUrl}/documents/upload`, {
         method: "POST",
         headers: {
@@ -64,7 +64,7 @@ export const POST = async (req: Request) => {
         payload = JSON.parse(text);
     }
     catch {
-        payload = { error: text || `Agent 服务失败（HTTP ${res.status}）` };
+        payload = { error: text || `Brain 服务失败（HTTP ${res.status}）` };
     }
     return NextResponse.json(payload, { status: res.status });
 };

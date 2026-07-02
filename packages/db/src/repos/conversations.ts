@@ -1,4 +1,4 @@
-import type { DbChatTurn } from "@fambrain/agent-types";
+import type { DbChatTurn } from "@fambrain/brain-types";
 import { ChatRole, type Prisma } from "../generated/prisma/client";
 import { prisma } from "../client";
 export type MessageRow = {

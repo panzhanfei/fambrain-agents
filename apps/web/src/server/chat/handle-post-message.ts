@@ -1,7 +1,7 @@
-import type { AgentPipelineContext, AgentPipelineResult, DbChatTurn, } from "@fambrain/agent-types";
+import type { AgentPipelineContext, AgentPipelineResult, DbChatTurn, } from "@fambrain/brain-types";
 import { encodeSseEvent, sseResponse } from "@/lib/chat/sse";
 import { appendAssistantMessage, appendUserMessage, maybeUpdateConversationTitle, } from "@fambrain/db";
-import { streamAgentPipeline } from "./agents-client";
+import { streamAgentPipeline } from "./brain-service-client";
 type UiRole = "user" | "assistant";
 const mapRole = (role: string): UiRole => {
     return role === "user" ? "user" : "assistant";

@@ -3,7 +3,7 @@
  *
  *   pnpm run summarize:document -- path/to/file.md
  */
-import { summarizeMarkdownFile } from "../src/agentflow/agents/online/content-summarizer/index";
+import { summarizeMarkdownFile } from "../src/agentflow/brain-service/online/content-summarizer/index";
 const main = async () => {
     const absPath = process.argv[2]?.trim();
     if (!absPath) {

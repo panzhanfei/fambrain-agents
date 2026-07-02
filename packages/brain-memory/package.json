@@ -1,5 +1,5 @@
 {
-  "name": "@fambrain/agent-memory",
+  "name": "@fambrain/brain-memory",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -8,9 +8,9 @@
     "./langmem": "./src/langmem/index.ts"
   },
   "dependencies": {
-    "@fambrain/agent-config": "workspace:*",
-    "@fambrain/agent-shared": "workspace:*",
-    "@fambrain/agent-types": "workspace:*",
+    "@fambrain/brain-config": "workspace:*",
+    "@fambrain/brain-shared": "workspace:*",
+    "@fambrain/brain-types": "workspace:*",
     "@fambrain/corpus": "workspace:*",
     "@langchain/core": "^1.1.46",
     "@langchain/ollama": "^1.2.7",

@@ -1,11 +1,11 @@
 import { createServer } from "node:http";
-import { bootstrapAgentsRuntime, logLangSmithStartup, } from "@/config";
+import { bootstrapBrainServiceRuntime, logLangSmithStartup, } from "@/config";
 import { handleAsync } from "@/server/handle-async";
 import { handleHealth, handleNotFound, handlePipelineStream, } from "@/server/routes";
 import { handleDocumentsUpload } from "@/server/documents-upload";
 import { handleLearningApply } from "@/server/learning-apply";
 
-const { langSmith, port } = bootstrapAgentsRuntime();
+const { langSmith, port } = bootstrapBrainServiceRuntime();
 
 const server = createServer((req, res) => {
     const url = req.url?.split("?")[0] ?? "/";
@@ -29,6 +29,6 @@ const server = createServer((req, res) => {
 });
 
 server.listen(port, () => {
-    console.log(`[@fambrain/agents] listening on http://127.0.0.1:${port}`);
+    console.log(`[@fambrain/brain-service] listening on http://127.0.0.1:${port}`);
     logLangSmithStartup(langSmith);
 });

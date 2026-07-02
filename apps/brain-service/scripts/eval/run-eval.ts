@@ -1,24 +1,24 @@
 /**
  * Eval MVP：golden.json → Pipeline / KM 断言 → JSON + Markdown 报告。
  *
- *   pnpm --filter @fambrain/agents run eval:run
- *   pnpm --filter @fambrain/agents run eval:run -- --json-only
- *   pnpm --filter @fambrain/agents run eval:run -- --mem-only
- *   EVAL_WRITE_REPORT=1 pnpm --filter @fambrain/agents run eval:run
+ *   pnpm --filter @fambrain/brain-service run eval:run
+ *   pnpm --filter @fambrain/brain-service run eval:run -- --json-only
+ *   pnpm --filter @fambrain/brain-service run eval:run -- --mem-only
+ *   EVAL_WRITE_REPORT=1 pnpm --filter @fambrain/brain-service run eval:run
  *
  * 需 Ollama + 语料；KM hybrid 指标建议 Chroma 在线。
  */
 import { readFile, mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import type { AgentPipelineContext, DbChatTurn } from "@fambrain/agent-types";
-import { listCorpusUserIds } from "@/agentflow/agents/offline/knowledge-indexer/list-corpus-users";
-import { hybridRecall } from "@/agentflow/agents/online/knowledge-manager/hybrid-recall";
-import { getProfileRecallParams } from "@/agentflow/agents/online/knowledge-manager/km-config";
-import { resolveQueryProfile } from "@/agentflow/agents/online/knowledge-manager/query-profile";
-import { retrieveKnowledge } from "@/agentflow/agents/online/knowledge-manager/retrieve";
+import type { AgentPipelineContext, DbChatTurn } from "@fambrain/brain-types";
+import { listCorpusUserIds } from "@/agentflow/brain-service/offline/knowledge-indexer/list-corpus-users";
+import { hybridRecall } from "@/agentflow/brain-service/online/knowledge-manager/hybrid-recall";
+import { getProfileRecallParams } from "@/agentflow/brain-service/online/knowledge-manager/km-config";
+import { resolveQueryProfile } from "@/agentflow/brain-service/online/knowledge-manager/query-profile";
+import { retrieveKnowledge } from "@/agentflow/brain-service/online/knowledge-manager/retrieve";
 import { runPipelineStream } from "@/agentflow/index";
-import { bootstrapAgentsRuntime } from "@/config";
+import { bootstrapBrainServiceRuntime } from "@/config";
 import {
     assertKm,
     assertPipeline,
@@ -536,7 +536,7 @@ const profileOnly = process.argv.includes("--profile-only");
 const memOnly = process.argv.includes("--mem-only");
 
 const main = async (): Promise<void> => {
-    bootstrapAgentsRuntime();
+    bootstrapBrainServiceRuntime();
     const raw = await readFile(GOLDEN_PATH, "utf8");
     const golden = JSON.parse(raw) as GoldenFile;
     const corpusUserId = await resolveCorpusUserId();

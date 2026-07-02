@@ -1,6 +1,6 @@
 # FamBrain 实验脚本（触达级）
 
-与主聊天链路 **解耦**，用于 P1 技术栈触达与面试演示。实现位于 `apps/agents/scripts/experiments/`。
+与主聊天链路 **解耦**，用于 P1 技术栈触达与面试演示。实现位于 `apps/brain-service/scripts/experiments/`。
 
 | 命令（仓库根目录） | 技术 | 说明 |
 |-------------------|------|------|

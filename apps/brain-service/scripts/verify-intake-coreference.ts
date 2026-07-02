@@ -1,9 +1,9 @@
 /**
  * Wave C（QU-02）：Intake 多轮指代 — guard 单测 + Intake live 抽检。
  *
- *   pnpm --filter @fambrain/agents run verify:intake-coreference
+ *   pnpm --filter @fambrain/brain-service run verify:intake-coreference
  */
-import type { DbChatTurn } from "@fambrain/agent-types";
+import type { DbChatTurn } from "@fambrain/brain-types";
 import { resetInfraConfigForTests } from "@fambrain/infra";
 import {
     applyIntakeCoreferenceGuard,
@@ -11,10 +11,10 @@ import {
     hasCoreferenceContext,
     isVagueReferentialQuestion,
     type IntakeRoutingDecision,
-} from "../src/agentflow/agents/online/intake-coordinator/index";
-import { findRepeatAnswerInHistory } from "../src/agentflow/agents/online/intake-coordinator";
-import { parseIntakeDecision } from "../src/agentflow/agents/online/intake-coordinator/parse-intake";
-import { bootstrapAgentsRuntime } from "../src/config/index";
+} from "../src/agentflow/brain-service/online/intake-coordinator/index";
+import { findRepeatAnswerInHistory } from "../src/agentflow/brain-service/online/intake-coordinator";
+import { parseIntakeDecision } from "../src/agentflow/brain-service/online/intake-coordinator/parse-intake";
+import { bootstrapBrainServiceRuntime } from "../src/config/index";
 import { enableRepeatGuardForVerify } from "./verify-test-env";
 
 const assertSync = (name: string, fn: () => void) => {
@@ -81,7 +81,7 @@ assertSync("guard：有上文实体 → 保留 retrieve", () => {
 
 console.log("\n— repeat guard 单测 —");
 
-await bootstrapAgentsRuntime();
+await bootstrapBrainServiceRuntime();
 enableRepeatGuardForVerify();
 
 assertSync("repeat：同句再问命中 history 答", () => {

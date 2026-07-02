@@ -1,4 +1,4 @@
-import { resolveQueryProfile } from "@/agentflow/agents/online/knowledge-manager/query-profile";
+import { resolveQueryProfile } from "@/agentflow/brain-service/online/knowledge-manager/query-profile";
 import { organizeKnowledge } from "./organize-knowledge";
 import type { PipelineGraphState } from "@/agentflow/pipeline/graph/state";
 

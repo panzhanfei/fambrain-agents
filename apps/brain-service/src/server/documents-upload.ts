@@ -1,5 +1,5 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
-import { docParserLogger, docUploadFieldSchema, ingestDocumentBatch, } from "@/agentflow/agents/offline/doc-parser";
+import { docParserLogger, docUploadFieldSchema, ingestDocumentBatch, } from "@/agentflow/brain-service/offline/doc-parser";
 import { requireAuth } from "@/server/auth-middleware";
 import { parseMultipartRequest } from "@/server/parse-multipart";
 const parseRelativePathsField = (raw: string | undefined): string[] | undefined => {

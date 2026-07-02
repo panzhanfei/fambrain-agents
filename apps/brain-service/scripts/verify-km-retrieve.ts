@@ -1,7 +1,7 @@
 /**
  * KnowledgeManager 检索规则验证（KM-07）：不测全链路 / Chroma，只测 rank + pathBoost。
  *
- *   pnpm --filter @fambrain/agents run verify:km-retrieve
+ *   pnpm --filter @fambrain/brain-service run verify:km-retrieve
  */
 import {
     applyEnumerationFill,
@@ -15,14 +15,14 @@ import {
     pickExcerpt,
     pickTableExcerpt,
     rankCandidates,
-} from "../src/agentflow/agents/online/knowledge-manager/retrieve-helpers";
+} from "../src/agentflow/brain-service/online/knowledge-manager/retrieve-helpers";
 import {
     getProfileRecallParams,
-} from "../src/agentflow/agents/online/knowledge-manager/km-config";
+} from "../src/agentflow/brain-service/online/knowledge-manager/km-config";
 import {
     inferQueryProfile,
     resolveQueryProfile,
-} from "../src/agentflow/agents/online/knowledge-manager/query-profile";
+} from "../src/agentflow/brain-service/online/knowledge-manager/query-profile";
 
 const stubExcerpt = (body: string) => body.slice(0, 120);
 

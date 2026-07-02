@@ -1,6 +1,6 @@
-import { formatLangSmithStartupLine, type LangSmithStatus, } from "@fambrain/agent-config/langsmith";
+import { formatLangSmithStartupLine, type LangSmithStatus, } from "@fambrain/brain-config/langsmith";
 
-export const logLangSmithStartup = (langSmith: LangSmithStatus, log: (message: string) => void = console.log, prefix = "[@fambrain/agents]"): void => {
+export const logLangSmithStartup = (langSmith: LangSmithStatus, log: (message: string) => void = console.log, prefix = "[@fambrain/brain-service]"): void => {
     const line = formatLangSmithStartupLine(langSmith);
     if (line) {
         log(`${prefix} ${line}`);

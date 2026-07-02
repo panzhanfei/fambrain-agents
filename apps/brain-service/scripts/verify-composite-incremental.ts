@@ -1,7 +1,7 @@
 /**
  * L3/L4 composite 增量 cache 单测。
  *
- *   pnpm --filter @fambrain/agents run verify:composite-incremental
+ *   pnpm --filter @fambrain/brain-service run verify:composite-incremental
  */
 import {
     clearMemoryCompositeAnswerCache,
@@ -13,7 +13,7 @@ import {
     buildFacetKey,
     planItemToSlot,
     resolveIncrementalCompositePlan,
-} from "../src/agentflow/agents/online/intake-coordinator";
+} from "../src/agentflow/brain-service/online/intake-coordinator";
 
 process.env.REDIS_ENABLED = "0";
 process.env.COMPOSITE_ANSWER_CACHE_DISABLED = "0";

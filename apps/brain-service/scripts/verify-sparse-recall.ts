@@ -1,11 +1,11 @@
 /**
  * HY-01 BM25 sparse 检索验证（不依赖 Chroma）。
  *
- *   pnpm --filter @fambrain/agents run verify:sparse-recall
+ *   pnpm --filter @fambrain/brain-service run verify:sparse-recall
  */
 import { buildBm25Index } from "@fambrain/corpus";
 import { recallSparseRetrieve } from "@fambrain/corpus";
-import { listCorpusUserIds } from "../src/agentflow/agents/offline/knowledge-indexer/list-corpus-users";
+import { listCorpusUserIds } from "../src/agentflow/brain-service/offline/knowledge-indexer/list-corpus-users";
 
 const assert = (name: string, fn: () => void) => {
     try {

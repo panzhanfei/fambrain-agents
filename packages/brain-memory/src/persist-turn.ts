@@ -1,4 +1,4 @@
-import type { AgentPipelineContext, DbChatTurn } from "@fambrain/agent-types";
+import type { AgentPipelineContext, DbChatTurn } from "@fambrain/brain-types";
 import { getMemoryConfig } from "./config";
 import { persistSessionSummary } from "./langmem";
 import { addTurnToMem0 } from "./mem0";

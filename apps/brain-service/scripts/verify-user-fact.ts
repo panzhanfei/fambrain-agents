@@ -1,7 +1,7 @@
 /**
  * P0-16：Intake 结构化 user_fact + Mem0 JSON 存储。
  *
- *   pnpm --filter @fambrain/agents run verify:user-fact
+ *   pnpm --filter @fambrain/brain-service run verify:user-fact
  */
 import assert from "node:assert/strict";
 import { mkdtemp, rm } from "node:fs/promises";
@@ -15,8 +15,8 @@ import {
     routeUserFactFromIntake,
     serializeUserFactRecord,
     type IntakeRoutingDecision,
-} from "../src/agentflow/agents/online/intake-coordinator";
-import { userFactNode } from "../src/agentflow/agents/online/intake-coordinator/user-fact-node";
+} from "../src/agentflow/brain-service/online/intake-coordinator";
+import { userFactNode } from "../src/agentflow/brain-service/online/intake-coordinator/user-fact-node";
 import type { PipelineGraphState } from "../src/agentflow/pipeline/graph/state";
 
 const QQ = "734858469";
@@ -167,7 +167,7 @@ const main = async () => {
     process.env.MEM0_HISTORY_DB_PATH = path.join(tmp, "history.db");
     process.env.LANGMEM_ENABLED = "false";
     const { resetMemoryConfigCache, addStructuredUserFact, searchUserFactMemories } =
-        await import("@fambrain/agent-memory");
+        await import("@fambrain/brain-memory");
     resetMemoryConfigCache();
 
     const userId = `uf-${Date.now()}`;

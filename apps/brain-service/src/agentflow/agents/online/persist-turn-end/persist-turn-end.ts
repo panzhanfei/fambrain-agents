@@ -2,9 +2,9 @@
  * PersistTurnEnd：LangGraph END 前最后一个在线节点（非 LLM）。
  * 轮次结束后写 Mem0/LangMem、触发 Learning 候选抽取。
  */
-import { logAgentIn, logAgentOut } from "@fambrain/agent-shared/agent-log";
-import { persistPipelineMemory } from "@fambrain/agent-memory";
-import { persistLearningAfterTurn } from "@/agentflow/agents/offline/learning";
+import { logAgentIn, logAgentOut } from "@fambrain/brain-shared/agent-log";
+import { persistPipelineMemory } from "@fambrain/brain-memory";
+import { persistLearningAfterTurn } from "@/agentflow/brain-service/offline/learning";
 import type { PipelineGraphState } from "@/agentflow/pipeline/graph/state";
 
 const retrievalPathsFromState = (state: PipelineGraphState): string[] => {

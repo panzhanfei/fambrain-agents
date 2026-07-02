@@ -2,12 +2,12 @@
  * PrepareTurnStart：LangGraph START 后第一个在线节点（非 LLM）。
  * 挂 ALS 记事本、同问短路、Mem0/LangMem 上下文注入。
  */
-import { logAgentIn, logAgentOut } from "@fambrain/agent-shared/agent-log";
+import { logAgentIn, logAgentOut } from "@fambrain/brain-shared/agent-log";
 import {
     createPipelineRunStore,
     pipelineRunStorage,
-} from "@fambrain/agent-shared/pipeline-run-context";
-import { preparePipelineMemory } from "@fambrain/agent-memory";
+} from "@fambrain/brain-shared/pipeline-run-context";
+import { preparePipelineMemory } from "@fambrain/brain-memory";
 import type { PipelineGraphState } from "@/agentflow/pipeline/graph/state";
 import { findRepeatAnswerInHistory } from "./repeat-question-guard";
 

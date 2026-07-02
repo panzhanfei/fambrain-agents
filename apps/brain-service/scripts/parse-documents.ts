@@ -18,7 +18,7 @@ import {
     ingestDocumentBatch,
     isSupportedDocFile,
     resolveDefaultIngestIdentity,
-} from "@fambrain/agents";
+} from "@fambrain/brain-service";
 type CliOptions = {
     category?: "experience" | "projects" | "personal";
     indexAfter: boolean;

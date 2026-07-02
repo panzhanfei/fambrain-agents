@@ -1,8 +1,8 @@
-import type { CompositeRetrievalSlot } from "@/agentflow/agents/online/intake-coordinator";
+import type { CompositeRetrievalSlot } from "@/agentflow/brain-service/online/intake-coordinator";
 import {
     retrieveKnowledge,
     type KnowledgeRetrievalResult,
-} from "@/agentflow/agents/online/knowledge-manager";
+} from "@/agentflow/brain-service/online/knowledge-manager";
 import {
     getRetrievalFromCache,
     setRetrievalCache,

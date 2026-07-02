@@ -7,5 +7,5 @@ export type PipelineMemoryContext = {
     /** 拼进 Intake / Analyst prompt 的单块文本；无内容时为 null */
     promptBlock: string | null;
     /** 供 Intake 使用的截断历史（LangMem 启用时保留最近 N 轮） */
-    intakeHistory: import("@fambrain/agent-types").DbChatTurn[];
+    intakeHistory: import("@fambrain/brain-types").DbChatTurn[];
 };

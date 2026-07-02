@@ -5,10 +5,10 @@
  */
 import { createOllama } from "ollama-ai-provider";
 import { streamText } from "ai";
-import { getAgentsConfig } from "@fambrain/agent-config";
+import { getBrainServiceConfig } from "@fambrain/brain-config";
 const main = async () => {
     const prompt = process.argv.slice(2).join(" ").trim() || "用一句话说明 RAG 是什么。";
-    const { ollama } = getAgentsConfig();
+    const { ollama } = getBrainServiceConfig();
     const modelId = ollama.models.intakeCoordinator;
     const ollamaProvider = createOllama({ baseURL: ollama.baseUrl });
     const model = ollamaProvider(modelId);

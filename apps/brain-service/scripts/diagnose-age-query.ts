@@ -1,14 +1,14 @@
 /**
  * 诊断「我今年多大」：路由 + KM 检索 + 语料字段。
  *
- *   pnpm --filter @fambrain/agents exec tsx --env-file=../../.env scripts/diagnose-age-query.ts
+ *   pnpm --filter @fambrain/brain-service exec tsx --env-file=../../.env scripts/diagnose-age-query.ts
  */
 import { readFile } from "node:fs/promises";
 import { getRetrievalFromCache } from "@fambrain/infra";
-import { applyCompositeRouteGuard } from "../src/agentflow/agents/online/intake-coordinator";
-import { defaultIntakeDecision } from "../src/agentflow/agents/online/intake-coordinator/parse-intake";
-import { retrieveKnowledge } from "../src/agentflow/agents/online/knowledge-manager/retrieve";
-import { listCorpusUserIds } from "../src/agentflow/agents/offline/knowledge-indexer/list-corpus-users";
+import { applyCompositeRouteGuard } from "../src/agentflow/brain-service/online/intake-coordinator";
+import { defaultIntakeDecision } from "../src/agentflow/brain-service/online/intake-coordinator/parse-intake";
+import { retrieveKnowledge } from "../src/agentflow/brain-service/online/knowledge-manager/retrieve";
+import { listCorpusUserIds } from "../src/agentflow/brain-service/offline/knowledge-indexer/list-corpus-users";
 
 const USER_QUESTION = "我今年多大";
 const IDENTITY_SEARCH =

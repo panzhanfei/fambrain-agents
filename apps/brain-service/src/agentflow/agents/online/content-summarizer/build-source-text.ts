@@ -1,5 +1,5 @@
-import type { InformationAnalystInput } from "@/agentflow/agents/online/information-analyst";
-import type { IntakeRoutingDecision } from "@/agentflow/agents/online/intake-coordinator";
+import type { InformationAnalystInput } from "@/agentflow/brain-service/online/information-analyst";
+import type { IntakeRoutingDecision } from "@/agentflow/brain-service/online/intake-coordinator";
 export const buildSummarizeSourceText = (input: {
     userQuestion: string;
     decision: IntakeRoutingDecision;

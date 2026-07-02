@@ -2,7 +2,7 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { HumanMessage, SystemMessage } from "@langchain/core/messages";
 import { ChatOllama } from "@langchain/ollama";
-import type { DbChatTurn } from "@fambrain/agent-types";
+import type { DbChatTurn } from "@fambrain/brain-types";
 import { getMemoryConfig } from "../config";
 import type { SessionSummaryRecord } from "./types";
 /**

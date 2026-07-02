@@ -29,7 +29,7 @@ Intake 是 Pipeline 的**第一个 LLM 在线 Agent**（图内位于 **`prepareT
 
 | 技术 | 文件 | 用途 |
 |------|------|------|
-| LangChain `ChatOllama` | `llm/ollama-chat.ts` | 调本地 Ollama（模型名见 `getAgentsConfig().ollama.models.intakeCoordinator`） |
+| LangChain `ChatOllama` | `llm/ollama-chat.ts` | 调本地 Ollama（模型名见 `getBrainServiceConfig().ollama.models.intakeCoordinator`） |
 | Zod | `contract/schema.ts` | 校验 / 规范化 LLM 输出的 JSON |
 | 正则 + 纯函数 guard | `guards/*` | 指代、闲聊、plan 补全、userFact 短路 |
 | Mem0 / LangMem | 由 **`prepareTurnStart`** 注入 `memoryBlock` | 帮理解多轮指代，**不能**替代 searchQuery 里的实体词 |
@@ -486,10 +486,10 @@ import {
   runIntakePipeline,
   type IntakeRoutingDecision,
   type RoutedIntakeDecision,
-} from "@/agentflow/agents/online/intake-coordinator";
+} from "@/agentflow/brain-service/online/intake-coordinator";
 
 // 同问短路已迁至 prepare-turn-start；兼容 re-export：
-import { findRepeatAnswerInHistory } from "@/agentflow/agents/online/prepare-turn-start";
+import { findRepeatAnswerInHistory } from "@/agentflow/brain-service/online/prepare-turn-start";
 ```
 
 Pipeline 内主要调用点：
@@ -521,18 +521,18 @@ Pipeline 内主要调用点：
 | 9 | `我叫什么，我做过什么项目，我在那几家公司上过班，近两年在干什么？` | composite 多槽 |
 | 10 | 第 9 句原样再问 | 同问短路 |
 
-对应 eval 定义：`apps/agents/scripts/eval/golden.json`（G1～G5b、GMem、profileProbe）。
+对应 eval 定义：`apps/brain-service/scripts/eval/golden.json`（G1～G5b、GMem、profileProbe）。
 
 ---
 
 ## 9. 相关脚本
 
 ```bash
-pnpm --filter @fambrain/agents run verify:intake-chitchat
-pnpm --filter @fambrain/agents run verify:intake-coreference
-pnpm --filter @fambrain/agents run verify:composite-route
-pnpm --filter @fambrain/agents run verify:user-fact
-pnpm --filter @fambrain/agents run golden:regression   # G1～G5b + GMem
+pnpm --filter @fambrain/brain-service run verify:intake-chitchat
+pnpm --filter @fambrain/brain-service run verify:intake-coreference
+pnpm --filter @fambrain/brain-service run verify:composite-route
+pnpm --filter @fambrain/brain-service run verify:user-fact
+pnpm --filter @fambrain/brain-service run golden:regression   # G1～G5b + GMem
 ```
 
 ---

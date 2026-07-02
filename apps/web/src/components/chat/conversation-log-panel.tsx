@@ -1,6 +1,6 @@
 "use client";
 
-import type { PipelineStepName } from "@fambrain/agent-types";
+import type { PipelineStepName } from "@fambrain/brain-types";
 import {
     AGENT_LABELS,
     formatTokenSummary,

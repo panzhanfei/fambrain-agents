@@ -1,15 +1,15 @@
 /**
  * Wave D（EV-01～04）：置信分档单测 + KM live 抽检。
  *
- *   pnpm --filter @fambrain/agents run verify:confidence-tier
+ *   pnpm --filter @fambrain/brain-service run verify:confidence-tier
  */
-import { listCorpusUserIds } from "../src/agentflow/agents/offline/knowledge-indexer/list-corpus-users";
+import { listCorpusUserIds } from "../src/agentflow/brain-service/offline/knowledge-indexer/list-corpus-users";
 import {
     assessConfidence,
     deriveCoverageFromTier,
     shouldCoalesceEmptyHits,
-} from "../src/agentflow/agents/online/knowledge-manager/score-candidate";
-import { retrieveKnowledge } from "../src/agentflow/agents/online/knowledge-manager/retrieve";
+} from "../src/agentflow/brain-service/online/knowledge-manager/score-candidate";
+import { retrieveKnowledge } from "../src/agentflow/brain-service/online/knowledge-manager/retrieve";
 
 const assert = (name: string, fn: () => void) => {
     try {

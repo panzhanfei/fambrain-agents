@@ -1,15 +1,15 @@
 /**
  * KM 在线自测：真实语料 + Hybrid（Chroma 可用时 vector+sparse，否则 sparse）。
  *
- *   FAMBRAIN_CORPUS_USER_ID=xxx pnpm --filter @fambrain/agents run verify:km-retrieve:live
+ *   FAMBRAIN_CORPUS_USER_ID=xxx pnpm --filter @fambrain/brain-service run verify:km-retrieve:live
  */
-import { listCorpusUserIds } from "../src/agentflow/agents/offline/knowledge-indexer/list-corpus-users";
-import { getProfileRecallParams } from "../src/agentflow/agents/online/knowledge-manager/km-config";
+import { listCorpusUserIds } from "../src/agentflow/brain-service/offline/knowledge-indexer/list-corpus-users";
+import { getProfileRecallParams } from "../src/agentflow/brain-service/online/knowledge-manager/km-config";
 import {
     inferQueryProfile,
     resolveQueryProfile,
-} from "../src/agentflow/agents/online/knowledge-manager/query-profile";
-import { retrieveKnowledge } from "../src/agentflow/agents/online/knowledge-manager/retrieve";
+} from "../src/agentflow/brain-service/online/knowledge-manager/query-profile";
+import { retrieveKnowledge } from "../src/agentflow/brain-service/online/knowledge-manager/retrieve";
 
 type Case = {
     q: string;

@@ -9,10 +9,10 @@ alwaysApply: false
 | 路径 | 职责 |
 |------|------|
 | `apps/web/` | Next.js UI + BFF（`output: standalone`）；`@/*` → `apps/web/src/*` |
-| `apps/agents/` | Agent 业务（Intake / KM / Analyst / Indexer CLI） |
+| `apps/brain-service/` | 多 Agent 编排（Intake / KM / Analyst / Indexer CLI） |
 | `packages/db/` | Prisma schema、migrations、会话 repo |
 | `packages/auth/` | JWT、登录注册、会话（middleware 用 `/constants`、`/jwt` 子路径） |
-| `packages/agent-*` | types、config、shared 公共代码 |
+| `packages/brain-*` | types、config、shared、memory 公共代码 |
 
 **环境变量**：仅仓库根目录 `.env`；`apps/web/next.config.ts` 与 `packages/db/prisma.config.ts` 会加载它。
 
@@ -31,7 +31,7 @@ alwaysApply: false
 
 ## 依赖约定
 
-- Agent（`@fambrain/agents`）**不**依赖 db/auth
+- Brain Service（`@fambrain/brain-service`）**不**依赖 db/auth
 - BFF 负责：读库 → 拼 `pipelineContext` → 调 `runAgentStream` → SSE → 落库
 - 构建：`pnpm run build`（根目录）= `db generate` + `next build --webpack`
 - 产物：`.next` 在 **`apps/web/.next/`**，不在仓库根

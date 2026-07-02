@@ -1,5 +1,5 @@
-import type { AgentPipelineContext, AgentPipelineResult, AgentStreamEvent, DbChatTurn, } from "@fambrain/agent-types";
-import { resolveAgentsServiceUrl } from "@fambrain/agent-config/service-url";
+import type { AgentPipelineContext, AgentPipelineResult, AgentStreamEvent, DbChatTurn, } from "@fambrain/brain-types";
+import { resolveBrainServiceUrl } from "@fambrain/brain-config/service-url";
 type SseMessage = {
     event: string;
     data: string;
@@ -41,10 +41,10 @@ async function* parseSseStream(body: ReadableStream<Uint8Array>): AsyncGenerator
     }
 }
 /**
- * 调用 @fambrain/agents HTTP 服务，复用与进程内 runAgentStream 相同的事件流。
+ * 调用 @fambrain/brain-service HTTP 服务，复用与进程内 runAgentStream 相同的事件流。
  */
 export async function* streamAgentPipeline(history: DbChatTurn[], context: AgentPipelineContext, authToken: string): AsyncGenerator<AgentStreamEvent, AgentPipelineResult> {
-    const baseUrl = resolveAgentsServiceUrl();
+    const baseUrl = resolveBrainServiceUrl();
     const res = await fetch(`${baseUrl}/pipeline/stream`, {
         method: "POST",
         headers: {
@@ -55,10 +55,10 @@ export async function* streamAgentPipeline(history: DbChatTurn[], context: Agent
     });
     if (!res.ok) {
         const text = await res.text().catch(() => "");
-        throw new Error(text || `Agent 服务请求失败（HTTP ${res.status}），请确认 pnpm run dev:agents 已启动`);
+        throw new Error(text || `Brain 服务请求失败（HTTP ${res.status}），请确认 pnpm run dev:brain-service 已启动`);
     }
     if (!res.body) {
-        throw new Error("Agent 服务未返回 SSE 流");
+        throw new Error("Brain 服务未返回 SSE 流");
     }
     for await (const msg of parseSseStream(res.body)) {
         if (msg.event === "pipeline_done") {

@@ -1,4 +1,4 @@
-import type { PipelineStepName, PipelineTiming } from "@fambrain/agent-types";
+import type { PipelineStepName, PipelineTiming } from "@fambrain/brain-types";
 
 export class PipelineTimingTracker {
     private readonly startedAt = performance.now();

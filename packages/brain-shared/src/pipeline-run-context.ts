@@ -11,7 +11,7 @@
  * - 消费者：stream.ts 的 flushPipelineLogs → drainPipelineLogQueue → yield pipeline_log SSE
  */
 import { AsyncLocalStorage } from "node:async_hooks";
-import type { PipelineLogEntry, PipelineStepName, PipelineTokenUsage } from "@fambrain/agent-types";
+import type { PipelineLogEntry, PipelineStepName, PipelineTokenUsage } from "@fambrain/brain-types";
 
 /** Ollama / LangChain 单次调用的 prompt、completion token 计数 */
 export type OllamaTokenCounts = {

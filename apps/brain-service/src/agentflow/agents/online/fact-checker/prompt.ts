@@ -1,5 +1,5 @@
-import type { IntakeRoutingDecision } from "@/agentflow/agents/online/intake-coordinator";
-import type { KnowledgeHit, KnowledgeRetrievalResult, ConfidenceTier } from "@/agentflow/agents/online/knowledge-manager";
+import type { IntakeRoutingDecision } from "@/agentflow/brain-service/online/intake-coordinator";
+import type { KnowledgeHit, KnowledgeRetrievalResult, ConfidenceTier } from "@/agentflow/brain-service/online/knowledge-manager";
 /**
  * FactChecker 系统指令（D5 / P0）。
  * 职责：在信息分析师动笔前，审查知识管理员产出的 hits / coverage 是否足以回答用户问题；

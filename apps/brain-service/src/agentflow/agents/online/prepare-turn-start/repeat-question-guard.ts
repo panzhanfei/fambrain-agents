@@ -5,7 +5,7 @@
  * Key = normalize(userQuestion)，与检索结果 cache（searchQuery + queryType）互补。
  * 开关：REPEAT_QUESTION_CACHE_DISABLED=1 关闭。
  */
-import type { DbChatTurn } from "@fambrain/agent-types";
+import type { DbChatTurn } from "@fambrain/brain-types";
 import { isRepeatQuestionCacheEnabled, normalizeSearchQuery } from "@fambrain/infra";
 
 const assistantAfter = (

@@ -2,13 +2,13 @@
  * FactChecker 本地验证脚本（不依赖 HTTP / 登录）。
  *
  * 用法（仓库根目录 .env 已配置时）：
- *   pnpm --filter @fambrain/agents exec tsx --env-file=../../.env scripts/verify-fact-checker.ts
- *   pnpm --filter @fambrain/agents exec tsx --env-file=../../.env scripts/verify-fact-checker.ts --llm
+ *   pnpm --filter @fambrain/brain-service exec tsx --env-file=../../.env scripts/verify-fact-checker.ts
+ *   pnpm --filter @fambrain/brain-service exec tsx --env-file=../../.env scripts/verify-fact-checker.ts --llm
  *
  * --llm  额外调用 Ollama 跑 completeFactCheck（需本地 Ollama 已启动）
  */
-import { applyFactCheckGuards, buildRuleBasedFactCheck, completeFactCheck, type FactCheckerInput, type FactCheckerResult, } from "../src/agentflow/agents/online/fact-checker/index";
-import { mergeRetrySearchQuery } from "../src/agentflow/agents/online/fact-checker/refined-search-query";
+import { applyFactCheckGuards, buildRuleBasedFactCheck, completeFactCheck, type FactCheckerInput, type FactCheckerResult, } from "../src/agentflow/brain-service/online/fact-checker/index";
+import { mergeRetrySearchQuery } from "../src/agentflow/brain-service/online/fact-checker/refined-search-query";
 const runLlm = process.argv.includes("--llm");
 type Case = {
     name: string;

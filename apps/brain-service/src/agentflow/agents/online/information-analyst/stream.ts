@@ -1,7 +1,7 @@
-import { getAgentsConfig } from "@fambrain/agent-config";
-import { logAgentIn, logAgentOut } from "@fambrain/agent-shared/agent-log";
-import { estimateTokenUsage, recordPipelineTokenUsage, } from "@fambrain/agent-shared/pipeline-run-context";
-import { streamOllamaNative } from "@fambrain/agent-shared/ollama-native-stream";
+import { getBrainServiceConfig } from "@fambrain/brain-config";
+import { logAgentIn, logAgentOut } from "@fambrain/brain-shared/agent-log";
+import { estimateTokenUsage, recordPipelineTokenUsage, } from "@fambrain/brain-shared/pipeline-run-context";
+import { streamOllamaNative } from "@fambrain/brain-shared/ollama-native-stream";
 import { parseJsonObject } from "@/agentflow/utils";
 import {
     maxAnalystHitsForProfile,
@@ -20,7 +20,7 @@ import {
     type InformationAnalystInput,
     type InformationAnalystResult,
 } from "./prompt";
-import { cachedFacetToAnalystResult } from "@/agentflow/agents/online/intake-coordinator";
+import { cachedFacetToAnalystResult } from "@/agentflow/brain-service/online/intake-coordinator";
 import { streamCompositeAnalyze } from "./stream-composite";
 
 type AnalystStreamChunk =
@@ -106,7 +106,7 @@ async function* streamSingleAnalyze(
         searchQuery: input.searchQuery,
     });
     const fallback = buildFallbackAnswer(input);
-    const { ollama } = getAgentsConfig();
+    const { ollama } = getBrainServiceConfig();
 
     if (shouldSkipAnalystLlm(input)) {
         logAgentOut("InformationAnalyst", "出去", {

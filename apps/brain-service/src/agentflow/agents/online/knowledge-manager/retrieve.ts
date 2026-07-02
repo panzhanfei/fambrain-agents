@@ -19,7 +19,7 @@
  */
 import { readFile } from "node:fs/promises";
 import path from "node:path";
-import { logAgentIn, logAgentOut } from "@fambrain/agent-shared/agent-log";
+import { logAgentIn, logAgentOut } from "@fambrain/brain-shared/agent-log";
 import { aggregateFeedbackByPath } from "@fambrain/db";
 import {
     listCorpusScanRoots,
@@ -37,7 +37,7 @@ import { resolveQueryProfile } from "./query-profile";
 import {
     resolveEnumerationTarget,
     type EnumerationTarget,
-} from "@/agentflow/agents/online/intake-coordinator";
+} from "@/agentflow/brain-service/online/intake-coordinator";
 import {
     applyEnumerationFill,
     applyIdentityGuard,

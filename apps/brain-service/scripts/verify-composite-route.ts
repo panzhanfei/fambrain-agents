@@ -1,7 +1,7 @@
 /**
  * P0-15 / R6-3：Intake retrievalPlan 主路由 + 结构兜底 + merge 单测。
  *
- *   pnpm --filter @fambrain/agents run verify:composite-route
+ *   pnpm --filter @fambrain/brain-service run verify:composite-route
  */
 import {
   applyCompositeRouteGuard,
@@ -15,12 +15,12 @@ import {
   resolveCompositeRoute,
   splitQuestionUnits,
   type IntakeRoutingDecision,
-} from "../src/agentflow/agents/online/intake-coordinator/index";
+} from "../src/agentflow/brain-service/online/intake-coordinator/index";
 import {
   mergeCompositeHits,
   mergeCompositeRetrieval,
-} from "../src/agentflow/agents/online/knowledge-manager/pipeline-retrieval/merge-composite-retrieval";
-import { mergeSubQuestionAnswers } from "../src/agentflow/agents/online/information-analyst/analyze-helpers";
+} from "../src/agentflow/brain-service/online/knowledge-manager/pipeline-retrieval/merge-composite-retrieval";
+import { mergeSubQuestionAnswers } from "../src/agentflow/brain-service/online/information-analyst/analyze-helpers";
 
 const retrieveStub: IntakeRoutingDecision = {
   intent: "retrieve_and_answer",

@@ -1,14 +1,14 @@
 import { END, START, StateGraph } from "@langchain/langgraph";
-import { runContentOrganizerNode } from "@/agentflow/agents/online/content-organizer/content-organizer-node";
-import { runContentSummarizerNode } from "@/agentflow/agents/online/content-summarizer/content-summarizer-node";
-import { runFactCheckerNode } from "@/agentflow/agents/online/fact-checker/fact-checker-node";
-import { runIntakeNode } from "@/agentflow/agents/online/intake-coordinator/intake-node";
-import { runRespondEarlyNode } from "@/agentflow/agents/online/intake-coordinator/respond-early-node";
-import { userFactNode } from "@/agentflow/agents/online/intake-coordinator/user-fact-node";
-import { runAnalystNode } from "@/agentflow/agents/online/information-analyst/analyst-node";
-import { runRetrievalNode } from "@/agentflow/agents/online/knowledge-manager/pipeline-retrieval";
-import { runPrepareTurnStart } from "@/agentflow/agents/online/prepare-turn-start";
-import { runPersistTurnEnd } from "@/agentflow/agents/online/persist-turn-end";
+import { runContentOrganizerNode } from "@/agentflow/brain-service/online/content-organizer/content-organizer-node";
+import { runContentSummarizerNode } from "@/agentflow/brain-service/online/content-summarizer/content-summarizer-node";
+import { runFactCheckerNode } from "@/agentflow/brain-service/online/fact-checker/fact-checker-node";
+import { runIntakeNode } from "@/agentflow/brain-service/online/intake-coordinator/intake-node";
+import { runRespondEarlyNode } from "@/agentflow/brain-service/online/intake-coordinator/respond-early-node";
+import { userFactNode } from "@/agentflow/brain-service/online/intake-coordinator/user-fact-node";
+import { runAnalystNode } from "@/agentflow/brain-service/online/information-analyst/analyst-node";
+import { runRetrievalNode } from "@/agentflow/brain-service/online/knowledge-manager/pipeline-retrieval";
+import { runPrepareTurnStart } from "@/agentflow/brain-service/online/prepare-turn-start";
+import { runPersistTurnEnd } from "@/agentflow/brain-service/online/persist-turn-end";
 import { PipelineGraphAnnotation } from "./state";
 import {
     routeAfterFactChecker,

@@ -2,12 +2,12 @@
  * Intake 编排：LLM → parse → guard 链 → RoutedIntakeDecision。
  * 每步打结构化日志，供 Web 运行日志 / 控制台复盘。
  */
-import { logAgentOut } from "@fambrain/agent-shared/agent-log";
-import type { DbChatTurn } from "@fambrain/agent-types";
+import { logAgentOut } from "@fambrain/brain-shared/agent-log";
+import type { DbChatTurn } from "@fambrain/brain-types";
 import {
   defaultIntakeDecision,
   parseIntakeDecision,
-} from "@/agentflow/agents/online/intake-coordinator/parse-intake";
+} from "@/agentflow/brain-service/online/intake-coordinator/parse-intake";
 import { applyCompositeRouteGuard } from "../composite/composite-route-guard";
 import type { RoutedIntakeDecision } from "../composite/composite-route-guard";
 import { applyIntakeChitchatGuard } from "../guards/intake-chitchat-guard";

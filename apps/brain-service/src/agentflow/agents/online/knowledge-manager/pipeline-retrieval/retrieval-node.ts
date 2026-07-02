@@ -1,5 +1,5 @@
-import { resolveIncrementalCompositePlan } from "@/agentflow/agents/online/intake-coordinator";
-import { retrieveKnowledge } from "@/agentflow/agents/online/knowledge-manager";
+import { resolveIncrementalCompositePlan } from "@/agentflow/brain-service/online/intake-coordinator";
+import { retrieveKnowledge } from "@/agentflow/brain-service/online/knowledge-manager";
 import type { PipelineGraphState } from "@/agentflow/pipeline/graph/state";
 import {
     getRetrievalFromCache,

@@ -1,4 +1,4 @@
-import type { DbChatTurn } from "@fambrain/agent-types";
+import type { DbChatTurn } from "@fambrain/brain-types";
 import type { IntakeRoutingDecision } from "../contract/prompt";
 
 /** 编排器 user_fact 分支路由（来自 Intake JSON，非问句 regex） */

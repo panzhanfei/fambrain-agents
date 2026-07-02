@@ -3,8 +3,8 @@ import { Chroma } from "@langchain/community/vectorstores/chroma";
 import { OllamaEmbeddings } from "@langchain/ollama";
 import { ChromaClient } from "chromadb";
 import type { Logger } from "pino";
-import { getAgentsConfig } from "@fambrain/agent-config";
-import { resolveChromaServerUrl } from "@fambrain/agent-config/service-url";
+import { getBrainServiceConfig } from "@fambrain/brain-config";
+import { resolveChromaServerUrl } from "@fambrain/brain-config/service-url";
 import { addDocumentsWithEmbedLimit, getEmbedIndexOptions, type EmbedIndexOptions, } from "./embed-batches";
 /** 在线向量召回单条结果（与 KnowledgeManager candidates 对齐） */
 export type CorpusVectorHit = {
@@ -24,7 +24,7 @@ export const getChromaServerUrl = (): string => {
     return resolveChromaServerUrl();
 };
 export const createOllamaEmbeddings = (): OllamaEmbeddings => {
-    const { ollama } = getAgentsConfig();
+    const { ollama } = getBrainServiceConfig();
     return new OllamaEmbeddings({
         model: ollama.models.embed,
         baseUrl: ollama.baseUrl,
@@ -62,7 +62,7 @@ export const searchCorpusVectors = async (corpusUserId: string, searchQuery: str
 export const indexCorpusDocuments = async (corpusUserId: string, docs: Document[], logger: Logger, options: EmbedIndexOptions = getEmbedIndexOptions()): Promise<CorpusVectorIndexResult> => {
     const collectionName = corpusCollectionName(corpusUserId);
     const chromaUrl = getChromaServerUrl();
-    const { ollama } = getAgentsConfig();
+    const { ollama } = getBrainServiceConfig();
     logger.info({
         step: "4a",
         corpusUserId,

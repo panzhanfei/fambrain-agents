@@ -22,8 +22,8 @@
 
 | 线 | 目录 | 编排 |
 |----|------|------|
-| **在线** | `agentflow/agents/online/` + `pipeline/` | LangGraph 骨架（`graph/`）+ SSE 运行时（`runtime/`） |
-| **离线** | `agentflow/agents/offline/` | 手动脚本：Indexer / DocParser / Learning 等 |
+| **在线** | `agentflow/brain-service/online/` + `pipeline/` | LangGraph 骨架（`graph/`）+ SSE 运行时（`runtime/`） |
+| **离线** | `agentflow/brain-service/offline/` | 手动脚本：Indexer / DocParser / Learning 等 |
 
 ## 全链路总览（离线入库 + 在线对话）
 
@@ -74,7 +74,7 @@ flowchart TB
 
 ## P0 在线编排流程
 
-入口接线员只输出 **JSON 路由决策**；**进哪个节点由 LangGraph 查表决定**（`IntakeRoutingDecision` 见 `agentflow/agents/online/intake-coordinator/prompt.ts`），不是模型在回复里写「下一个 Agent 名字」。
+入口接线员只输出 **JSON 路由决策**；**进哪个节点由 LangGraph 查表决定**（`IntakeRoutingDecision` 见 `agentflow/brain-service/online/intake-coordinator/prompt.ts`），不是模型在回复里写「下一个 Agent 名字」。
 
 **Pipeline 目录（2026-06 方案 2）：**
 
@@ -96,7 +96,7 @@ flowchart TB
 | **检索结果 cache** | `knowledge-manager/pipeline-retrieval/`（`runRetrievalNode`） | `{prefix}:retrieval:v1:{corpusUserId}:{queryType}:{normalize(searchQuery)}` | 跳过 KM；仍走 FC / Analyst（`retrievalCacheHit`） | `RETRIEVAL_CACHE_DISABLED=1` |
 | **composite 终稿 cache** | `composite-answer-cache.ts` | 同会话 `conversationId` + `corpusUserId` + **facetKey** | composite/slot 增量：命中槽跳过 KM；**slot 单槽**时 Analyst 读 cache 或 citations 还原 hits | `COMPOSITE_ANSWER_CACHE_DISABLED=1` |
 
-清空 Redis / memory：`pnpm --filter @fambrain/agents exec tsx --env-file=../../.env scripts/clear-pipeline-cache.ts`（改 env 后须**重启 agents** 清进程内 memory）。
+清空 Redis / memory：`pnpm --filter @fambrain/brain-service exec tsx --env-file=../../.env scripts/clear-pipeline-cache.ts`（改 env 后须**重启 agents** 清进程内 memory）。
 
 L1 解决 Intake 非确定性导致「同句再问 searchQuery 变、公司数降级」；检索结果 cache 解决问法不同但 Intake 产出相同 `searchQuery` 的场景（如 eval `CACHE-G4-repeat`）。
 
@@ -138,7 +138,7 @@ flowchart TD
 2. **同问短路** `findRepeatAnswerInHistory` — 命中 → `exitEarly` + `respondEarly`
 3. `preparePipelineMemory` — Mem0 检索 + LangMem 摘要 → 写入 state 的 `memoryBlock` / `intakeHistory` / `userMemories`
 
-**代码：** `agentflow/agents/online/prepare-turn-start/` · 图节点 `compile.ts` · SSE step 名 **`prepare_turn_start`**（UI：准备上下文）
+**代码：** `agentflow/brain-service/online/prepare-turn-start/` · 图节点 `compile.ts` · SSE step 名 **`prepare_turn_start`**（UI：准备上下文）
 
 **验证：** `pnpm run verify:repeat-question-smoke`（同问短路，无 Ollama）；全链路 `verify:fact-checker:pipeline`（首步 `prepare_turn_start`，末步 `persist_turn_end`）。
 
@@ -152,7 +152,7 @@ flowchart TD
 2. `persistLearningAfterTurn` — Learning 候选（`userFact` 轮次跳过）
 3. **跳过：** `repeatQuestionHit`、空 `answer`
 
-**代码：** `agentflow/agents/online/persist-turn-end/` · SSE step 名 **`persist_turn_end`**（UI：写入记忆）
+**代码：** `agentflow/brain-service/online/persist-turn-end/` · SSE step 名 **`persist_turn_end`**（UI：写入记忆）
 
 **验证：** `verify:fact-checker:pipeline` 闲聊/检索链末步应为 `persist_turn_end`；同问短路仍会经过 `persist_turn_end`（内部 no-op）。
 
@@ -164,7 +164,7 @@ flowchart TD
 
 ```mermaid
 flowchart TD
-  CLI["apps/agents/scripts/index-all-corpus.ts"] --> ALL["indexAllCorpora()"]
+  CLI["apps/brain-service/scripts/index-all-corpus.ts"] --> ALL["indexAllCorpora()"]
   ALL --> LISTU["listCorpusUserIds()"]
   LISTU --> LOOP{每个 corpusUserId}
   LOOP --> ONE["indexOneCorpusUser()"]
@@ -178,9 +178,9 @@ flowchart TD
 
 | 步骤 | 做什么 | 规则 | 文件 | 方法 |
 |------|--------|------|------|------|
-| 0 | CLI 入口 | 加载 `.env`；失败 exit 1 | `apps/agents/scripts/index-all-corpus.ts` | — |
+| 0 | CLI 入口 | 加载 `.env`；失败 exit 1 | `apps/brain-service/scripts/index-all-corpus.ts` | — |
 | 1 | 找用户 | `data/doc/users/*` 下 corpus 至少有 1 个 `.md` | `list-corpus-users.ts` | `listCorpusUserIds()` |
-| 2 | 路径约定 | 语料根 `users/<id>/corpus/` | `apps/agents/src/knowledge/doc-paths.ts` | `getUserCorpusRoot()` |
+| 2 | 路径约定 | 语料根 `users/<id>/corpus/` | `apps/brain-service/src/knowledge/doc-paths.ts` | `getUserCorpusRoot()` |
 | 3 | 扫 md | 递归 `.md`；跳过 `vault/originals/images/...` | `list-markdown-files.ts` | `listMarkdownFiles()`, `toRepoPath()` |
 | 4 | 读正文 | UTF-8 读全文 | `index-one-user.ts` | `readFile()` |
 | 5 | 分块 | 按 `##` 切；无 `##` 整篇 1 块；`id_`=user:path:index | `split-markdown.ts` | `splitMarkdownToDocuments()` |
@@ -252,7 +252,7 @@ flowchart TD
 | 3 | 写入 / 召回 | `intake-coordinator/user-fact-node.ts` | `userFactNode()` → Mem0 |
 | 4 | SSE | `stream.ts` | step `user_fact` |
 
-**验证：** `pnpm --filter @fambrain/agents run verify:user-fact`（跨 conversationId A 记 → B 问）。**改 agents 代码后须重启服务**；与 Pipeline cache 无关。
+**验证：** `pnpm --filter @fambrain/brain-service run verify:user-fact`（跨 conversationId A 记 → B 问）。**改 agents 代码后须重启服务**；与 Pipeline cache 无关。
 
 ### 3. KnowledgeManager — 知识管理员 ✅
 
@@ -428,13 +428,13 @@ flowchart TD
 
 ### 8. 记忆层 — Mem0 + LangMem（D8）✅
 
-**触发：** 每轮 LangGraph **`prepareTurnStart` 节点**内调用 `preparePipelineMemory()`（`agentflow/agents/online/prepare-turn-start/prepare-turn-start.ts`）。**不参与**离线入库链路。
+**触发：** 每轮 LangGraph **`prepareTurnStart` 节点**内调用 `preparePipelineMemory()`（`agentflow/brain-service/online/prepare-turn-start/prepare-turn-start.ts`）。**不参与**离线入库链路。
 
 **职责：** **Mem0** 按 `actorUserId` 检索跨会话偏好/事实；**LangMem** 按 `conversationId` 维护会话摘要；合并为 `memoryBlock` 注入 **IntakeCoordinator** 与 **InformationAnalyst** prompt。轮次结束后由 **`persistTurnEnd` 节点**写回 Mem0 与 LangMem。
 
 **P0-16 补充：** 联系方式类 **remember/recall** 走 **userFact 节点**（`addStructuredUserFact` / `searchUserFactMemories`），不依赖轮次后 LLM 抽取；LangMem 仍仅本会话。
 
-**存储：** `data/memory/mem0/history.db`（Mem0 SQLite）、`data/memory/sessions/<conversationId>.json`（LangMem）。BFF 请求体须带 `conversationId`（`packages/agent-types`）。
+**存储：** `data/memory/mem0/history.db`（Mem0 SQLite）、`data/memory/sessions/<conversationId>.json`（LangMem）。BFF 请求体须带 `conversationId`（`packages/brain-types`）。
 
 ```mermaid
 flowchart LR
@@ -455,7 +455,7 @@ flowchart LR
 | 0 | 开关 | `MEM0_ENABLED` / `LANGMEM_ENABLED`（默认开） | `memory/config.ts` | `getMemoryConfig()` |
 | 1 | 加载 | 检索 Mem0 + 读会话摘要；裁剪 Intake 历史 | `prepare-context.ts` | `preparePipelineMemory()` |
 | 2 | 注入 | `memoryBlock` 拼入 system/human | `build-prompt-block.ts` | `buildMemoryPromptBlock()` |
-| 3 | 持久化 | 本轮 user/assistant 写入 Mem0；LangMem 摘要；Learning 候选 | `agents/online/persist-turn-end/`、`packages/agent-memory/persist-turn.ts` | `runPersistTurnEnd()` → `persistPipelineMemory()` |
+| 3 | 持久化 | 本轮 user/assistant 写入 Mem0；LangMem 摘要；Learning 候选 | `agents/online/persist-turn-end/`、`packages/brain-memory/persist-turn.ts` | `runPersistTurnEnd()` → `persistPipelineMemory()` |
 
 **验证：** `pnpm run verify:memory`（需 Ollama；可 `MEM0_ENABLED=false` 仅测 LangMem）。
 
@@ -492,7 +492,7 @@ flowchart TD
 
 ### 10. 实验触达 — MCP / Recall / Vercel AI ✅
 
-与主链解耦，脚本在 `apps/agents/scripts/experiments/`，说明见 [experiments/README.md](../experiments/README.md)。
+与主链解耦，脚本在 `apps/brain-service/scripts/experiments/`，说明见 [experiments/README.md](../experiments/README.md)。
 
 | 实验 | 命令 | 作用 |
 |------|------|------|
@@ -532,7 +532,7 @@ flowchart LR
 **验证：**
 
 ```bash
-pnpm --filter @fambrain/agents run verify:learning-extract
+pnpm --filter @fambrain/brain-service run verify:learning-extract
 # Web：/learning 审核 pending；聊天助手消息下反馈按钮
 ```
 
@@ -550,15 +550,15 @@ pnpm --filter @fambrain/agents run verify:learning-extract
 
 调用前须 `runWithToolContext({ corpusUserId, actorUserId }, () => tool.invoke(...))` 注入上下文。
 
-**LangSmith：** `bootstrapAgentsRuntime()` → `configureLangSmithTracing()`；`graph.stream` 附带 `runName` / `metadata`（conversationId 等）。配 `LANGSMITH_API_KEY` 后在 [smith.langchain.com](https://smith.langchain.com) 查看 trace。
+**LangSmith：** `bootstrapBrainServiceRuntime()` → `configureLangSmithTracing()`；`graph.stream` 附带 `runName` / `metadata`（conversationId 等）。配 `LANGSMITH_API_KEY` 后在 [smith.langchain.com](https://smith.langchain.com) 查看 trace。
 
 **验证：**
 
 ```bash
-pnpm --filter @fambrain/agents run verify:langchain-tools
-pnpm --filter @fambrain/agents run verify:vault-list   # vault 底层 API
-pnpm --filter @fambrain/agents run experiment:bind-tools -- --schema-only
-pnpm --filter @fambrain/agents run experiment:bind-tools -- "我的名字是什么？"
+pnpm --filter @fambrain/brain-service run verify:langchain-tools
+pnpm --filter @fambrain/brain-service run verify:vault-list   # vault 底层 API
+pnpm --filter @fambrain/brain-service run experiment:bind-tools -- --schema-only
+pnpm --filter @fambrain/brain-service run experiment:bind-tools -- "我的名字是什么？"
 ```
 
 **bindTools 实验（`scripts/experiments/bind-tools-react.ts`）：** 将 4 个工具（不含 `summarize_text`）绑定到 `ChatOllama`，最多 4 轮 tool call → 终稿；与 Golden/eval **完全隔离**。生产聊天仍走 LangGraph 节点。

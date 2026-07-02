@@ -1,17 +1,17 @@
 /**
  * KM-13～15 全链路 spot check：「我在哪几家公司上过班？」
  *
- *   pnpm --filter @fambrain/agents exec tsx --env-file=../../.env scripts/verify-km-e2e-enumeration.ts
+ *   pnpm --filter @fambrain/brain-service exec tsx --env-file=../../.env scripts/verify-km-e2e-enumeration.ts
  */
-import type { AgentPipelineContext, DbChatTurn } from "@fambrain/agent-types";
-import { listCorpusUserIds } from "@/agentflow/agents/offline/knowledge-indexer/list-corpus-users";
+import type { AgentPipelineContext, DbChatTurn } from "@fambrain/brain-types";
+import { listCorpusUserIds } from "@/agentflow/brain-service/offline/knowledge-indexer/list-corpus-users";
 import { runPipelineStream } from "@/agentflow/index";
-import { bootstrapAgentsRuntime } from "@/config";
+import { bootstrapBrainServiceRuntime } from "@/config";
 
 const COMPANIES = ["云联智慧", "友谊时光", "奖多多", "奥卡云"];
 
 const main = async (): Promise<void> => {
-    bootstrapAgentsRuntime();
+    bootstrapBrainServiceRuntime();
     const ids = await listCorpusUserIds();
     const corpusUserId =
         process.env.FAMBRAIN_CORPUS_USER_ID?.trim() || ids[0];

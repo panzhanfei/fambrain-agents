@@ -7,10 +7,10 @@ WORKDIR /app
 FROM base AS deps
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml .npmrc ./
 COPY apps/web/package.json apps/web/
-COPY apps/agents/package.json apps/agents/
-COPY packages/agent-types/package.json packages/agent-types/
-COPY packages/agent-config/package.json packages/agent-config/
-COPY packages/agent-shared/package.json packages/agent-shared/
+COPY apps/brain-service/package.json apps/brain-service/
+COPY packages/brain-types/package.json packages/brain-types/
+COPY packages/brain-config/package.json packages/brain-config/
+COPY packages/brain-shared/package.json packages/brain-shared/
 COPY packages/db/package.json packages/db/
 COPY packages/auth/package.json packages/auth/
 RUN pnpm install --frozen-lockfile

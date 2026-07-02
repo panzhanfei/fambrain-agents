@@ -1,7 +1,7 @@
 /**
  * 清空 Pipeline cache（同问短路 / 检索结果 / composite 终稿 cache 均可在 .env 用 DISABLED=1 关闭）。
  *
- *   pnpm --filter @fambrain/agents exec tsx --env-file=../../.env scripts/clear-pipeline-cache.ts
+ *   pnpm --filter @fambrain/brain-service exec tsx --env-file=../../.env scripts/clear-pipeline-cache.ts
  *   CONVERSATION_ID=xxx CORPUS_USER_ID=yyy ...  # 可选，仅清该会话 L3
  *
  * Env 开关：
@@ -89,7 +89,7 @@ const main = async () => {
         );
     }
     console.log(
-        "  进程内 memory cache：请重启 agents 服务（pnpm --filter @fambrain/agents dev）"
+        "  进程内 memory cache：请重启 agents 服务（pnpm --filter @fambrain/brain-service dev）"
     );
 };
 

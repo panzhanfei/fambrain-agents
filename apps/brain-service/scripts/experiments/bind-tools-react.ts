@@ -1,8 +1,8 @@
 /**
  * LangChain bindTools + 简易 ReAct 实验（不进主 pipeline / Golden / eval）。
  *
- *   pnpm --filter @fambrain/agents run experiment:bind-tools -- "我的名字是什么？"
- *   pnpm --filter @fambrain/agents run experiment:bind-tools -- --schema-only
+ *   pnpm --filter @fambrain/brain-service run experiment:bind-tools -- "我的名字是什么？"
+ *   pnpm --filter @fambrain/brain-service run experiment:bind-tools -- --schema-only
  */
 import {
     AIMessage,
@@ -12,9 +12,9 @@ import {
     type BaseMessage,
 } from "@langchain/core/messages";
 import { ChatOllama } from "@langchain/ollama";
-import { getAgentsConfig } from "@fambrain/agent-config";
-import { bootstrapAgentsRuntime } from "@/config";
-import { listCorpusUserIds } from "@/agentflow/agents/offline/knowledge-indexer/list-corpus-users";
+import { getBrainServiceConfig } from "@fambrain/brain-config";
+import { bootstrapBrainServiceRuntime } from "@/config";
+import { listCorpusUserIds } from "@/agentflow/brain-service/offline/knowledge-indexer/list-corpus-users";
 import {
     createFambrainTools,
     runWithToolContext,
@@ -79,7 +79,7 @@ const runBindToolsReact = async (input: {
     ctx: FambrainToolContext;
     tools: StructuredToolInterface[];
 }): Promise<{ answer: string; toolRounds: number; messages: BaseMessage[] }> => {
-    const { ollama } = getAgentsConfig();
+    const { ollama } = getBrainServiceConfig();
     const llm = new ChatOllama({
         baseUrl: ollama.baseUrl,
         model: ollama.models.intakeCoordinator,
@@ -140,7 +140,7 @@ const runBindToolsReact = async (input: {
 
 const main = async (): Promise<void> => {
     const { schemaOnly, prompt } = parseArgs();
-    bootstrapAgentsRuntime();
+    bootstrapBrainServiceRuntime();
 
     const tools = createFambrainTools().filter(
         (t) => t.name !== "summarize_text"
@@ -150,7 +150,7 @@ const main = async (): Promise<void> => {
     );
 
     if (schemaOnly) {
-        const { ollama } = getAgentsConfig();
+        const { ollama } = getBrainServiceConfig();
         new ChatOllama({
             baseUrl: ollama.baseUrl,
             model: ollama.models.intakeCoordinator,

@@ -1,13 +1,13 @@
 /**
  * BullMQ pipeline worker：消费队列任务并 pub/sub 推送 SSE 事件。
  *
- *   pnpm --filter @fambrain/agents run dev:worker
+ *   pnpm --filter @fambrain/brain-service run dev:worker
  */
 import { startPipelineWorker, stopPipelineWorker } from "@fambrain/infra";
 import { runPipelineStream } from "@/agentflow/pipeline";
-import { bootstrapAgentsRuntime } from "@/config/index";
+import { bootstrapBrainServiceRuntime } from "@/config/index";
 
-await bootstrapAgentsRuntime();
+await bootstrapBrainServiceRuntime();
 
 console.log("[pipeline-worker] 启动中…");
 

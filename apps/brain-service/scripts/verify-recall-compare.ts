@@ -1,14 +1,14 @@
 /**
  * HY-07：三问法 vector / sparse / RRF(hybrid) 对比验收。
  *
- *   pnpm --filter @fambrain/agents run verify:recall-compare
+ *   pnpm --filter @fambrain/brain-service run verify:recall-compare
  *
  * Chroma + Ollama 在线时要求 recallSource=hybrid；未起时 sparse 段仍跑，hybrid 段 skip 并 exit 1。
  */
 import { recallSparseRetrieve, searchCorpusVectors } from "@fambrain/corpus";
-import { listCorpusUserIds } from "../src/agentflow/agents/offline/knowledge-indexer/list-corpus-users";
-import { hybridRecall } from "../src/agentflow/agents/online/knowledge-manager/hybrid-recall";
-import { getKmRetrievalConfig } from "../src/agentflow/agents/online/knowledge-manager/km-config";
+import { listCorpusUserIds } from "../src/agentflow/brain-service/offline/knowledge-indexer/list-corpus-users";
+import { hybridRecall } from "../src/agentflow/brain-service/online/knowledge-manager/hybrid-recall";
+import { getKmRetrievalConfig } from "../src/agentflow/brain-service/online/knowledge-manager/km-config";
 
 const TOP_K = 8;
 

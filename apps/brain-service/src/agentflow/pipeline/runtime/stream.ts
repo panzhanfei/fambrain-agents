@@ -8,9 +8,9 @@
  *
  * 对外入口：runPipelineStream()，由 HTTP routes / eval / golden 调用。
  */
-import { ensureAgentsRuntime } from "@/config";
-import { buildLangGraphRunConfig } from "@fambrain/agent-config/langsmith";
-import { logAgentOut } from "@fambrain/agent-shared/agent-log";
+import { ensureBrainServiceRuntime } from "@/config";
+import { buildLangGraphRunConfig } from "@fambrain/brain-config/langsmith";
+import { logAgentOut } from "@fambrain/brain-shared/agent-log";
 import type {
   AgentPipelineContext,
   AgentPipelineResult,
@@ -18,12 +18,12 @@ import type {
   DbChatTurn,
   PipelineStepName,
   PipelineTiming,
-} from "@fambrain/agent-types";
+} from "@fambrain/brain-types";
 import {
   drainPipelineLogQueue,
   pipelineRunStorage,
   setPipelineActiveNode,
-} from "@fambrain/agent-shared/pipeline-run-context";
+} from "@fambrain/brain-shared/pipeline-run-context";
 import { getCompiledPipelineGraph } from "../graph/compile";
 import type { PipelineGraphState } from "../graph/state";
 import { buildInitialState, lastUserQuestion } from "./initial-state";
@@ -142,7 +142,7 @@ async function* runPipelineStreamInner(
   history: DbChatTurn[],
   context: AgentPipelineContext
 ): AsyncGenerator<AgentStreamEvent, AgentPipelineResult> {
-  ensureAgentsRuntime();
+  ensureBrainServiceRuntime();
   const userQuestion = lastUserQuestion(history);
   const timing = new PipelineTimingTracker();
   const graph = getCompiledPipelineGraph();

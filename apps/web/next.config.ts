@@ -28,9 +28,9 @@ const nextConfig: NextConfig = {
         root: path.join(__dirname, "../.."),
     },
     transpilePackages: [
-        "@fambrain/agent-types",
-        "@fambrain/agent-config",
-        "@fambrain/agent-shared",
+        "@fambrain/brain-types",
+        "@fambrain/brain-config",
+        "@fambrain/brain-shared",
         "@fambrain/corpus",
         "@fambrain/db",
         "@fambrain/auth",

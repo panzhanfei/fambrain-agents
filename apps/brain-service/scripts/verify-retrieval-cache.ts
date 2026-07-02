@@ -1,7 +1,7 @@
 /**
  * D5-2：检索 cache 单测（memory fallback；Redis 在线时额外测 ping）。
  *
- *   pnpm --filter @fambrain/agents run verify:retrieval-cache
+ *   pnpm --filter @fambrain/brain-service run verify:retrieval-cache
  */
 import {
     clearMemoryRetrievalCache,

@@ -4,7 +4,7 @@ export const handleAsync = (fn: HttpHandler): HttpHandler => {
     return (req, res) => {
         void Promise.resolve(fn(req, res)).catch((err: unknown) => {
             if (res.headersSent) {
-                console.error("[@fambrain/agents] handler error after headers sent:", err);
+                console.error("[@fambrain/brain-service] handler error after headers sent:", err);
                 try {
                     res.destroy();
                 }

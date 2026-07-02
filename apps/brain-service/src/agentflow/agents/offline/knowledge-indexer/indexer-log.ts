@@ -1,4 +1,4 @@
-import { AGENT_LOG_LABEL_IN, AGENT_LOG_LABEL_OUT, logAgentIn, logAgentOut } from "@fambrain/agent-shared/agent-log";
+import { AGENT_LOG_LABEL_IN, AGENT_LOG_LABEL_OUT, logAgentIn, logAgentOut } from "@fambrain/brain-shared/agent-log";
 
 const AGENT = "KnowledgeIndexer" as const;
 

@@ -1,7 +1,7 @@
 /**
  * R6-1 / R6-3 / P0-15 / R6-2 全链路验收（同问短路 + 检索结果 + composite 终稿 cache 全关）。
  *
- *   pnpm --filter @fambrain/agents run verify:r6-no-cache
+ *   pnpm --filter @fambrain/brain-service run verify:r6-no-cache
  *
  * 需 Ollama + Chroma + 语料（潘展飞 4 段经历）。
  */
@@ -9,15 +9,15 @@ process.env.REPEAT_QUESTION_CACHE_DISABLED = "1";
 process.env.RETRIEVAL_CACHE_DISABLED = "1";
 process.env.COMPOSITE_ANSWER_CACHE_DISABLED = "1";
 
-import type { AgentPipelineContext, DbChatTurn } from "@fambrain/agent-types";
+import type { AgentPipelineContext, DbChatTurn } from "@fambrain/brain-types";
 import {
     clearMemoryCompositeAnswerCache,
     clearMemoryRetrievalCache,
     resetInfraConfigForTests,
 } from "@fambrain/infra";
-import { listCorpusUserIds } from "@/agentflow/agents/offline/knowledge-indexer/list-corpus-users";
+import { listCorpusUserIds } from "@/agentflow/brain-service/offline/knowledge-indexer/list-corpus-users";
 import { runPipelineStream } from "@/agentflow/index";
-import { bootstrapAgentsRuntime } from "@/config";
+import { bootstrapBrainServiceRuntime } from "@/config";
 import {
     assertPipeline,
     type JsonAssert,
@@ -31,7 +31,7 @@ const DENY_ALL = /没有明确列出|未在知识库找到|知识库未覆盖|�
 resetInfraConfigForTests();
 clearMemoryRetrievalCache();
 clearMemoryCompositeAnswerCache();
-bootstrapAgentsRuntime();
+bootstrapBrainServiceRuntime();
 
 const resolveCorpusUserId = async (): Promise<string> => {
     const fromEnv = process.env.FAMBRAIN_CORPUS_USER_ID?.trim();
