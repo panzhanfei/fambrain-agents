@@ -22,10 +22,12 @@ const securityHeaders = (): {
     }
     return base;
 };
+const monorepoRoot = path.join(__dirname, "../..");
 const nextConfig: NextConfig = {
     output: "standalone",
+    outputFileTracingRoot: monorepoRoot,
     turbopack: {
-        root: path.join(__dirname, "../.."),
+        root: monorepoRoot,
     },
     transpilePackages: [
         "@fambrain/brain-types",

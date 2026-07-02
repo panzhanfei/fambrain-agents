@@ -3,7 +3,7 @@
  *
  * 职责划分：
  * - graph/：LangGraph 状态、路由、节点注册（compile.ts）
- * - agents/online/*：各节点业务实现
+ * - brain-service/online/*：各节点业务实现
  * - 本目录：SSE 事件、步骤耗时、Pipeline 出去日志
  *
  * 对外入口：runPipelineStream()，由 HTTP routes / eval / golden 调用。
@@ -136,7 +136,7 @@ export async function* runPipelineStream(
 
 /**
  * Pipeline 主流程：LangGraph stream 消费循环。
- * 业务节点在 agents/online/*；图拓扑在 graph/compile.ts。
+ * 业务节点在 brain-service/online/*；图拓扑在 graph/compile.ts。
  */
 async function* runPipelineStreamInner(
   history: DbChatTurn[],
