@@ -15,8 +15,8 @@ export { completeIntakeCoordinator } from "./llm/ollama-chat";
 
 export { runIntakePipeline, type RunIntakePipelineResult } from "./pipeline/intake-pipeline";
 
-/** @deprecated 实现已迁至 prepare-turn/repeat-question-guard；保留 re-export 兼容旧 import */
-export { findRepeatAnswerInHistory } from "../prepare-turn";
+/** @deprecated 实现已迁至 prepare-turn-start/repeat-question-guard；保留 re-export 兼容旧 import */
+export { findRepeatAnswerInHistory } from "../prepare-turn-start";
 export {
     applyIntakeCoreferenceGuard,
     hasCoreferenceContext,

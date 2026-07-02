@@ -1,8 +1,8 @@
 # IntakeCoordinator（入口接线员）
 
-Intake 是 Pipeline 的**第一个 LLM 在线 Agent**（图内位于 **`prepareTurn` 之后**）。它把用户自然语言变成一张**结构化路由工单**，告诉下游「要不要查库、查什么、单问还是多问分槽、还是直接短答 / 记 QQ」。
+Intake 是 Pipeline 的**第一个 LLM 在线 Agent**（图内位于 **`prepareTurnStart` 之后**）。它把用户自然语言变成一张**结构化路由工单**，告诉下游「要不要查库、查什么、单问还是多问分槽、还是直接短答 / 记 QQ」。
 
-**Intake 不做的事：** 检索语料、事实核查、写最终长分析、读写数据库、同问短路、Mem0/LangMem 加载（见 `../prepare-turn/`）。
+**Intake 不做的事：** 检索语料、事实核查、写最终长分析、读写数据库、同问短路、Mem0/LangMem 加载（见 `../prepare-turn-start/`）。
 
 ---
 
@@ -16,7 +16,7 @@ Intake 是 Pipeline 的**第一个 LLM 在线 Agent**（图内位于 **`prepareT
 | 纯 LLM 不稳定（闲聊乱称呼、指代误判） | **LLM 理解 + 规则 guard 兜底** |
 | 多问并列难检索 | **retrievalPlan → composite 多槽**，每槽独立 KM |
 | 用户口述 QQ/微信不在简历里 | **userFact 分支**，走 Mem0，不经 KM |
-| 同句再问浪费算力 | **同问短路** 在 **`prepare-turn`** 节点（Intake 不再重复检） |
+| 同句再问浪费算力 | **同问短路** 在 **`prepare-turn-start`** 节点（Intake 不再重复检） |
 
 ### 1.2 核心原则
 
@@ -32,7 +32,7 @@ Intake 是 Pipeline 的**第一个 LLM 在线 Agent**（图内位于 **`prepareT
 | LangChain `ChatOllama` | `llm/ollama-chat.ts` | 调本地 Ollama（模型名见 `getAgentsConfig().ollama.models.intakeCoordinator`） |
 | Zod | `contract/schema.ts` | 校验 / 规范化 LLM 输出的 JSON |
 | 正则 + 纯函数 guard | `guards/*` | 指代、闲聊、plan 补全、userFact 短路 |
-| Mem0 / LangMem | 由 **`prepareTurn`** 注入 `memoryBlock` | 帮理解多轮指代，**不能**替代 searchQuery 里的实体词 |
+| Mem0 / LangMem | 由 **`prepareTurnStart`** 注入 `memoryBlock` | 帮理解多轮指代，**不能**替代 searchQuery 里的实体词 |
 
 ---
 
@@ -92,7 +92,7 @@ Web 用户消息
 pipeline/graph/stream.ts          ← SSE 壳（消费 LangGraph stream）
     │
     ▼
-pipeline/graph/compile.ts  →  prepareTurnNode()     ../prepare-turn/
+pipeline/graph/compile.ts  →  prepareTurnStartNode()     ../prepare-turn-start/
     ├─ ALS enterWith + 同问短路 findRepeatAnswerInHistory
     ├─ preparePipelineMemory()  → memoryBlock, intakeHistory, userMemories
     │         同问命中 → respondEarly → END
@@ -112,9 +112,9 @@ state.decision 写入 PipelineGraphState
     │
     ▼
 routeAfterIntake()                        compile.ts
-    ├─ userFact        → user-fact-node.ts
-    ├─ respondEarly    → clarify / chitchat 短答
-    ├─ retrieval       → KnowledgeManager
+    ├─ userFact        → user-fact-node.ts → persistTurnEnd
+    ├─ respondEarly    → clarify / chitchat 短答 → persistTurnEnd
+    ├─ retrieval       → KnowledgeManager → … → analyst → persistTurnEnd
     ├─ contentSummarizer
     └─ factChecker     → （无检索的 direct_answer 等）
 ```
@@ -397,7 +397,7 @@ applyUserFactFromIntake → userFact: { action:"remember", factKey:"qq", ... }
 → 无 KM / analyst
 ```
 
-### 5.7 同问短路（已迁至 `prepare-turn`）
+### 5.7 同问短路（已迁至 `prepare-turn-start`）
 
 ```text
 history 中已有:
@@ -405,9 +405,9 @@ history 中已有:
   assistant: "（长答…）"
   user: "城管平台用了什么 technology"   ← 同句再问
 
-prepareTurn 节点内 findRepeatAnswerInHistory → 直接返回答案
+prepareTurnStart 节点内 findRepeatAnswerInHistory → 直接返回答案
 → 跳过 Intake LLM / KM / FC / Analyst
-→ SSE 仅 prepare_turn step；repeatQuestionHit: true
+→ SSE 仅 prepare_turn_start step；repeatQuestionHit: true
 ```
 
 ### 5.8 LLM JSON 解析失败
@@ -488,15 +488,15 @@ import {
   type RoutedIntakeDecision,
 } from "@/agentflow/agents/online/intake-coordinator";
 
-// 同问短路已迁至 prepare-turn；兼容 re-export：
-import { findRepeatAnswerInHistory } from "@/agentflow/agents/online/prepare-turn";
+// 同问短路已迁至 prepare-turn-start；兼容 re-export：
+import { findRepeatAnswerInHistory } from "@/agentflow/agents/online/prepare-turn-start";
 ```
 
 Pipeline 内主要调用点：
 
 | 调用方 | 使用的 Intake / Prepare 导出 |
 |--------|---------------------------|
-| `pipeline/graph/compile.ts` | `runPrepareTurn`（prepare-turn）；`completeIntakeCoordinator`, `runIntakePipeline`, `resolveIncrementalCompositePlan` |
+| `pipeline/graph/compile.ts` | `runPrepareTurnStart`（prepare-turn-start）；`completeIntakeCoordinator`, `runIntakePipeline`, `resolveIncrementalCompositePlan` |
 | `pipeline/graph/stream.ts` | SSE 消费；**不**再直接调同问短路/Mem0 |
 | `pipeline/graph/state.ts` | `RoutedIntakeDecision`, `IncrementalCompositePlan` |
 | `pipeline/graph/user-fact-node.ts` | user-fact 话术 / 查找函数 |
@@ -549,4 +549,4 @@ pnpm --filter @fambrain/agents run golden:regression   # G1～G5b + GMem
 | `decision.coverage` 等 | **不产** — 由 KM 写入 state |
 
 Intake 写入 Pipeline 状态的字段：`state.decision`（类型 `RoutedIntakeDecision | null`）。  
-可选标记：`state.repeatQuestionHit`（同问短路，在 prepareTurn 节点设置）。
+可选标记：`state.repeatQuestionHit`（同问短路，在 prepareTurnStart 节点设置）。

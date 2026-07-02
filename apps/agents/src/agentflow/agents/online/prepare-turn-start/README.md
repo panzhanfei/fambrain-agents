@@ -1,6 +1,6 @@
-# PrepareTurn（轮次准备）
+# PrepareTurnStart（轮次开始）
 
-在线 LangGraph **第一个节点**（非 LLM）。每轮用户消息必经此处，再进入 Intake。
+在线 LangGraph **START 后第一个节点**（非 LLM）。每轮用户消息必经此处，再进入 Intake。
 
 **职责：**
 
@@ -18,7 +18,7 @@
 
 | 文件 | 说明 |
 |------|------|
-| `prepare-turn.ts` | `runPrepareTurn()` 主流程 |
+| `prepare-turn-start.ts` | `runPrepareTurnStart()` 主流程 |
 | `repeat-question-guard.ts` | 同问短路 guard |
 | `index.ts` | 对外 barrel |
 
@@ -27,9 +27,9 @@
 ## 图内位置
 
 ```text
-START → prepareTurn → intake → …
+START → prepareTurnStart → intake → … → persistTurnEnd → END
          ↑
-    routeAfterPrepare：同问命中 → respondEarly → END
+    routeAfterPrepare：同问命中 → respondEarly → persistTurnEnd → END
 ```
 
-SSE step 名：`prepare_turn`（UI：准备上下文）。
+SSE step 名：`prepare_turn_start`（UI：准备上下文）。与 `persist-turn-end` 对称：首节点读上下文，末节点写记忆。

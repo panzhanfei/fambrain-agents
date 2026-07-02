@@ -1,5 +1,5 @@
 /**
- * PrepareTurn：LangGraph 第一个在线节点（非 LLM）。
+ * PrepareTurnStart：LangGraph START 后第一个在线节点（非 LLM）。
  * 挂 ALS 记事本、同问短路、Mem0/LangMem 上下文注入。
  */
 import { logAgentIn, logAgentOut } from "@fambrain/agent-shared/agent-log";
@@ -17,12 +17,12 @@ const ensurePipelineRunStore = (): void => {
     pipelineRunStorage.enterWith(createPipelineRunStore());
 };
 
-export const runPrepareTurn = async (
+export const runPrepareTurnStart = async (
     state: PipelineGraphState
 ): Promise<Partial<PipelineGraphState>> => {
     ensurePipelineRunStore();
 
-    logAgentIn("TurnPrepare", "进入", {
+    logAgentIn("TurnStart", "进入", {
         userQuestion: state.userQuestion,
         historyTurns: state.history.length,
         actorUserId: state.context.actorUserId,
@@ -36,7 +36,7 @@ export const runPrepareTurn = async (
         state.userQuestion
     );
     if (repeatAnswer) {
-        logAgentOut("TurnPrepare", "同问短路", {
+        logAgentOut("TurnStart", "同问短路", {
             hit: true,
             userQuestion: state.userQuestion,
             answerPreview:
@@ -44,7 +44,7 @@ export const runPrepareTurn = async (
                     ? `${repeatAnswer.slice(0, 200)}…`
                     : repeatAnswer,
         });
-        logAgentOut("TurnPrepare", "出去", {
+        logAgentOut("TurnStart", "出去", {
             repeatQuestionHit: true,
             exitEarly: true,
         });
@@ -64,7 +64,7 @@ export const runPrepareTurn = async (
             history: state.history,
             userQuestion: state.userQuestion,
         });
-        logAgentOut("TurnPrepare", "出去", {
+        logAgentOut("TurnStart", "出去", {
             repeatQuestionHit: false,
             memoryBlockChars: memory.promptBlock?.length ?? 0,
             userMemoryCount: memory.userMemories.length,
@@ -78,7 +78,7 @@ export const runPrepareTurn = async (
     }
     catch (e) {
         const message = e instanceof Error ? e.message : String(e);
-        logAgentOut("TurnPrepare", "出去", { error: message });
+        logAgentOut("TurnStart", "出去", { error: message });
         return {
             error: message,
             answer: "（准备对话上下文失败，请稍后重试）",

@@ -48,7 +48,7 @@ while (true) {
 console.log(
     `repeatHit=${repeatHit} steps=[${steps.join(",")}] ${Date.now() - started}ms`
 );
-if (!repeatHit || steps.join(",") !== "prepare_turn") {
+if (!repeatHit || steps.join(",") !== "prepare_turn_start,persist_turn_end") {
     process.exit(1);
 }
 console.log("OK");

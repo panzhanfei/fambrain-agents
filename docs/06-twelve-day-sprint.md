@@ -53,7 +53,7 @@
 
 | 上午 | 下午 | 晚间 |
 |------|------|------|
-| 画全链路（**离线** Indexer/DocParser/Learning + **在线** prepareTurn→Intake→KM… + cache） | 跑 baseline | 记 3 行日志 |
+| 画全链路（**离线** Indexer/DocParser/Learning + **在线** prepareTurnStart→Intake→KM… + cache） | 跑 baseline | 记 3 行日志 |
 
 **命令：**
 

@@ -1,9 +1,9 @@
 /**
- * Pipeline 在线编排 SSE 壳（LangGraph 消费 + 轮次后持久化）。
+ * Pipeline 在线编排 SSE 壳（LangGraph 消费 + 耗时统计）。
  *
  * 职责划分：
- * - prepare-turn / intake / …：LangGraph 图内在线 Agent（compile.ts）
- * - 本文件：SSE 事件、耗时统计、图结束后 Mem0/Learning 持久化
+ * - prepare-turn-start / intake / persist-turn-end / …：LangGraph 图内在线节点（compile.ts）
+ * - 本文件：SSE 事件、步骤耗时、Pipeline 出去日志
  *
  * 对外入口：runPipelineStream()，由 HTTP routes / eval / golden 调用。
  */
@@ -26,10 +26,6 @@ import {
 import { getCompiledPipelineGraph } from "./compile";
 import { PipelineTimingTracker } from "./pipeline-timing";
 import type { PipelineGraphState } from "./state";
-import {
-  persistPipelineMemory,
-} from "@fambrain/agent-memory";
-import { persistLearningAfterTurn } from "@/agentflow/agents/offline/learning";
 
 /** Analyst 经 LangGraph custom 通道推送的流式 chunk 形状 */
 type AnalystStreamChunk =
@@ -55,7 +51,7 @@ function* emitAssistant(answer: string): Generator<AgentStreamEvent> {
   yield { type: "assistant", text: answer };
 }
 
-/** 构造 LangGraph 初始状态；memory 字段由 prepareTurn 节点填充 */
+/** 构造 LangGraph 初始状态；memory 字段由 prepareTurnStart 节点填充 */
 const buildInitialState = (
   history: DbChatTurn[],
   context: AgentPipelineContext,
@@ -100,48 +96,12 @@ const isAnalystStreamChunk = (value: unknown): value is AnalystStreamChunk => {
   );
 };
 
-/** 轮次后 Mem0/Learning 持久化失败时写 Pipeline 日志，不抛错中断主流程 */
-const logPersistMemoryFailure = (e: unknown): void => {
-  const message = e instanceof Error ? e.message : String(e);
-  logAgentOut("Pipeline", "persist_memory_failed", { error: message });
-};
-
-/** 从 finalState.hits 提取去重后的 corpus path，供 Learning 反馈与 Phase D 元数据 */
+/** 从 finalState.hits 提取去重后的 corpus path，供 AgentPipelineResult */
 const retrievalPathsFromState = (state: PipelineGraphState): string[] => {
   const paths = state.hits
     .map((h) => h.path?.trim())
     .filter((p): p is string => Boolean(p));
   return [...new Set(paths)];
-};
-
-/**
- * 图结束后的副作用（不在 LangGraph 节点内）：
- * - persistPipelineMemory：Mem0 抽记忆 + LangMem 摘要
- * - persistLearningAfterTurn：Learning 候选（userFact 轮次跳过）
- * 同问短路时不写。
- */
-const persistTurnSideEffects = async (input: {
-  context: AgentPipelineContext;
-  history: DbChatTurn[];
-  userQuestion: string;
-  answer: string;
-  finalState: PipelineGraphState;
-}): Promise<void> => {
-  if (input.finalState.repeatQuestionHit) return;
-  await persistPipelineMemory({
-    context: input.context,
-    history: input.history,
-    userQuestion: input.userQuestion,
-    answer: input.answer,
-  }).catch(logPersistMemoryFailure);
-  if (!input.finalState.decision?.userFact) {
-    await persistLearningAfterTurn({
-      context: input.context,
-      userQuestion: input.userQuestion,
-      answer: input.answer,
-      retrievalPaths: retrievalPathsFromState(input.finalState),
-    }).catch(logPersistMemoryFailure);
-  }
 };
 
 /** FactChecker 打回且尚未 retry 时，stream 层需再 yield retrieval step */
@@ -213,8 +173,8 @@ export async function* runPipelineStream(
 }
 
 /**
- * Pipeline 主流程：LangGraph stream 消费循环 + 轮次后持久化。
- * ALS / 同问短路 / Mem0 在图内 prepareTurn 节点完成。
+ * Pipeline 主流程：LangGraph stream 消费循环。
+ * 业务节点（含 prepareTurnStart / persistTurnEnd）在 compile.ts 图内执行。
  */
 async function* runPipelineStreamInner(
   history: DbChatTurn[],
@@ -226,10 +186,10 @@ async function* runPipelineStreamInner(
   const graph = getCompiledPipelineGraph();
   const input = buildInitialState(history, context, userQuestion);
   let finalState: PipelineGraphState = input;
-  let activeStep: PipelineStepName | null = "prepare_turn";
-  timing.markNodeStart("prepare_turn");
-  setPipelineActiveNode("prepare_turn");
-  yield { type: "step", name: "prepare_turn", status: "running" };
+  let activeStep: PipelineStepName | null = "prepare_turn_start";
+  timing.markNodeStart("prepare_turn_start");
+  setPipelineActiveNode("prepare_turn_start");
+  yield { type: "step", name: "prepare_turn_start", status: "running" };
   const stream = await graph.stream(
     input as Parameters<typeof graph.stream>[0],
     {
@@ -286,8 +246,8 @@ async function* runPipelineStreamInner(
     if (nodePatch) {
       finalState = { ...finalState, ...nodePatch };
     }
-    if (nodeName === "prepareTurn") {
-      yield* finishStep("prepare_turn");
+    if (nodeName === "prepareTurnStart") {
+      yield* finishStep("prepare_turn_start");
       yield* flushPipelineLogs();
       if (finalState.error && finalState.exitEarly) {
         yield { type: "error", message: finalState.error };
@@ -354,6 +314,7 @@ async function* runPipelineStreamInner(
       if (finalState.error) {
         yield { type: "error", message: finalState.error };
       }
+      yield* startStep("persist_turn_end");
       continue;
     }
     if (nodeName === "retrieval") {
@@ -396,6 +357,7 @@ async function* runPipelineStreamInner(
       if (finalState.error) {
         yield { type: "error", message: finalState.error };
       }
+      yield* startStep("persist_turn_end");
       continue;
     }
     if (nodeName === "respondEarly") {
@@ -409,6 +371,13 @@ async function* runPipelineStreamInner(
         };
         activeStep = null;
       }
+      yield* startStep("persist_turn_end");
+      continue;
+    }
+    if (nodeName === "persistTurnEnd") {
+      yield* finishStep("persist_turn_end");
+      yield* flushPipelineLogs();
+      continue;
     }
   }
   if (activeStep) {
@@ -422,43 +391,14 @@ async function* runPipelineStreamInner(
   }
   if (finalState.exitEarly && finalState.answer) {
     timing.markFirstToken();
-    const pipelineTiming = yield* finishPipeline(timing);
-    logAgentOut(
-      "Pipeline",
-      "出去",
-      summarizePipelineOut(finalState, finalState.answer, pipelineTiming)
-    );
     yield* emitAssistant(finalState.answer);
-    if (!finalState.repeatQuestionHit) {
-      await persistTurnSideEffects({
-        context,
-        history,
-        userQuestion,
-        answer: finalState.answer,
-        finalState,
-      });
-    }
-    return {
-      answer: finalState.answer,
-      repeatQuestionHit: finalState.repeatQuestionHit,
-      retrievalCacheHit: finalState.retrievalCacheHit,
-      compositeFacetCacheHits: finalState.compositeFacetCacheHits,
-      timing: pipelineTiming,
-      retrievalPaths: retrievalPathsFromState(finalState),
-    };
   }
-  const answer = finalState.answer ?? "（未能生成回复，请稍后重试）";
-  if (!finalState.answer) {
+  const answer =
+    finalState.answer ?? "（未能生成回复，请稍后重试）";
+  if (!finalState.exitEarly && !finalState.answer) {
     timing.markFirstToken();
     yield* emitAssistant(answer);
   }
-  await persistTurnSideEffects({
-    context,
-    history,
-    userQuestion,
-    answer,
-    finalState,
-  });
   const pipelineTiming = yield* finishPipeline(timing);
   logAgentOut(
     "Pipeline",

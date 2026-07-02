@@ -58,7 +58,8 @@ export const formatTokenSummary = (timing?: PipelineTiming): string | null => {
 
 export const AGENT_LABELS: Record<string, string> = {
     Pipeline: "编排",
-    TurnPrepare: "准备",
+    TurnStart: "准备",
+    TurnEnd: "写入",
     IntakeCoordinator: "入口",
     KnowledgeManager: "检索",
     FactChecker: "核查",

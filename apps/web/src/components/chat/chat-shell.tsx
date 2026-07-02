@@ -34,7 +34,7 @@ type ChatMessage = {
 };
 
 const STEP_TIMING_LABELS: Record<PipelineStepName, string> = {
-  prepare_turn: "准备上下文",
+  prepare_turn_start: "准备上下文",
   intake: "理解问题",
   user_fact: "读取记忆",
   retrieval: "检索知识库",
@@ -42,6 +42,7 @@ const STEP_TIMING_LABELS: Record<PipelineStepName, string> = {
   content_summarizer: "生成摘要",
   content_organizer: "整理证据",
   analyst: "生成回答",
+  persist_turn_end: "写入记忆",
 };
 
 const formatDuration = (ms: number): string => {
@@ -967,7 +968,7 @@ export const ChatShell = ({ initialConversations, viewer }: ChatShellProps) => {
           }
           if (p.status === "running" && typeof p.name === "string") {
             const labels: Record<string, string> = {
-              prepare_turn: "准备上下文…",
+              prepare_turn_start: "准备上下文…",
               intake: "理解问题…",
               user_fact: "读取记忆…",
               retrieval: "检索知识库…",
@@ -975,6 +976,7 @@ export const ChatShell = ({ initialConversations, viewer }: ChatShellProps) => {
               content_summarizer: "生成摘要…",
               content_organizer: "整理证据…",
               analyst: "生成回答…",
+              persist_turn_end: "写入记忆…",
             };
             setThinkingPanelVisible(true);
             setStreamThinking(labels[p.name] ?? "处理中…");

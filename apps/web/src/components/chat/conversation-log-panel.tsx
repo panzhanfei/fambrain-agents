@@ -9,7 +9,7 @@ import {
 } from "@/lib/chat/conversation-logs";
 
 const STEP_LABELS: Record<PipelineStepName, string> = {
-    prepare_turn: "准备上下文",
+    prepare_turn_start: "准备上下文",
     intake: "理解问题",
     user_fact: "读取记忆",
     retrieval: "检索知识库",
@@ -17,6 +17,7 @@ const STEP_LABELS: Record<PipelineStepName, string> = {
     content_summarizer: "生成摘要",
     content_organizer: "整理证据",
     analyst: "生成回答",
+    persist_turn_end: "写入记忆",
 };
 
 const formatDuration = (ms: number): string => {

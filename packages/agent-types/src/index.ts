@@ -14,14 +14,15 @@ export type AgentPipelineContext = {
     conversationId: string;
 };
 export type PipelineStepName =
-    | "prepare_turn"
+    | "prepare_turn_start"
     | "intake"
     | "user_fact"
     | "retrieval"
     | "fact_checker"
     | "content_summarizer"
     | "content_organizer"
-    | "analyst";
+    | "analyst"
+    | "persist_turn_end";
 
 /** Pipeline 各节点与端到端耗时（后端 performance.now 统计） */
 export type PipelineTokenUsage = {

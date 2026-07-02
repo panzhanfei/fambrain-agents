@@ -9,7 +9,8 @@ import {
     resolveIncrementalCompositePlan,
     runIntakePipeline,
 } from "@/agentflow/agents/online/intake-coordinator";
-import { runPrepareTurn } from "@/agentflow/agents/online/prepare-turn";
+import { runPrepareTurnStart } from "@/agentflow/agents/online/prepare-turn-start";
+import { runPersistTurnEnd } from "@/agentflow/agents/online/persist-turn-end";
 import { streamAnalyzeInformation } from "@/agentflow/agents/online/information-analyst";
 import { retrieveKnowledge } from "@/agentflow/agents/online/knowledge-manager";
 import { retrieveCompositeIncremental } from "./retrieve-composite-incremental";
@@ -64,8 +65,11 @@ const routeAfterFactChecker = (state: PipelineGraphState): "retrieval" | "conten
     }
     return "contentOrganizer";
 };
-const prepareTurnNode = async (state: PipelineGraphState): Promise<Partial<PipelineGraphState>> => {
-    return runPrepareTurn(state);
+const persistTurnEndNode = async (state: PipelineGraphState): Promise<Partial<PipelineGraphState>> => {
+    return runPersistTurnEnd(state);
+};
+const prepareTurnStartNode = async (state: PipelineGraphState): Promise<Partial<PipelineGraphState>> => {
+    return runPrepareTurnStart(state);
 };
 const intakeNode = async (state: PipelineGraphState): Promise<Partial<PipelineGraphState>> => {
     try {
@@ -376,7 +380,8 @@ const respondEarlyNode = (state: PipelineGraphState): Partial<PipelineGraphState
 };
 const buildPipelineGraph = () => {
     return new StateGraph(PipelineGraphAnnotation)
-        .addNode("prepareTurn", prepareTurnNode)
+        .addNode("persistTurnEnd", persistTurnEndNode)
+        .addNode("prepareTurnStart", prepareTurnStartNode)
         .addNode("intake", intakeNode)
         .addNode("retrieval", retrievalNode)
         .addNode("factChecker", factCheckerNode)
@@ -385,16 +390,17 @@ const buildPipelineGraph = () => {
         .addNode("analyst", analystNode)
         .addNode("userFact", userFactNode)
         .addNode("respondEarly", respondEarlyNode)
-        .addEdge(START, "prepareTurn")
-        .addConditionalEdges("prepareTurn", routeAfterPrepare)
+        .addEdge(START, "prepareTurnStart")
+        .addConditionalEdges("prepareTurnStart", routeAfterPrepare)
         .addConditionalEdges("intake", routeAfterIntake)
-        .addEdge("userFact", END)
+        .addEdge("userFact", "persistTurnEnd")
         .addConditionalEdges("retrieval", routeAfterRetrieval)
         .addConditionalEdges("factChecker", routeAfterFactChecker)
         .addEdge("contentSummarizer", "respondEarly")
         .addEdge("contentOrganizer", "analyst")
-        .addEdge("analyst", END)
-        .addEdge("respondEarly", END);
+        .addEdge("analyst", "persistTurnEnd")
+        .addEdge("respondEarly", "persistTurnEnd")
+        .addEdge("persistTurnEnd", END);
 };
 let compiledGraph: ReturnType<ReturnType<typeof buildPipelineGraph>["compile"]> | null = null;
 export const getCompiledPipelineGraph = () => {

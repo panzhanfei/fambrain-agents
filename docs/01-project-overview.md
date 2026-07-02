@@ -139,7 +139,7 @@ pnpm run dev
 | `REDIS_KEY_PREFIX` | 否 | Redis key 根前缀，默认 `fambrain`（检索 cache / 限流 / 队列名派生） |
 | `DEV_REDIS_AUTO_START` | 否 | `pnpm dev` 时 Redis 不可达且端口空闲则 `docker compose up redis`，默认 `1` |
 | `RETRIEVAL_CACHE_DISABLED` / `RETRIEVAL_CACHE_TTL_MS` | 否 | **L2** 检索结果 cache（D5-2）；`=1` 关闭；Redis 不可用时 memory fallback |
-| `REPEAT_QUESTION_CACHE_DISABLED` | 否 | **同问短路**（`prepare-turn/repeat-question-guard.ts`）；`=1` 关闭，同句再问走全链路 |
+| `REPEAT_QUESTION_CACHE_DISABLED` | 否 | **同问短路**（`prepare-turn-start/repeat-question-guard.ts`）；`=1` 关闭，同句再问走全链路 |
 | `COMPOSITE_ANSWER_CACHE_DISABLED` / `COMPOSITE_ANSWER_CACHE_TTL_MS` | 否 | **L3** composite facet 终稿 cache（P0-15）；`=1` 关闭 |
 | `PIPELINE_QUEUE_ENABLED` | 否 | `1` 时 `pnpm dev` 另起 BullMQ worker（web 入队接好后再开） |
 | `OLLAMA_STREAM_THINK` | 否 | 流式是否请求 thinking；不支持时服务端会自动降级重试 |
@@ -167,7 +167,7 @@ pnpm run dev
 |------|------|
 | `apps/web/` | Next.js UI + BFF；`.next` 产物在此目录 |
 | `apps/agents/` | Agent 业务：orchestrator、**在线** LangGraph pipeline、**离线** Indexer/Learning CLI |
-| `apps/agents/src/agentflow/agents/online/` | 在线 Agent：`prepare-turn`、intake-coordinator、knowledge-manager… |
+| `apps/agents/src/agentflow/agents/online/` | 在线 Agent：`prepare-turn-start`、intake-coordinator、`persist-turn-end`、knowledge-manager… |
 | `apps/agents/src/agentflow/agents/offline/` | 离线：knowledge-indexer、doc-parser、learning |
 | `packages/db/` | Prisma schema、migrations、会话 repo |
 | `packages/auth/` | JWT、登录注册、会话 |
@@ -184,9 +184,10 @@ pnpm run dev
 
 | 技能点 | 代码位置 | 用途 |
 |--------|----------|------|
-| `runAgentStream` + `runPipelineStream` | `apps/agents/src/agentflow/`、`pipeline/graph/stream.ts` | LangGraph SSE 壳（消费 stream；同问短路/Mem0 在图内） |
-| `runPrepareTurn` | `agentflow/agents/online/prepare-turn/` | 图首节点：ALS、同问短路、Mem0/LangMem 注入 |
-| `getCompiledPipelineGraph` | `pipeline/graph/compile.ts` | **prepareTurn** → Intake → **userFact**（可选）→ KM → FactChecker → **ContentOrganizer** → Analyst |
+| `runAgentStream` + `runPipelineStream` | `apps/agents/src/agentflow/`、`pipeline/graph/stream.ts` | LangGraph SSE 壳（步骤耗时 + SSE；业务在图内） |
+| `runPrepareTurnStart` | `agentflow/agents/online/prepare-turn-start/` | 图首节点：ALS、同问短路、Mem0/LangMem **读** |
+| `runPersistTurnEnd` | `agentflow/agents/online/persist-turn-end/` | 图末节点：Mem0/LangMem **写**、Learning 候选 |
+| `getCompiledPipelineGraph` | `pipeline/graph/compile.ts` | **prepareTurnStart** → Intake → … → **persistTurnEnd** → END |
 | `userFactNode` / `routeUserFactFromIntake` | `pipeline/graph/user-fact-node.ts`、`intake-coordinator/user-fact.ts` | P0-16：跨会话 remember/recall；绕过 KM / FC / Analyst |
 | `addStructuredUserFact` / `searchUserFactMemories` | `packages/agent-memory/src/mem0/store.ts` | Mem0 结构化写入 + 按 factKey 语义检索 |
 | `parseIntakeDecision` / `defaultIntakeDecision` | `pipeline/parse-intake.ts` | 解析 Intake 路由 JSON |
@@ -200,7 +201,8 @@ pnpm run dev
 | `verify:content-organizer` / `verify:agent-schemas` | `apps/agents/scripts/` | ContentOrganizer / 全 Agent Zod |
 | `verify:embed-batches` | `apps/agents/scripts/` | Indexer p-limit 分批逻辑 |
 | `verify:memory` / `verify:doc-parser` | `apps/agents/scripts/` | Mem0+LangMem / DocParser |
-| `preparePipelineMemory` | `packages/agent-memory/`（由 **prepare-turn** 调用） | 每轮加载 Mem0 + LangMem → `memoryBlock` |
+| `preparePipelineMemory` | `packages/agent-memory/`（由 **prepare-turn-start** 调用） | 每轮加载 Mem0 + LangMem → `memoryBlock` |
+| `persistPipelineMemory` | `packages/agent-memory/`（由 **persist-turn-end** 调用） | 每轮写入 Mem0 + LangMem |
 | `ingestDocumentBatch` | `agentflow/agents/offline/doc-parser/` | 批量上传解析 → corpus + 可选入库 |
 | `summarizeContent` | `agentflow/agents/online/content-summarizer/` | 在线摘要分支 + CLI（D9） |
 | `listVaultFiles` | `agentflow/knowledge/list-vault-files.ts` | vault 只读列举（MCP 共用） |

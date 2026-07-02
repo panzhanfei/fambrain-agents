@@ -49,8 +49,10 @@ const main = async (): Promise<void> => {
     const retrieve = await runCase("检索 + 核查", "城管平台用了什么技术？");
     const okChitchat = !chitchat.steps.includes("retrieval")
         && !chitchat.steps.includes("fact_checker");
-    const okPrepareFirst = chitchat.steps[0] === "prepare_turn"
-        && retrieve.steps[0] === "prepare_turn";
+    const okPrepareFirst = chitchat.steps[0] === "prepare_turn_start"
+        && retrieve.steps[0] === "prepare_turn_start";
+    const okPersistLast = chitchat.steps.at(-1) === "persist_turn_end"
+        && retrieve.steps.at(-1) === "persist_turn_end";
     const okRetrieve = retrieve.steps.includes("intake")
         && retrieve.steps.includes("retrieval")
         && retrieve.steps.includes("fact_checker")
@@ -58,10 +60,11 @@ const main = async (): Promise<void> => {
         && retrieve.steps.includes("analyst");
     const retrievalCount = retrieve.steps.filter((s) => s === "retrieval").length;
     console.log("\n--- 断言 ---");
-    console.log(`首步 prepare_turn: ${okPrepareFirst ? "OK" : "FAIL"}`);
+    console.log(`首步 prepare_turn_start: ${okPrepareFirst ? "OK" : "FAIL"}`);
+    console.log(`末步 persist_turn_end: ${okPersistLast ? "OK" : "FAIL"}`);
     console.log(`G1 不检索/不核查: ${okChitchat ? "OK" : "FAIL"}`);
     console.log(`检索链路含 fact_checker + content_organizer: ${okRetrieve ? "OK" : "FAIL"} (retrieval 出现 ${retrievalCount} 次)`);
-    if (!okPrepareFirst || !okChitchat || !okRetrieve)
+    if (!okPrepareFirst || !okPersistLast || !okChitchat || !okRetrieve)
         process.exit(1);
     console.log("\nPipeline 冒烟通过。");
 };

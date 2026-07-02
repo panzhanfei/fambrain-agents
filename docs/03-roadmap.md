@@ -165,7 +165,7 @@ GOLDEN_RUNS=3 pnpm run golden:regression   # G1～G5b + GMem，稳定性 3 遍
 | 交付 | 改动面 | 通过标准 |
 |------|--------|----------|
 | **检索结果 cache** | `@fambrain/infra` `retrievalNode`；key = `{REDIS_KEY_PREFIX}:retrieval:v1:{corpusUserId}:{queryType}:{query}`；TTL 可配 | 同会话连续两问 G4 原文，第二次不全量走向量检索 |
-| **同问短路** | `prepare-turn/repeat-question-guard.ts`；LangGraph **`prepareTurn` 节点** | 归一化 user 问与本会话 history 相同 → 复用上轮 assistant 答，跳过 Intake/KM/FC/Analyst |
+| **同问短路** | `prepare-turn-start/repeat-question-guard.ts`；LangGraph **`prepareTurnStart` 节点** | 归一化 user 问与本会话 history 相同 → 复用上轮 assistant 答，跳过 Intake/KM/FC/Analyst |
 | **FactChecker cache hit** | cache hit 时规则快检（`cache_hit_skip_llm`） | 日志 / SSE 可见 `retrievalCacheHit` |
 
 **状态（2026-06-18）：** ✅ 检索 cache 已接入 pipeline（Redis db=`REDIS_DB` 或 URL `/N`；未配 Redis 时 memory fallback）；✅ FC cache hit 快检；✅ `verify:retrieval-cache` + eval `CACHE-G4-repeat` **1/1**；✅ **同问短路** — `findRepeatAnswerInHistory` + `repeatQuestionHit`；✅ `verify:repeat-question-smoke` / `verify:intake-coreference` repeat 单测
