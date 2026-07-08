@@ -152,6 +152,12 @@ const extractFromFieldMarker = (
     return null;
 };
 
+/** Intake intent 是否为跨会话用户自述记忆（remember / recall） */
+export const isUserFactIntent = (
+    intent: IntakeRoutingDecision["intent"]
+): boolean =>
+    intent === "remember_user_fact" || intent === "recall_user_fact";
+
 /** Intake 结构化 intent → userFact 路由（主路径） */
 export const routeUserFactFromIntake = (
     decision: IntakeRoutingDecision

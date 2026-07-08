@@ -2,6 +2,7 @@
 
 export {
     routeUserFactFromIntake,
+    isUserFactIntent,
     parseUserFactRecord,
     serializeUserFactRecord,
     memoryBlockHasStructuredUserFacts,

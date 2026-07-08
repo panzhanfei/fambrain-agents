@@ -12,15 +12,15 @@ import {
     coalesceRememberValue,
     findUserFactValueInMemoryBlock,
     findUserFactValueInTexts,
+    routeUserFactFromIntake,
     validateFactValue,
+    type UserFactRoute,
 } from "../user-fact";
 
 const resolveRecallValue = async (
-    state: PipelineGraphState
+    state: PipelineGraphState,
+    route: UserFactRoute
 ): Promise<string | null> => {
-    const route = state.decision?.userFact;
-    if (!route) return null;
-
     const fromBlock = findUserFactValueInMemoryBlock(
         state.memoryBlock,
         route.factKey,
@@ -56,11 +56,13 @@ const resolveRecallValue = async (
     return null;
 };
 
-/** LangGraph userFact 节点：跨会话 remember / recall */
+/** LangGraph userFact 节点：解析 Intake JSON → remember / recall（Mem0 已在 preparePipelineMemory 加载） */
 export const userFactNode = async (
     state: PipelineGraphState
 ): Promise<Partial<PipelineGraphState>> => {
-    const userFact = state.decision?.userFact;
+    const userFact = state.decision
+        ? routeUserFactFromIntake(state.decision)
+        : null;
     const language = state.decision?.language ?? "zh";
     if (!userFact) {
         return {
@@ -122,7 +124,7 @@ export const userFactNode = async (
             return { answer, exitEarly: true };
         }
 
-        const value = await resolveRecallValue(state);
+        const value = await resolveRecallValue(state, userFact);
         const answer = value
             ? buildRecallAnswer(userFact.label, value, language)
             : buildRecallMissingAnswer(userFact.label, language);

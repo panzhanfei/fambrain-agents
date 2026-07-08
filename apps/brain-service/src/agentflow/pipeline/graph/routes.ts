@@ -1,4 +1,5 @@
 import type { PipelineGraphState } from "./state";
+import { isUserFactIntent } from "@/agentflow/brain-service/online/user-fact";
 
 export const routeAfterRepeat = (
     state: PipelineGraphState
@@ -22,7 +23,7 @@ export const routeAfterIntake = (
     const decision = state.decision;
     if (!decision)
         return "respondEarly";
-    if (decision.userFact) {
+    if (decision && isUserFactIntent(decision.intent)) {
         return "userFact";
     }
     if (decision.intent === "clarify" && decision.clarifyingQuestion) {

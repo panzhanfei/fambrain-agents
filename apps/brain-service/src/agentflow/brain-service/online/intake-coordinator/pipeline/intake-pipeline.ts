@@ -12,9 +12,8 @@ import { applyCompositeRouteGuard } from "../composite/composite-route-guard";
 import type { RoutedIntakeDecision } from "../composite/composite-route-guard";
 import { applyIntakeChitchatGuard } from "../guards/intake-chitchat-guard";
 import { applyIntakeRetrievalPlanGuard } from "../guards/intake-retrieval-plan-guard";
-import { applyUserFactFromIntake } from "../guards/intake-user-fact-guard";
 import type { IntakeRoutingDecision } from "../contract/prompt";
-import { routeUserFactFromIntake } from "@/agentflow/brain-service/online/user-fact";
+import { isUserFactIntent } from "@/agentflow/brain-service/online/user-fact";
 
 const summarizeDecision = (
   decision: IntakeRoutingDecision | RoutedIntakeDecision
@@ -167,24 +166,27 @@ export const runIntakePipeline = (
     return { decision, parseUsedFallback, earlyExit: true };
   }
 
-  /** ④ 用户记忆：intent 为 remember_user_fact / recall_user_fact → 解析 userFactRoute */
-  const userFactRoute = routeUserFactFromIntake(afterChitchat);
+  /** ④ 用户记忆：intent 为 remember/recall → pipeline 早退（解析与读写均在 userFact 节点） */
+  const userFactMatched = isUserFactIntent(afterChitchat.intent);
   logAgentOut("IntakeCoordinator", "guard_用户记忆", {
-    matched: Boolean(userFactRoute),
-    ...(userFactRoute
+    matched: userFactMatched,
+    intent: afterChitchat.intent,
+    ...(userFactMatched
       ? {
-          action: userFactRoute.action,
-          factKey: userFactRoute.factKey,
-          label: userFactRoute.label,
-          hasValue: Boolean(userFactRoute.value),
+          userFactKey: afterChitchat.userFactKey,
+          userFactLabel: afterChitchat.userFactLabel,
+          hasValue: Boolean(afterChitchat.userFactValue?.trim()),
         }
       : {}),
   });
 
-  /** ④ 短路：命中 userFact 则包装 RoutedIntakeDecision 并 return，不进入 KM/composite */
-  if (userFactRoute) {
-    const decision = applyUserFactFromIntake(afterChitchat, userFactRoute);
-    logAgentOut("IntakeCoordinator", "最终路由", summarizeDecision(decision));
+  if (userFactMatched) {
+    const decision = buildEarlyExitRoutedDecision(afterChitchat);
+    logAgentOut("IntakeCoordinator", "最终路由", {
+      earlyExit: true,
+      reason: afterChitchat.intent,
+      ...summarizeDecision(decision),
+    });
     return { decision, parseUsedFallback, earlyExit: true };
   }
 

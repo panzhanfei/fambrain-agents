@@ -136,7 +136,7 @@ LLM 原始 JSON
     │   chitchat/out_of_scope → pipeline 早退
     │
     ▼ routeUserFactFromIntake()          user-fact/user-fact.ts
-    │   命中 → applyUserFactFromIntake() → 最终路由（不经 composite）
+    │   命中 → pipeline 早退（解析在 userFact 节点）
     │
     ▼ applyIntakeRetrievalPlanGuard()    guards/intake-retrieval-plan-guard.ts
     │

@@ -15,7 +15,22 @@ export type IntakeRetrievalPlanItem = {
 };
 
 export type IntakeRoutingDecision = {
-    /** 主意图分类 */
+    /**
+     * 主意图分类（8 种）。Mem0/LangMem 已在 preparePipelineMemory 加载；本 JSON 只定路由。
+     *
+     * | intent | 含义 | 典型字段 | pipeline | routeAfterIntake → |
+     * |--------|------|----------|----------|---------------------|
+     * | retrieve_and_answer | 查语料答经历/项目/技术/简历档案 | needsRetrieval+searchQuery | ⑤⑥ plan/composite | retrieval → FC → analyst |
+     * | summarize_content | 总结/概括某段内容 | needsRetrieval+searchQuery；briefReply=null | ⑤⑥ | retrieval → contentSummarizer |
+     * | direct_answer | 通用短答，与本人履历无关 | briefReply；needsRetrieval=false | 可能早退 | respondEarly |
+     * | clarify | 指代不明/缺实体，反问用户 | clarifyingQuestion | ② 早退 | respondEarly |
+     * | chitchat | 问候、闲聊 | briefReply=null（服务端注入固定话术） | ③ 早退 | respondEarly |
+     * | out_of_scope | 越界/有害，拒绝 | briefReply | 可能早退 | respondEarly |
+     * | remember_user_fact | 记住用户口述（QQ/微信等，不在简历） | userFactKey/Label/Value | ④ 早退 | userFact 节点 → 写入 Mem0 |
+     * | recall_user_fact | 召回已记住字段 | userFactKey/Label；value=null | ④ 早退 | userFact 节点 → 读 memoryBlock/userMemories |
+     *
+     * 简历已有事实（姓名/年龄/经历）用 retrieve_and_answer，不用 recall_user_fact。
+     */
     intent:
         | "retrieve_and_answer"
         | "summarize_content"

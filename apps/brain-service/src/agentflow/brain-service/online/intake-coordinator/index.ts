@@ -42,6 +42,7 @@ export {
   applyIntakeRetrievalPlanGuard,
   type IntakeRetrievalPlanGuardReason,
 } from "./guards/intake-retrieval-plan-guard";
+/** @deprecated 仅测试/兼容；pipeline 已改为 intent 判断 + userFact 节点内 routeUserFactFromIntake */
 export {
   applyUserFactFromIntake,
   buildUserFactRoutedDecision,
@@ -100,6 +101,7 @@ export {
 
 export {
   routeUserFactFromIntake,
+  isUserFactIntent,
   parseUserFactRecord,
   serializeUserFactRecord,
   memoryBlockHasStructuredUserFacts,

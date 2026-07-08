@@ -9,7 +9,7 @@ import os from "node:os";
 import path from "node:path";
 import {
     applyUserFactFromIntake,
-    buildUserFactRoutedDecision,
+    buildEarlyExitRoutedDecision,
     findUserFactValueInTexts,
     parseUserFactRecord,
     routeUserFactFromIntake,
@@ -194,7 +194,7 @@ const main = async () => {
             displayName: "Test",
             conversationId: "conv-b",
         },
-        decision: buildUserFactRoutedDecision(recallRoute!, recallIntake()),
+        decision: buildEarlyExitRoutedDecision(recallIntake()),
         userMemories: memories,
         memoryBlock: `### 用户长期记忆（Mem0）\n- ${serializeUserFactRecord({ factKey: "qq", label: "QQ号", value: QQ })}`,
     });
@@ -209,7 +209,7 @@ const main = async () => {
             displayName: "Test",
             conversationId: "conv-c",
         },
-        decision: buildUserFactRoutedDecision(rememberRoute!, rememberIntake()),
+        decision: buildEarlyExitRoutedDecision(rememberIntake()),
     });
     const rememberOut = await userFactNode(rememberState);
     assert.ok(
