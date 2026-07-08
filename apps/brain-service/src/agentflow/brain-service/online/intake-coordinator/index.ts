@@ -35,9 +35,8 @@ export { userFactNode } from "../user-fact";
 /** @deprecated 实现已迁至 repeat-question-guard；保留 re-export 兼容旧 import */
 export { findRepeatAnswerInHistory } from "../repeat-question-guard";
 export {
-  applyIntakeChitchatGuard,
-  DEFAULT_CHITCHAT_BRIEF_REPLY,
-  isAcceptableChitchatBriefReply,
+    applyIntakeChitchatGuard,
+    DEFAULT_CHITCHAT_BRIEF_REPLY,
 } from "./guards/intake-chitchat-guard";
 export {
   applyIntakeRetrievalPlanGuard,

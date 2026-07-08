@@ -154,7 +154,7 @@ LLM 原始 JSON
 | `同问短路` | 同句再问命中 |
 | `解析LLM输出` | parse 成功 / fallback |
 | `LLM指代决策` | LLM 指代/澄清 intent；clarify 时标记 earlyExit |
-| `guard_闲聊` | chitchat guard |
+| `guard_闲聊` | chitchat 注入固定 briefReply |
 | `guard_用户记忆` | remember / recall |
 | `guard_检索计划` | retrievalPlan 补全 / canonicalize |
 | `guard_复合路由` | routeMode、槽位列表 |
@@ -322,12 +322,12 @@ RoutedIntakeDecision:
 LLM:
   intent: chitchat
   needsRetrieval: false
-  briefReply: "你好，大表哥！"   ← 可能幻觉
+  briefReply: null   ← 不撰写，由服务端注入
 
 guard_闲聊:
-  briefReply → "你好，我是 FamBrain 助手。可以问我关于工作经历、项目或技术栈的问题。"
+  briefReply → DEFAULT_CHITCHAT_BRIEF_REPLY（固定模板，忽略 LLM 原文）
 
-→ routeAfterIntake → respondEarly → answer = briefReply
+pipeline → earlyExit → respondEarly → answer = briefReply
 → 无 retrieval / analyst
 ```
 
@@ -468,7 +468,7 @@ defaultIntakeDecision(userQuestion):
 | 文件 | 职责 |
 |------|------|
 | `intake-pipeline.ts` | parse → LLM指代决策（透传/clarify 早退）→ guard 链 |
-| `intake-chitchat-guard.ts` | 闲聊 briefReply 模板化，禁幻觉称呼 |
+| `intake-chitchat-guard.ts` | chitchat 注入服务端固定 briefReply |
 | `intake-retrieval-plan-guard.ts` | 多问补 retrievalPlan；canonicalize 对齐 L2 cache |
 | `intake-user-fact-guard.ts` | userFact 路由 decision 包装，needsRetrieval=false |
 

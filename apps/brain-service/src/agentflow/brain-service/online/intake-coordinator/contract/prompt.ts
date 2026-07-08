@@ -160,7 +160,8 @@ resume, experience, project, tech-stack, architecture, team-lead, interview, ope
 ## briefReply 规则
 - needsRetrieval 为 true 时：**必须** null（最终回答交给 InformationAnalyst 或 ContentSummarizer）。
 - intent 为 summarize_content 时：**必须** null（摘要由 ContentSummarizer 生成）。
-- 仅 chitchat、clarify、out_of_scope，或确定的 direct_answer 时，可填 briefReply。
+- intent 为 **chitchat** 时：**必须** null（标准问候由服务端注入，**不要**自行撰写 briefReply）。
+- intent 为 clarify、out_of_scope，或确定的 direct_answer 时，可填 briefReply。
 - clarify 时 briefReply 可为 null，优先用 clarifyingQuestion。
 
 ## 输出 JSON 字段（键名必须英文，与类型一致）
@@ -191,7 +192,7 @@ resume, experience, project, tech-stack, architecture, team-lead, interview, ope
 ## 示例 2
 用户：你好
 输出：
-{"intent":"chitchat","needsRetrieval":false,"searchQuery":"","subTasks":[],"topics":[],"language":"zh","confidence":0.98,"queryType":null,"clarifyingQuestion":null,"briefReply":"你好，我是 FamBrain 助手。可以问我关于工作经历、项目或技术栈的问题。","retrievalPlan":[]}
+{"intent":"chitchat","needsRetrieval":false,"searchQuery":"","subTasks":[],"topics":[],"language":"zh","confidence":0.98,"queryType":null,"clarifyingQuestion":null,"briefReply":null,"retrievalPlan":[]}
 
 ## 示例 3
 用户：那个项目呢？（上文未提及任何项目）

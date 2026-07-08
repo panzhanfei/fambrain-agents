@@ -1,5 +1,5 @@
 /**
- * P0-13：Intake chitchat briefReply — guard 单测 + live 连跑 N 次「你好」。
+ * P0-13：Intake chitchat — 服务端固定 briefReply + live 连跑 N 次「你好」。
  *
  *   pnpm --filter @fambrain/brain-service run verify:intake-chitchat
  *   CHITCHAT_RUNS=10 pnpm --filter @fambrain/brain-service run verify:intake-chitchat
@@ -9,10 +9,9 @@ import {
     applyIntakeChitchatGuard,
     completeIntakeCoordinator,
     DEFAULT_CHITCHAT_BRIEF_REPLY,
-    isAcceptableChitchatBriefReply,
+    runIntakePipeline,
     type IntakeRoutingDecision,
 } from "../src/agentflow/brain-service/online/intake-coordinator/index";
-import { parseIntakeDecision } from "../src/agentflow/brain-service/online/intake-coordinator/pipeline/parse-intake";
 import { bootstrapBrainServiceRuntime } from "../src/config/index";
 
 const DEFAULT_RUNS = 10;
@@ -57,23 +56,7 @@ const chitchatStub = (
 
 console.log("verify-intake-chitchat\n— guard 单测 —");
 
-assertSync("isAcceptable：标准 FamBrain 话术", () => {
-    if (!isAcceptableChitchatBriefReply(DEFAULT_CHITCHAT_BRIEF_REPLY)) {
-        throw new Error("标准模板应通过");
-    }
-});
-
-assertSync("isAcceptable：大表哥 不通过", () => {
-    if (
-        isAcceptableChitchatBriefReply(
-            "你好，大表哥！有什么可以帮你的？"
-        )
-    ) {
-        throw new Error("应拒绝大表哥");
-    }
-});
-
-assertSync("guard：大表哥 → 模板", () => {
+assertSync("guard：LLM 大表哥 → 固定模板", () => {
     const out = applyIntakeChitchatGuard(
         chitchatStub("你好，大表哥，我是助手。")
     );
@@ -82,7 +65,7 @@ assertSync("guard：大表哥 → 模板", () => {
     }
 });
 
-assertSync("guard：null briefReply → 模板", () => {
+assertSync("guard：null briefReply → 固定模板", () => {
     const out = applyIntakeChitchatGuard(chitchatStub(null));
     if (out.briefReply !== DEFAULT_CHITCHAT_BRIEF_REPLY) {
         throw new Error(`期望模板，实际: ${out.briefReply}`);
@@ -113,20 +96,23 @@ const history: DbChatTurn[] = [{ role: "user", content: "你好" }];
 for (let i = 1; i <= runs; i++) {
     try {
         const raw = await completeIntakeCoordinator(history);
-        const parsed = parseIntakeDecision(raw);
-        if (!parsed) {
-            throw new Error(`JSON 解析失败: ${raw.slice(0, 200)}`);
-        }
-        const decision = applyIntakeChitchatGuard(parsed);
+        const { decision, earlyExit } = runIntakePipeline({
+            intakeRaw: raw,
+            userQuestion: "你好",
+            intakeHistory: history,
+        });
         const reply = decision.briefReply ?? "";
         if (decision.intent !== "chitchat") {
             throw new Error(`期望 chitchat，实际 ${decision.intent}`);
         }
+        if (!earlyExit) {
+            throw new Error("chitchat 应 pipeline 早退");
+        }
         if (decision.needsRetrieval) {
             throw new Error("chitchat 不应 needsRetrieval");
         }
-        if (!isAcceptableChitchatBriefReply(reply)) {
-            throw new Error(`guard 后仍不合格: ${reply}`);
+        if (reply !== DEFAULT_CHITCHAT_BRIEF_REPLY) {
+            throw new Error(`期望固定模板，实际: ${reply}`);
         }
         if (FORBIDDEN_ANSWER_RE.test(reply)) {
             throw new Error(`含禁用称呼: ${reply}`);

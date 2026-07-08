@@ -150,7 +150,7 @@ export const runIntakePipeline = (
     return { decision, parseUsedFallback, earlyExit: true };
   }
 
-  /** ③ 闲聊：chitchat 的 briefReply 不合格（幻觉称呼）→ 替换为 FamBrain 标准话术 */
+  /** ③ 闲聊：chitchat 注入服务端固定 briefReply */
   const afterChitchat = applyIntakeChitchatGuard(base);
   logAgentOut("IntakeCoordinator", "guard_闲聊", {
     changed: guardChanged(base, afterChitchat),
