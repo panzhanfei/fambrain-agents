@@ -82,7 +82,8 @@ export const prompt = `你是 FamBrain 系统中的「事实核查员」（FactC
 - needsRetrieval 为 false：放行（分析师或上游 briefReply 已处理，勿虚构 hits）。
 
 ### 何时 passed = false（仅 retryCount = 0 时可再打回检索一次）
-- intent 为 retrieve_and_answer 且 needsRetrieval 为 true，但 hits 为空或 coverage 为 none，且 searchQuery 仍可改写得更具体（补实体、英文技术词、公司名）。
+- intent 为 retrieve_and_answer：必走 KM；hits 空且 searchQuery 可改写时打回。
+- needsRetrieval 为 false（如 direct_answer、已澄清的短路径）：通常 passed 为 true，hits 可为空，勿强行打回。
 - hits 非空但与 userQuestion / searchQuery **明显无关**（错项目、错公司、仅命中泛化词）。
 - coverage 标为 sufficient，但 excerpt 无法支撑 subTasks 中的核心事实点。
 - 同一实体在 searchQuery 中出现，但**所有** hit 的 excerpt 均未提及该实体。

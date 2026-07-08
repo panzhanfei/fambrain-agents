@@ -23,10 +23,7 @@ export const applyIntakeRetrievalPlanGuard = (
     decision: IntakeRoutingDecision,
     userQuestion: string
 ): IntakeRoutingDecision & { retrievalPlanGuardReason?: IntakeRetrievalPlanGuardReason } => {
-    if (
-        decision.intent !== "retrieve_and_answer" ||
-        !decision.needsRetrieval
-    ) {
+    if (decision.intent !== "retrieve_and_answer") {
         return {
             ...decision,
             retrievalPlan: decision.retrievalPlan ?? [],

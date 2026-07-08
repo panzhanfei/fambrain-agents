@@ -28,6 +28,17 @@ const server = createServer((req, res) => {
     handleNotFound(res);
 });
 
+server.on("error", (err: NodeJS.ErrnoException) => {
+    if (err.code === "EADDRINUSE") {
+        console.error(
+            `[@fambrain/brain-service] port ${port} already in use — another brain-service instance may still be running.\n` +
+                `  Stop it: kill $(lsof -t -i :${port})`
+        );
+        process.exit(1);
+    }
+    throw err;
+});
+
 server.listen(port, () => {
     console.log(`[@fambrain/brain-service] listening on http://127.0.0.1:${port}`);
     logLangSmithStartup(langSmith);

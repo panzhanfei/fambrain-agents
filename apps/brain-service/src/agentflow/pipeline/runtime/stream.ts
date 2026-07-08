@@ -9,6 +9,7 @@
  * 对外入口：runPipelineStream()，由 HTTP routes / eval / golden 调用。
  */
 import { ensureBrainServiceRuntime } from "@/config";
+import { intakeRequiresKmRetrieval } from "@/agentflow/brain-service/online/intake-coordinator/pipeline/intake-km-routing";
 import { buildLangGraphRunConfig } from "@fambrain/brain-config/langsmith";
 import { logAgentOut } from "@fambrain/brain-shared/agent-log";
 import type {
@@ -280,7 +281,10 @@ async function* runPipelineStreamInner(
       }
       if (finalState.decision?.userFact) {
         yield* startStep("user_fact");
-      } else if (finalState.decision?.needsRetrieval) {
+      } else if (
+        finalState.decision &&
+        intakeRequiresKmRetrieval(finalState.decision)
+      ) {
         yield* startStep("retrieval");
       } else if (finalState.decision?.intent === "summarize_content") {
         yield* startStep("content_summarizer");

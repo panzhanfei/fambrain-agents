@@ -20,9 +20,9 @@ export type IntakeRoutingDecision = {
      *
      * | intent | 含义 | 典型字段 | pipeline | routeAfterIntake → |
      * |--------|------|----------|----------|---------------------|
-     * | retrieve_and_answer | 查语料答经历/项目/技术/简历档案 | needsRetrieval+searchQuery | ⑤⑥ plan/composite | retrieval → FC → analyst |
-     * | summarize_content | 总结/概括某段内容 | needsRetrieval+searchQuery；briefReply=null | ⑤⑥ | retrieval → contentSummarizer |
-     * | direct_answer | 通用短答，与本人履历无关 | briefReply；needsRetrieval=false | 可能早退 | respondEarly |
+     * | retrieve_and_answer | 查语料答经历/项目/技术/简历档案 | searchQuery（服务端恒走 KM） | ⑤⑥ plan/composite | retrieval → FC → analyst |
+     * | summarize_content | 总结/概括某段内容 | needsRetrieval 决定是否先查库；briefReply=null | ⑤⑥ | retrieval → contentSummarizer |
+     * | direct_answer | 通用短答，与本人履历无关 | briefReply | 可能早退 | respondEarly |
      * | clarify | 指代不明/缺实体，反问用户 | clarifyingQuestion | ② 早退 | respondEarly |
      * | chitchat | 问候、闲聊 | briefReply=null（服务端注入固定话术） | ③ 早退 | respondEarly |
      * | out_of_scope | 越界/有害，拒绝 | briefReply | 可能早退 | respondEarly |
@@ -40,7 +40,12 @@ export type IntakeRoutingDecision = {
         | "out_of_scope"
         | "remember_user_fact"
         | "recall_user_fact";
-    /** 是否需要 KnowledgeManager 检索个人知识库 */
+    /**
+     * 是否需要 KnowledgeManager 检索。
+     * - retrieve_and_answer：服务端按 intent 恒为 true（LLM 填什么都忽略）
+     * - summarize_content：由 LLM 决定（粘贴长文可不查库）
+     * - 其余 intent：false
+     */
     needsRetrieval: boolean;
     /**
      * 供检索用的查询句：中文为主，可含英文技术词；
@@ -112,7 +117,7 @@ export const prompt = `你是 FamBrain 系统中的「入口接线员」（Intak
 ## 意图（intent）选用规则
 | intent | 何时使用 | needsRetrieval |
 |--------|----------|----------------|
-| retrieve_and_answer | 问经历、项目、技术栈、职责、成果、对比、时间线等需查库事实 | true |
+| retrieve_and_answer | 问经历、项目、技术栈、职责、成果、对比、时间线等需查库事实 | （服务端恒检索，无需填 false） |
 | summarize_content | 用户明确要求**总结/概括/摘要**某项目、文档、经历（非逐条问答） | true（默认；用户粘贴长文且不必查库时可 false） |
 | direct_answer | 纯概念/通用技术解释，且明确与「该用户履历」无关 | false |
 | clarify | **仅**当指代不明（如「那个项目」但上文无项目）、缺关键实体（哪家公司、哪个项目）时 | false |
@@ -128,9 +133,11 @@ export const prompt = `你是 FamBrain 系统中的「入口接线员」（Intak
 - **userFactValue**：仅 remember 时填写用户给出的值；recall 时为 null。
 - 用户说「记住 / 记下 / 保存」且带具体值 → remember_user_fact；用户问「我的 XX 是多少 / 是什么」且指**已记住字段** → recall_user_fact。
 - **禁止**对 recall_user_fact 使用 clarify（不要问「工作还是个人」）；**禁止** needsRetrieval: true。
-- 语料**简历里已有**的姓名/年龄/经历仍用 retrieve_and_answer，不用 recall_user_fact。
+- 语料**简历里已有**的姓名/年龄/经历 → **retrieve_and_answer**（服务端必查库），不用 recall_user_fact。
 
-**默认倾向**：只要问题**可能**涉及用户本人经历或 doc 中的项目，一律 retrieve_and_answer + needsRetrieval: true。宁可多检索，不要漏检索。
+**retrieve_and_answer 与 needsRetrieval**：intent 为 retrieve_and_answer 时**必定检索**；needsRetrieval 字段可填 true，填 false 也会被服务端忽略。
+
+**默认倾向**：只要问题**可能**涉及用户本人经历或 doc 中的项目，一律 retrieve_and_answer。宁可多检索，不要漏检索。
 
 **不要用 clarify 的情况**（即使句子很短也要检索）：
 - 问本人姓名、称呼、年龄、出生年份、**语料简历中已有的**联系方式、所在地、学历、简历概要等（须 retrieve）；

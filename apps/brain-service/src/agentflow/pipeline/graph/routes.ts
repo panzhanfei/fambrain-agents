@@ -1,4 +1,5 @@
 import type { PipelineGraphState } from "./state";
+import { intakeRequiresKmRetrieval } from "@/agentflow/brain-service/online/intake-coordinator/pipeline/intake-km-routing";
 import { isUserFactIntent } from "@/agentflow/brain-service/online/user-fact";
 
 export const routeAfterRepeat = (
@@ -34,15 +35,14 @@ export const routeAfterIntake = (
         return "respondEarly";
     }
     if (decision.intent === "summarize_content") {
-        if (decision.needsRetrieval)
+        if (intakeRequiresKmRetrieval(decision))
             return "retrieval";
         return "contentSummarizer";
     }
-    if (decision.needsRetrieval)
+    if (decision.intent === "retrieve_and_answer")
         return "retrieval";
-    if (!decision.needsRetrieval && decision.briefReply) {
+    if (decision.briefReply)
         return "respondEarly";
-    }
     return "factChecker";
 };
 

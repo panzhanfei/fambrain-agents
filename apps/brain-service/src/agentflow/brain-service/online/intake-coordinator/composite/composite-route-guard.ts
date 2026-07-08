@@ -86,13 +86,7 @@ export const applyCompositeRouteGuard = (
     userQuestion: string
 ): RoutedIntakeDecision => {
     if (
-        decision.intent === "chitchat" ||
-        decision.intent === "out_of_scope" ||
-        decision.intent === "clarify" ||
-        decision.intent === "remember_user_fact" ||
-        decision.intent === "recall_user_fact" ||
-        !decision.needsRetrieval ||
-        decision.intent === "summarize_content"
+        decision.intent !== "retrieve_and_answer"
     ) {
         return {
             ...decision,

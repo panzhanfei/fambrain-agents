@@ -7,10 +7,8 @@ import type { QueryProfile } from "@/agentflow/brain-service/online/knowledge-ma
 import {
   resolveAnalystQueryProfile,
 } from "./analyst-recall-limits";
-import {
-    isProjectEnumeration,
-    memoryBlockHasStructuredUserFacts,
-} from "@/agentflow/brain-service/online/intake-coordinator";
+import { isProjectEnumeration } from "@/agentflow/brain-service/online/intake-coordinator";
+import { memoryBlockHasStructuredUserFacts } from "@/agentflow/brain-service/online/user-fact";
 import type {
   Citation,
   InformationAnalystInput,

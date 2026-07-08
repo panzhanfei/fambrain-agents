@@ -257,7 +257,7 @@ export const buildSingleQuestionPlanItem = (
 export const resolveCompositeRoute = (
     decision: Pick<
         IntakeRoutingDecision,
-        | "needsRetrieval"
+        | "intent"
         | "searchQuery"
         | "subTasks"
         | "topics"
@@ -266,7 +266,7 @@ export const resolveCompositeRoute = (
     >,
     userQuestion: string
 ): ResolvedCompositeRoute => {
-    if (!decision.needsRetrieval) {
+    if (decision.intent !== "retrieve_and_answer") {
         return { slots: [], source: "none" };
     }
 
@@ -324,7 +324,7 @@ export const resolveCompositeRoute = (
 export const isCompositeProfileQuestion = (
     decision: Pick<
         IntakeRoutingDecision,
-        | "needsRetrieval"
+        | "intent"
         | "searchQuery"
         | "subTasks"
         | "topics"

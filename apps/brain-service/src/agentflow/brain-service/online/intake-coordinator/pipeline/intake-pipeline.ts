@@ -8,6 +8,7 @@ import {
   defaultIntakeDecision,
   parseIntakeDecision,
 } from "./parse-intake";
+import { normalizeIntakeDecision } from "./intake-km-routing";
 import { applyCompositeRouteGuard } from "../composite/composite-route-guard";
 import type { RoutedIntakeDecision } from "../composite/composite-route-guard";
 import { applyIntakeChitchatGuard } from "../guards/intake-chitchat-guard";
@@ -70,7 +71,7 @@ export const isClarifyEarlyExit = (
   decision.intent === "clarify" &&
   Boolean(decision.clarifyingQuestion?.trim());
 
-/** 闲聊 / 超范围等可直接 respondEarly 的 intent */
+/** 闲聊 / 超范围 / 短 direct_answer → respondEarly */
 export const isRespondEarlyIntent = (
   decision: IntakeRoutingDecision
 ): boolean => {
@@ -82,7 +83,6 @@ export const isRespondEarlyIntent = (
     return true;
   }
   return (
-    !decision.needsRetrieval &&
     decision.intent === "direct_answer" &&
     Boolean(decision.briefReply?.trim())
   );
@@ -105,12 +105,12 @@ export type RunIntakePipelineResult = {
  * Intake 规则主流程（LLM 之后）：parse → guard 链 → RoutedIntakeDecision。
  *
  * 步骤一览：
- *   ① 解析 LLM JSON（失败则 defaultIntakeDecision 兜底）
- *   ② LLM 指代/澄清决策（透传 + 日志；clarify → pipeline 早退）
- *   ③ 闲聊 guard（briefReply 模板化）
- *   ④ 用户记忆分流（remember/recall → 短路，跳过 ⑤⑥）
- *   ⑤ 检索计划 guard（多问补 retrievalPlan、canonicalize）
- *   ⑥ 复合路由 guard（plan → routeMode + compositeSlots）
+ *   ① 解析 LLM JSON（失败则 defaultIntakeDecision 兜底）+ needsRetrieval 与 intent 对齐
+ *   ② clarify 早退（仅 intent=clarify 时执行）
+ *   ③ chitchat guard + respondEarly（仅 intent=chitchat 时跑 guard）
+ *   ④ userFact 早退（仅 remember/recall intent）
+ *   ⑤ 检索计划 guard（retrieve_and_answer）
+ *   ⑥ 复合路由 guard（retrieve_and_answer）
  *   ⑦ 返回最终 decision 给 compile.ts → routeAfterIntake
  */
 export const runIntakePipeline = (
@@ -119,8 +119,10 @@ export const runIntakePipeline = (
   /** ① 解析：从 intakeRaw 提取 JSON → Zod 校验为 IntakeRoutingDecision */
   const parsed = parseIntakeDecision(input.intakeRaw);
   const parseUsedFallback = parsed === null;
-  /** ① 兜底：LLM 非 JSON 或字段不合法时，用 userQuestion 构造「尽量检索」的默认工单 */
-  const base = parsed ?? defaultIntakeDecision(input.userQuestion);
+  /** ① 兜底 + 对齐 needsRetrieval（retrieve_and_answer 恒 true） */
+  let decision = normalizeIntakeDecision(
+    parsed ?? defaultIntakeDecision(input.userQuestion)
+  );
 
   logAgentOut("IntakeCoordinator", "解析LLM输出", {
     parseOk: !parseUsedFallback,
@@ -130,86 +132,85 @@ export const runIntakePipeline = (
             "JSON 解析或 Zod 校验失败，使用 defaultIntakeDecision",
         }
       : {}),
-    ...summarizeDecision(base),
+    ...summarizeDecision(decision),
   });
 
-  /** ② 指代/澄清：完全信任 LLM；clarify 则跳过后续 plan/composite */
-  const clarifyEarlyExit = isClarifyEarlyExit(base);
-  logAgentOut("IntakeCoordinator", "LLM指代决策", {
-    earlyExit: clarifyEarlyExit,
-    ...summarizeDecision(base),
-  });
-  if (clarifyEarlyExit) {
-    const decision = buildEarlyExitRoutedDecision(base);
-    logAgentOut("IntakeCoordinator", "最终路由", {
-      earlyExit: true,
-      reason: "clarify",
+  /** ② 指代/澄清：仅 clarify intent */
+  if (decision.intent === "clarify") {
+    const clarifyEarlyExit = isClarifyEarlyExit(decision);
+    logAgentOut("IntakeCoordinator", "LLM指代决策", {
+      earlyExit: clarifyEarlyExit,
       ...summarizeDecision(decision),
     });
-    return { decision, parseUsedFallback, earlyExit: true };
+    if (clarifyEarlyExit) {
+      const routed = buildEarlyExitRoutedDecision(decision);
+      logAgentOut("IntakeCoordinator", "最终路由", {
+        earlyExit: true,
+        reason: "clarify",
+        ...summarizeDecision(routed),
+      });
+      return { decision: routed, parseUsedFallback, earlyExit: true };
+    }
   }
 
-  /** ③ 闲聊：chitchat 注入服务端固定 briefReply */
-  const afterChitchat = applyIntakeChitchatGuard(base);
-  logAgentOut("IntakeCoordinator", "guard_闲聊", {
-    changed: guardChanged(base, afterChitchat),
-    ...summarizeDecision(afterChitchat),
-  });
-
-  if (isRespondEarlyIntent(afterChitchat)) {
-    const decision = buildEarlyExitRoutedDecision(afterChitchat);
-    logAgentOut("IntakeCoordinator", "最终路由", {
-      earlyExit: true,
-      reason: afterChitchat.intent,
+  /** ③ 闲聊：仅 chitchat intent 注入 briefReply */
+  if (decision.intent === "chitchat") {
+    const beforeChitchat = decision;
+    decision = applyIntakeChitchatGuard(decision);
+    logAgentOut("IntakeCoordinator", "guard_闲聊", {
+      changed: guardChanged(beforeChitchat, decision),
       ...summarizeDecision(decision),
     });
-    return { decision, parseUsedFallback, earlyExit: true };
   }
 
-  /** ④ 用户记忆：intent 为 remember/recall → pipeline 早退（解析与读写均在 userFact 节点） */
-  const userFactMatched = isUserFactIntent(afterChitchat.intent);
-  logAgentOut("IntakeCoordinator", "guard_用户记忆", {
-    matched: userFactMatched,
-    intent: afterChitchat.intent,
-    ...(userFactMatched
-      ? {
-          userFactKey: afterChitchat.userFactKey,
-          userFactLabel: afterChitchat.userFactLabel,
-          hasValue: Boolean(afterChitchat.userFactValue?.trim()),
-        }
-      : {}),
-  });
-
-  if (userFactMatched) {
-    const decision = buildEarlyExitRoutedDecision(afterChitchat);
+  if (isRespondEarlyIntent(decision)) {
+    const routed = buildEarlyExitRoutedDecision(decision);
     logAgentOut("IntakeCoordinator", "最终路由", {
       earlyExit: true,
-      reason: afterChitchat.intent,
-      ...summarizeDecision(decision),
+      reason: decision.intent,
+      ...summarizeDecision(routed),
     });
-    return { decision, parseUsedFallback, earlyExit: true };
+    return { decision: routed, parseUsedFallback, earlyExit: true };
+  }
+
+  /** ④ 用户记忆：仅 remember/recall intent */
+  if (isUserFactIntent(decision.intent)) {
+    logAgentOut("IntakeCoordinator", "guard_用户记忆", {
+      matched: true,
+      intent: decision.intent,
+      userFactKey: decision.userFactKey,
+      userFactLabel: decision.userFactLabel,
+      hasValue: Boolean(decision.userFactValue?.trim()),
+    });
+    const routed = buildEarlyExitRoutedDecision(decision);
+    logAgentOut("IntakeCoordinator", "最终路由", {
+      earlyExit: true,
+      reason: decision.intent,
+      ...summarizeDecision(routed),
+    });
+    return { decision: routed, parseUsedFallback, earlyExit: true };
   }
 
   /** ⑤ 检索计划：多问并列时补全/规范化 retrievalPlan（与 L2 cache key 对齐） */
   const afterPlan = applyIntakeRetrievalPlanGuard(
-    afterChitchat,
+    decision,
     input.userQuestion
   );
   logAgentOut("IntakeCoordinator", "guard_检索计划", {
     reason: afterPlan.retrievalPlanGuardReason ?? "noop",
-    changed: guardChanged(afterChitchat, afterPlan),
+    changed: guardChanged(decision, afterPlan),
     retrievalPlanCount: afterPlan.retrievalPlan.length,
     retrievalPlanLabels: afterPlan.retrievalPlan.map((p) => p.label),
   });
 
   /** ⑥ 复合路由：plan → compositeSlots；定 routeMode（single / slot / composite） */
-  const decision = applyCompositeRouteGuard(afterPlan, input.userQuestion);
+  const routed = applyCompositeRouteGuard(afterPlan, input.userQuestion);
   logAgentOut("IntakeCoordinator", "guard_复合路由", {
-    routeMode: decision.routeMode,
-    routeReason: decision.routeReason,
-    routePlanSource: decision.routePlanSource,
-    compositeSlotCount: decision.compositeSlots.length,
-    compositeSlots: decision.compositeSlots.map((s) => ({
+    routeMode: routed.routeMode,
+    routeReason: routed.routeReason,
+    routePlanSource: routed.routePlanSource,
+    compositeSlotCount: routed.compositeSlots.length,
+    compositeSlots: routed.compositeSlots.map((s) => ({
       id: s.id,
       label: s.label,
       queryType: s.queryType,
@@ -221,6 +222,6 @@ export const runIntakePipeline = (
   });
 
   /** ⑦ 出口：decision 写入 state，由 compile.ts routeAfterIntake 决定去 retrieval / respondEarly 等 */
-  logAgentOut("IntakeCoordinator", "最终路由", summarizeDecision(decision));
-  return { decision, parseUsedFallback, earlyExit: false };
+  logAgentOut("IntakeCoordinator", "最终路由", summarizeDecision(routed));
+  return { decision: routed, parseUsedFallback, earlyExit: false };
 };

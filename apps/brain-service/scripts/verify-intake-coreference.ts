@@ -99,6 +99,58 @@ assertSync("pipeline：LLM retrieve 含实体 → 非早退", () => {
     }
 });
 
+assertSync("pipeline：retrieve_and_answer + LLM needsRetrieval false → 服务端纠正为 true", () => {
+    const contradictory = JSON.stringify({
+        intent: "retrieve_and_answer",
+        needsRetrieval: false,
+        searchQuery: "个人简介 简历 姓名 年龄 项目经历",
+        subTasks: ["姓名", "年龄", "项目经历列举"],
+        topics: ["personal", "resume", "project"],
+        language: "zh",
+        confidence: 0.9,
+        queryType: "identity",
+        clarifyingQuestion: null,
+        briefReply: null,
+        retrievalPlan: [
+            {
+                label: "姓名",
+                searchQuery: "个人简介 简历 姓名 全名",
+                queryType: "identity",
+                topics: ["personal", "resume"],
+            },
+            {
+                label: "年龄",
+                searchQuery: "个人简介 简历 年龄 出生年份",
+                queryType: "identity",
+                topics: ["personal", "resume"],
+            },
+            {
+                label: "项目经历",
+                searchQuery: "项目经历 全部项目 项目名称 职责",
+                queryType: "enumeration",
+                topics: ["project"],
+            },
+        ],
+        userFactKey: null,
+        userFactLabel: null,
+        userFactValue: null,
+    });
+    const { decision, earlyExit } = runIntakePipeline({
+        intakeRaw: contradictory,
+        userQuestion: "我叫什么？今年多大？做过哪些项目？",
+        intakeHistory: [{ role: "user", content: "我叫什么？今年多大？做过哪些项目？" }],
+    });
+    if (earlyExit) {
+        throw new Error("retrieve 不应早退");
+    }
+    if (!decision.needsRetrieval) {
+        throw new Error("needsRetrieval 应被纠正为 true");
+    }
+    if (decision.routeMode !== "composite") {
+        throw new Error(`期望 composite，实际 ${decision.routeMode}`);
+    }
+});
+
 console.log("\n— repeat guard 单测 —");
 
 await bootstrapBrainServiceRuntime();

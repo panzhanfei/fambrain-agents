@@ -14,7 +14,6 @@ export const applyIntakeChitchatGuard = (
         return decision;
     return {
         ...decision,
-        needsRetrieval: false,
         retrievalPlan: [],
         briefReply: DEFAULT_CHITCHAT_BRIEF_REPLY,
     };
