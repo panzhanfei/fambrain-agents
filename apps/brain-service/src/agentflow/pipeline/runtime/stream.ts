@@ -211,6 +211,22 @@ async function* runPipelineStreamInner(
     if (nodeName === "prepareTurnStart") {
       yield* finishStep("prepare_turn_start");
       yield* flushPipelineLogs();
+      yield* startStep("repeat_question_guard");
+      continue;
+    }
+    if (nodeName === "repeatQuestionGuard") {
+      yield* finishStep("repeat_question_guard");
+      yield* flushPipelineLogs();
+      if (finalState.repeatQuestionHit) {
+        yield* startStep("repeat_respond_early");
+      } else {
+        yield* startStep("prepare_pipeline_memory");
+      }
+      continue;
+    }
+    if (nodeName === "preparePipelineMemory") {
+      yield* finishStep("prepare_pipeline_memory");
+      yield* flushPipelineLogs();
       if (finalState.error && finalState.exitEarly) {
         yield { type: "error", message: finalState.error };
         const answer =
@@ -230,9 +246,13 @@ async function* runPipelineStreamInner(
           timing: pipelineTiming,
         };
       }
-      if (!finalState.exitEarly && !finalState.repeatQuestionHit) {
-        yield* startStep("intake");
-      }
+      yield* startStep("intake");
+      continue;
+    }
+    if (nodeName === "repeatRespondEarly") {
+      yield* finishStep("repeat_respond_early");
+      yield* flushPipelineLogs();
+      yield* startStep("persist_turn_end");
       continue;
     }
     if (nodeName === "intake") {

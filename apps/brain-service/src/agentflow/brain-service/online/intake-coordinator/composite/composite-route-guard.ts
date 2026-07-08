@@ -9,7 +9,7 @@ import {
 } from "./composite-routing";
 import type { CompositeRetrievalSlot } from "./composite-slot-queries";
 import type { IntakeRoutingDecision } from "../contract/prompt";
-import type { UserFactRoute } from "../user-fact/user-fact";
+import type { UserFactRoute } from "@/agentflow/brain-service/online/user-fact";
 
 export type IntakeRouteMode = "single" | "composite" | "slot";
 

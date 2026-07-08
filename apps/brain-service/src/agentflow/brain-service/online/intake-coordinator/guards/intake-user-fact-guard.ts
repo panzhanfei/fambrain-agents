@@ -3,7 +3,7 @@
  */
 import type { IntakeRoutingDecision } from "../contract/prompt";
 import type { RoutedIntakeDecision } from "../composite/composite-route-guard";
-import type { UserFactRoute } from "../user-fact/user-fact";
+import type { UserFactRoute } from "@/agentflow/brain-service/online/user-fact";
 
 export type { UserFactRoute };
 

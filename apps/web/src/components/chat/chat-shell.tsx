@@ -35,6 +35,9 @@ type ChatMessage = {
 
 const STEP_TIMING_LABELS: Record<PipelineStepName, string> = {
   prepare_turn_start: "准备上下文",
+  repeat_question_guard: "同问短路",
+  prepare_pipeline_memory: "加载记忆",
+  repeat_respond_early: "复用历史答",
   intake: "理解问题",
   user_fact: "读取记忆",
   retrieval: "检索知识库",
@@ -969,6 +972,9 @@ export const ChatShell = ({ initialConversations, viewer }: ChatShellProps) => {
           if (p.status === "running" && typeof p.name === "string") {
             const labels: Record<string, string> = {
               prepare_turn_start: "准备上下文…",
+              repeat_question_guard: "同问短路…",
+              prepare_pipeline_memory: "加载记忆…",
+              repeat_respond_early: "复用历史答…",
               intake: "理解问题…",
               user_fact: "读取记忆…",
               retrieval: "检索知识库…",

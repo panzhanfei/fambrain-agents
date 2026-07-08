@@ -60,6 +60,8 @@ export const AGENT_LABELS: Record<string, string> = {
     Pipeline: "编排",
     TurnStart: "准备",
     TurnEnd: "写入",
+    RepeatQuestionGuard: "同问短路",
+    PreparePipelineMemory: "加载记忆",
     IntakeCoordinator: "入口",
     KnowledgeManager: "检索",
     FactChecker: "核查",

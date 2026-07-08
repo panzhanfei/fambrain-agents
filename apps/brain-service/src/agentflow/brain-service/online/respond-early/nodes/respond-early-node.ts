@@ -1,6 +1,6 @@
 import type { PipelineGraphState } from "@/agentflow/pipeline/graph/state";
 
-/** LangGraph respondEarly 节点：clarify / chitchat / 同问短路终稿 */
+/** LangGraph respondEarly 节点：Intake 早退（clarify / chitchat / briefReply / 记忆加载失败等） */
 export const runRespondEarlyNode = (
     state: PipelineGraphState
 ): Partial<PipelineGraphState> => {

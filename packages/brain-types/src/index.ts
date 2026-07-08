@@ -15,6 +15,9 @@ export type AgentPipelineContext = {
 };
 export type PipelineStepName =
     | "prepare_turn_start"
+    | "repeat_question_guard"
+    | "prepare_pipeline_memory"
+    | "repeat_respond_early"
     | "intake"
     | "user_fact"
     | "retrieval"

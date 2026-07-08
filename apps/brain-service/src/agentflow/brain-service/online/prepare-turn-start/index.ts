@@ -1,4 +1,4 @@
-/** PrepareTurnStart：在线 Pipeline 图首节点（LangGraph START）— ALS、同问短路、Mem0/LangMem。 */
+/** PrepareTurnStart：轮次开始 ALS + Mem0/LangMem 注入（同问短路见 repeat-question-guard/）。 */
 
-export { findRepeatAnswerInHistory } from "./repeat-question-guard";
 export { runPrepareTurnStart } from "./prepare-turn-start";
+export { runPreparePipelineMemory } from "./prepare-pipeline-memory-node";

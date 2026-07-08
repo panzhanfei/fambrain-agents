@@ -13,7 +13,7 @@ import {
     findUserFactValueInMemoryBlock,
     findUserFactValueInTexts,
     validateFactValue,
-} from "./user-fact/user-fact";
+} from "../user-fact";
 
 const resolveRecallValue = async (
     state: PipelineGraphState

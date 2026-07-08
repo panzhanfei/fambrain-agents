@@ -1,5 +1,5 @@
-import { completeIntakeCoordinator } from "./llm/ollama-chat";
-import { runIntakePipeline } from "./pipeline/intake-pipeline";
+import { completeIntakeCoordinator } from "../llm/ollama-chat";
+import { runIntakePipeline } from "../pipeline/intake-pipeline";
 import type { PipelineGraphState } from "@/agentflow/pipeline/graph/state";
 
 /** LangGraph intake 节点：LLM 路由 + guard pipeline */

@@ -13,7 +13,7 @@ Intake 是 Pipeline 的**第一个 LLM 在线 Agent**（图内位于 **`prepareT
 | 问题 | Intake 的解法 |
 |------|---------------|
 | 下游 KM / FC / Analyst 各自猜意图会冲突 | **单一决策点**：只在这里定 intent + searchQuery |
-| 纯 LLM 不稳定（闲聊乱称呼、指代误判） | **LLM 理解 + 规则 guard 兜底** |
+| 纯 LLM 不稳定（闲聊乱称呼、指代误判） | **LLM 理解 + 轻量 guard**（指代由 prompt 负责；闲聊/plan 等规则兜底） |
 | 多问并列难检索 | **retrievalPlan → composite 多槽**，每槽独立 KM |
 | 用户口述 QQ/微信不在简历里 | **userFact 分支**，走 Mem0，不经 KM |
 | 同句再问浪费算力 | **同问短路** 在 **`prepare-turn-start`** 节点（Intake 不再重复检） |
@@ -31,7 +31,7 @@ Intake 是 Pipeline 的**第一个 LLM 在线 Agent**（图内位于 **`prepareT
 |------|------|------|
 | LangChain `ChatOllama` | `llm/ollama-chat.ts` | 调本地 Ollama（模型名见 `getBrainServiceConfig().ollama.models.intakeCoordinator`） |
 | Zod | `contract/schema.ts` | 校验 / 规范化 LLM 输出的 JSON |
-| 正则 + 纯函数 guard | `guards/*` | 指代、闲聊、plan 补全、userFact 短路 |
+| 正则 + 纯函数 guard | `guards/*` | 闲聊、plan 补全、userFact 短路 |
 | Mem0 / LangMem | 由 **`prepareTurnStart`** 注入 `memoryBlock` | 帮理解多轮指代，**不能**替代 searchQuery 里的实体词 |
 
 ---
@@ -50,11 +50,14 @@ intake-coordinator/
 ├── llm/                   ← 调模型
 │   └── ollama-chat.ts     # completeIntakeCoordinator()
 │
-├── pipeline/              ← guard 链编排 + 分步日志
-│   └── intake-pipeline.ts # runIntakePipeline()
+├── pipeline/              ← guard 链编排 + parse + 分步日志
+│   ├── intake-pipeline.ts # runIntakePipeline()
+│   └── parse-intake.ts    # parseIntakeDecision(), defaultIntakeDecision()
+│
+├── nodes/                 ← LangGraph 图节点（仅 intake）
+│   └── intake-node.ts     # runIntakeNode()
 │
 ├── guards/                ← LLM 之后的规则兜底
-│   ├── intake-coreference-guard.ts
 │   ├── intake-chitchat-guard.ts
 │   ├── intake-retrieval-plan-guard.ts
 │   └── intake-user-fact-guard.ts
@@ -67,8 +70,7 @@ intake-coordinator/
 │   ├── composite-incremental.ts
 │   └── enumeration-target.ts
 │
-└── user-fact/             ← 用户自述记忆（QQ/微信/手机…）
-    └── user-fact.ts
+└── user-fact/             ← 已迁至 ../user-fact/
 ```
 
 ### 推荐阅读顺序
@@ -98,7 +100,7 @@ pipeline/graph/compile.ts  →  runPrepareTurnStart()     ../prepare-turn-start/
     │         同问命中 → respondEarly → END
     │
     ▼
-intake-coordinator/intake-node.ts   runIntakeNode()
+intake-coordinator/nodes/intake-node.ts   runIntakeNode()
     │
     ├─ completeIntakeCoordinator()          llm/ollama-chat.ts
     │       输入: intakeHistory + memoryBlock + contract/prompt
@@ -125,11 +127,13 @@ routeAfterIntake()                        pipeline/graph/routes.ts
 LLM 原始 JSON
     │
     ▼ parseIntakeDecision() / defaultIntakeDecision()
-    │   contract/schema.ts + parse-intake.ts
+    │   contract/schema.ts + pipeline/parse-intake.ts
     │
-    ▼ applyIntakeCoreferenceGuard()      guards/intake-coreference-guard.ts
+    ▼ LLM指代决策（透传 + 日志）       pipeline/intake-pipeline.ts
+    │   clarify → pipeline 早退（跳过 plan/composite）
     │
     ▼ applyIntakeChitchatGuard()         guards/intake-chitchat-guard.ts
+    │   chitchat/out_of_scope → pipeline 早退
     │
     ▼ routeUserFactFromIntake()          user-fact/user-fact.ts
     │   命中 → applyUserFactFromIntake() → 最终路由（不经 composite）
@@ -149,7 +153,7 @@ LLM 原始 JSON
 | `出去` | LLM 原始 JSON 预览 |
 | `同问短路` | 同句再问命中 |
 | `解析LLM输出` | parse 成功 / fallback |
-| `guard_指代` | coreference guard |
+| `LLM指代决策` | LLM 指代/澄清 intent；clarify 时标记 earlyExit |
 | `guard_闲聊` | chitchat guard |
 | `guard_用户记忆` | remember / recall |
 | `guard_检索计划` | retrievalPlan 补全 / canonicalize |
@@ -330,15 +334,16 @@ guard_闲聊:
 ### 5.3 无上下文指代：「那个项目呢？」
 
 ```text
-LLM: 可能误判为 retrieve
+LLM（读 history）:
+  intent: clarify
+  clarifyingQuestion: "你指的是哪一段经历或哪个项目？…"
+  needsRetrieval: false
 
-guard_指代:
-  isVagueReferentialQuestion=true, hasCoreferenceContext=false
-  → intent: clarify
-  → clarifyingQuestion: "你指的是哪一段经历或哪个项目？…"
-  → needsRetrieval: false
+pipeline:
+  LLM指代决策 → earlyExit=true
+  → 跳过 retrievalPlan / composite
 
-→ respondEarly
+→ routeAfterIntake → respondEarly
 ```
 
 ### 5.4 有上下文指代（G5b）
@@ -349,13 +354,14 @@ history:
   assistant: "React TypeScript UniApp…"
   user: "那个项目呢？"
 
-guard_指代:
-  hasCoreferenceContext=true
-  → enrichSearchQueryFromHistory
-  → searchQuery 含「城市管理平台 技术栈」
-  → 保留 needsRetrieval=true
+LLM:
+  intent: retrieve_and_answer
+  searchQuery 含「城市管理平台 …」（禁止留指代词）
+  needsRetrieval: true
 
-→ retrieval → analyst
+pipeline:
+  LLM指代决策 → earlyExit=false
+  → retrievalPlan → composite → retrieval → analyst
 ```
 
 ### 5.5 多问 composite
@@ -447,12 +453,21 @@ defaultIntakeDecision(userQuestion):
 | 文件 | 职责 |
 |------|------|
 | `intake-pipeline.ts` | LLM 之后：parse → guard 链 → `RoutedIntakeDecision`；分步打日志 |
+| `parse-intake.ts` | 解析 LLM JSON；解析失败时 `defaultIntakeDecision` 兜底 |
+
+### nodes/
+
+| 文件 | 职责 |
+|------|------|
+| `intake-node.ts` | LangGraph intake 节点：调 LLM + `runIntakePipeline()` |
+| `respond-early-node.ts` | clarify / chitchat / 同问短路终稿 |
+| `user-fact-node.ts` | remember / recall → Mem0 |
 
 ### guards/
 
 | 文件 | 职责 |
 |------|------|
-| `intake-coreference-guard.ts` | 模糊指代 → clarify；有上文 → enrich searchQuery |
+| `intake-pipeline.ts` | parse → LLM指代决策（透传/clarify 早退）→ guard 链 |
 | `intake-chitchat-guard.ts` | 闲聊 briefReply 模板化，禁幻觉称呼 |
 | `intake-retrieval-plan-guard.ts` | 多问补 retrievalPlan；canonicalize 对齐 L2 cache |
 | `intake-user-fact-guard.ts` | userFact 路由 decision 包装，needsRetrieval=false |
@@ -499,8 +514,8 @@ Pipeline 内主要调用点：
 | `pipeline/graph/compile.ts` | `runPrepareTurnStart`（prepare-turn-start）；`runIntakeNode` 等节点委托 |
 | `pipeline/runtime/stream.ts` | SSE 消费；**不**再直接调同问短路/Mem0 |
 | `pipeline/graph/state.ts` | `RoutedIntakeDecision`, `IncrementalCompositePlan` |
-| `intake-coordinator/user-fact-node.ts` | userFact 图节点 |
-| `intake-coordinator/parse-intake.ts` | `parseIntakeDecision`, `defaultIntakeDecision` |
+| `user-fact/nodes/user-fact-node.ts` | userFact 图节点 |
+| `intake-coordinator/pipeline/parse-intake.ts` | `parseIntakeDecision`, `defaultIntakeDecision` |
 | `knowledge-manager/retrieve.ts` | `resolveEnumerationTarget` |
 | `information-analyst/*` | composite 槽类型、enumeration 辅助 |
 

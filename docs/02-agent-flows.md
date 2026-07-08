@@ -92,7 +92,7 @@ flowchart TB
 
 | 层 | 位置 | Key / 条件 | 命中后 | 关闭 |
 |----|------|------------|--------|------|
-| **同问短路** | **`prepare-turn-start`**（`prepareTurnStart` 节点） | `normalize(userQuestion)` + history 中已有 assistant 答 | 只 emit **`prepare_turn_start`**，复用上轮答案（`repeatQuestionHit`）→ `respondEarly` | `REPEAT_QUESTION_CACHE_DISABLED=1` |
+| **同问短路** | **`repeatQuestionGuard` 节点**（`repeat-question-guard/nodes/repeat-question-node.ts`） | `normalize(userQuestion)` + history 中已有 assistant 答 | `repeat_respond_early` → 复用答案（`repeatQuestionHit`）→ `persistTurnEnd` | `REPEAT_QUESTION_CACHE_DISABLED=1` |
 | **检索结果 cache** | `knowledge-manager/pipeline-retrieval/`（`runRetrievalNode`） | `{prefix}:retrieval:v1:{corpusUserId}:{queryType}:{normalize(searchQuery)}` | 跳过 KM；仍走 FC / Analyst（`retrievalCacheHit`） | `RETRIEVAL_CACHE_DISABLED=1` |
 | **composite 终稿 cache** | `composite-answer-cache.ts` | 同会话 `conversationId` + `corpusUserId` + **facetKey** | composite/slot 增量：命中槽跳过 KM；**slot 单槽**时 Analyst 读 cache 或 citations 还原 hits | `COMPOSITE_ANSWER_CACHE_DISABLED=1` |
 
@@ -212,11 +212,11 @@ flowchart TD
 |------|--------|------|------|------|
 | 1 | 拼 prompt | 系统指令定义 intent / searchQuery 等 | `IntakeCoordinator/prompt.ts` | `prompt` |
 | 2 | 调模型 | 一次 `invoke`；模型见 `OLLAMA_MODEL_INTAKE_COORDINATOR` | `IntakeCoordinator/ollama-chat.ts` | `completeIntakeCoordinator()` |
-| 3 | 解析 JSON | 抠 JSON → **Zod parse**；`userFact*` 缺省视为 `null`（勿误 fallback 检索） | `intake-coordinator/parse-intake.ts`, `schema.ts` | `parseIntakeDecision()`, `intakeRoutingSchema` |
-| 4 | 兜底 | 解析失败 → `needsRetrieval=true` 保守查库（Golden G1 曾因缺字段触发） | `intake-coordinator/parse-intake.ts` | `defaultIntakeDecision()` |
+| 3 | 解析 JSON | 抠 JSON → **Zod parse**；`userFact*` 缺省视为 `null`（勿误 fallback 检索） | `intake-coordinator/pipeline/parse-intake.ts`, `schema.ts` | `parseIntakeDecision()`, `intakeRoutingSchema` |
+| 4 | 兜底 | 解析失败 → `needsRetrieval=true` 保守查库（Golden G1 曾因缺字段触发） | `intake-coordinator/pipeline/parse-intake.ts` | `defaultIntakeDecision()` |
 | 5 | 编排 | LangGraph 条件边 | `pipeline/graph/routes.ts` + `compile.ts` | `routeAfterIntake()` 等 |
 
-**Guard 链（compile intake 节点内）：** **coreference**（无上下文指代 → clarify；有上文 → `enrichSearchQueryFromHistory` 补全 searchQuery，如 G5b 城管）→ chitchat → **retrievalPlan guard** → **`routeUserFactFromIntake`**（P0-16，优先于 composite）→ **`applyCompositeRouteGuard`**（P0-15）。详见 [坑点 §2.5.3](./04-pitfalls.md#253-p0-15--r6-3--composite-分槽检索-2026-06) · [§2.5.6 Golden](./04-pitfalls.md#256-golden-回归-g1gmem--2026-06) · [§2.6 userFact](./04-pitfalls.md#26-跨会话用户自述事实未召回2026-06--web-联调)。
+**Guard 链（compile intake 节点内）：** **LLM 指代/澄清**（`prompt.ts` 多轮指代补全；`clarify` → pipeline 早退）→ chitchat → **retrievalPlan guard** → **`routeUserFactFromIntake`**（P0-16，优先于 composite）→ **`applyCompositeRouteGuard`**（P0-15）。详见 [坑点 §2.5.3](./04-pitfalls.md#253-p0-15--r6-3--composite-分槽检索-2026-06) · [§2.5.6 Golden](./04-pitfalls.md#256-golden-回归-g1gmem--2026-06) · [§2.6 userFact](./04-pitfalls.md#26-跨会话用户自述事实未召回2026-06--web-联调)。
 
 ### 2.5 跨会话用户事实 userFact — P0-16 ✅
 
@@ -249,7 +249,7 @@ flowchart TD
 |------|--------|------|------|
 | 1 | Intake 产出 schema | `intake-coordinator/prompt.ts` | `remember_user_fact` / `recall_user_fact` 示例 |
 | 2 | 解析路由 | `user-fact.ts` | `routeUserFactFromIntake()`、`findUserFactValueInTexts()` |
-| 3 | 写入 / 召回 | `intake-coordinator/user-fact-node.ts` | `userFactNode()` → Mem0 |
+| 3 | 写入 / 召回 | `user-fact/nodes/user-fact-node.ts` | `userFactNode()` → Mem0 |
 | 4 | SSE | `stream.ts` | step `user_fact` |
 
 **验证：** `pnpm --filter @fambrain/brain-service run verify:user-fact`（跨 conversationId A 记 → B 问）。**改 agents 代码后须重启服务**；与 Pipeline cache 无关。

@@ -16,7 +16,7 @@ import {
     serializeUserFactRecord,
     type IntakeRoutingDecision,
 } from "../src/agentflow/brain-service/online/intake-coordinator";
-import { userFactNode } from "../src/agentflow/brain-service/online/intake-coordinator/user-fact-node";
+import { userFactNode } from "../src/agentflow/brain-service/online/user-fact";
 import type { PipelineGraphState } from "../src/agentflow/pipeline/graph/state";
 
 const QQ = "734858469";

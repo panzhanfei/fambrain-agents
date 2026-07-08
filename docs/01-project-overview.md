@@ -189,8 +189,8 @@ pnpm run dev
 | `runPrepareTurnStart` | `agentflow/brain-service/online/prepare-turn-start/` | 图首节点：ALS、同问短路、Mem0/LangMem **读** |
 | `runPersistTurnEnd` | `agentflow/brain-service/online/persist-turn-end/` | 图末节点：Mem0/LangMem **写**、Learning 候选 |
 | `getCompiledPipelineGraph` | `pipeline/graph/compile.ts` + `routes.ts` | **prepareTurnStart** → Intake → … → **persistTurnEnd** → END |
-| `userFactNode` / `routeUserFactFromIntake` | `intake-coordinator/user-fact-node.ts`、`user-fact.ts` | P0-16：跨会话 remember/recall；绕过 KM / FC / Analyst |
-| `parseIntakeDecision` / `defaultIntakeDecision` | `intake-coordinator/parse-intake.ts` | 解析 Intake 路由 JSON |
+| `userFactNode` / `routeUserFactFromIntake` | `user-fact/nodes/user-fact-node.ts`、`user-fact/user-fact.ts` | P0-16：跨会话 remember/recall；绕过 KM / FC / Analyst |
+| `parseIntakeDecision` / `defaultIntakeDecision` | `intake-coordinator/pipeline/parse-intake.ts` | 解析 Intake 路由 JSON |
 | `runRetrievalNode` | `knowledge-manager/pipeline-retrieval/` | L2/L3 cache + composite 增量检索 |
 | `addStructuredUserFact` / `searchUserFactMemories` | `packages/brain-memory/src/mem0/store.ts` | Mem0 结构化写入 + 按 factKey 语义检索 |
 | `completeIntakeCoordinator` | `agentflow/brain-service/online/intake-coordinator/` | 一次 `invoke` → 路由 JSON |

@@ -12,7 +12,7 @@ import {
     isAcceptableChitchatBriefReply,
     type IntakeRoutingDecision,
 } from "../src/agentflow/brain-service/online/intake-coordinator/index";
-import { parseIntakeDecision } from "../src/agentflow/brain-service/online/intake-coordinator/parse-intake";
+import { parseIntakeDecision } from "../src/agentflow/brain-service/online/intake-coordinator/pipeline/parse-intake";
 import { bootstrapBrainServiceRuntime } from "../src/config/index";
 
 const DEFAULT_RUNS = 10;

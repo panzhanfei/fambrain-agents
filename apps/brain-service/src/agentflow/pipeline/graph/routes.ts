@@ -1,10 +1,16 @@
 import type { PipelineGraphState } from "./state";
 
-export const routeAfterPrepare = (
+export const routeAfterRepeat = (
+    state: PipelineGraphState
+): "repeatRespondEarly" | "preparePipelineMemory" => {
+    if (state.repeatQuestionHit) return "repeatRespondEarly";
+    return "preparePipelineMemory";
+};
+
+export const routeAfterPrepareMemory = (
     state: PipelineGraphState
 ): "respondEarly" | "intake" => {
-    if (state.exitEarly || state.error || state.repeatQuestionHit)
-        return "respondEarly";
+    if (state.exitEarly || state.error) return "respondEarly";
     return "intake";
 };
 

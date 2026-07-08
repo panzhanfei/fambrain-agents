@@ -1,19 +1,17 @@
 /**
- * Wave C（QU-02）：Intake 多轮指代 — guard 单测 + Intake live 抽检。
+ * Wave C（QU-02）：Intake 多轮指代 — pipeline 早退单测 + Intake live 抽检。
  *
  *   pnpm --filter @fambrain/brain-service run verify:intake-coreference
  */
 import type { DbChatTurn } from "@fambrain/brain-types";
 import { resetInfraConfigForTests } from "@fambrain/infra";
 import {
-    applyIntakeCoreferenceGuard,
     completeIntakeCoordinator,
-    hasCoreferenceContext,
-    isVagueReferentialQuestion,
-    type IntakeRoutingDecision,
+    isClarifyEarlyExit,
+    parseIntakeDecision,
+    runIntakePipeline,
 } from "../src/agentflow/brain-service/online/intake-coordinator/index";
 import { findRepeatAnswerInHistory } from "../src/agentflow/brain-service/online/intake-coordinator";
-import { parseIntakeDecision } from "../src/agentflow/brain-service/online/intake-coordinator/parse-intake";
 import { bootstrapBrainServiceRuntime } from "../src/config/index";
 import { enableRepeatGuardForVerify } from "./verify-test-env";
 
@@ -28,10 +26,24 @@ const assertSync = (name: string, fn: () => void) => {
     }
 };
 
-const retrieveStub: IntakeRoutingDecision = {
+const clarifyJson = JSON.stringify({
+    intent: "clarify",
+    needsRetrieval: false,
+    searchQuery: "",
+    subTasks: [],
+    topics: ["project"],
+    language: "zh",
+    confidence: 0.55,
+    queryType: null,
+    clarifyingQuestion: "你指的是哪一段经历或哪个项目？",
+    briefReply: null,
+    retrievalPlan: [],
+});
+
+const retrieveWithEntityJson = JSON.stringify({
     intent: "retrieve_and_answer",
     needsRetrieval: true,
-    searchQuery: "西安奥卡云 城市管理平台",
+    searchQuery: "西安奥卡云 城市管理平台 技术栈",
     subTasks: [],
     topics: ["project"],
     language: "zh",
@@ -40,42 +52,50 @@ const retrieveStub: IntakeRoutingDecision = {
     clarifyingQuestion: null,
     briefReply: null,
     retrievalPlan: [],
-};
+});
 
-console.log("verify-intake-coreference\n— guard 单测 —");
+console.log("verify-intake-coreference\n— pipeline 单测（LLM JSON 透传） —");
 
-assertSync("isVagueReferentialQuestion：那个项目呢", () => {
-    if (!isVagueReferentialQuestion("那个项目呢？")) {
-        throw new Error("应识别为指代问法");
+assertSync("isClarifyEarlyExit：clarify + 反问", () => {
+    const parsed = parseIntakeDecision(clarifyJson);
+    if (!parsed || !isClarifyEarlyExit(parsed)) {
+        throw new Error("应识别为 clarify 早退");
     }
 });
 
-assertSync("isVagueReferentialQuestion：城管平台不是 vague", () => {
-    if (isVagueReferentialQuestion("城管平台用了什么技术")) {
-        throw new Error("含实体不应为 vague");
-    }
-});
-
-assertSync("guard：单轮指代 → clarify", () => {
+assertSync("pipeline：LLM clarify → earlyExit", () => {
     const history: DbChatTurn[] = [{ role: "user", content: "那个项目呢？" }];
-    const out = applyIntakeCoreferenceGuard(retrieveStub, history);
-    if (out.intent !== "clarify" || out.needsRetrieval) {
-        throw new Error(`期望 clarify，实际 ${out.intent}`);
+    const { decision, earlyExit } = runIntakePipeline({
+        intakeRaw: clarifyJson,
+        userQuestion: "那个项目呢？",
+        intakeHistory: history,
+    });
+    if (!earlyExit || decision.intent !== "clarify" || decision.needsRetrieval) {
+        throw new Error(
+            `期望 earlyExit+clarify，实际 earlyExit=${earlyExit} intent=${decision.intent}`
+        );
+    }
+    if (decision.routeReason !== "skip_non_retrieve") {
+        throw new Error(`期望 skip_non_retrieve，实际 ${decision.routeReason}`);
     }
 });
 
-assertSync("guard：有上文实体 → 保留 retrieve", () => {
+assertSync("pipeline：LLM retrieve 含实体 → 非早退", () => {
     const history: DbChatTurn[] = [
         { role: "user", content: "城管平台用了什么技术" },
         { role: "assistant", content: "React TypeScript" },
         { role: "user", content: "那个项目呢？" },
     ];
-    if (!hasCoreferenceContext(history)) {
-        throw new Error("应有 coreference context");
+    const { decision, earlyExit } = runIntakePipeline({
+        intakeRaw: retrieveWithEntityJson,
+        userQuestion: "那个项目呢？",
+        intakeHistory: history,
+    });
+    if (earlyExit) {
+        throw new Error("有实体 retrieve 不应 pipeline 早退");
     }
-    const out = applyIntakeCoreferenceGuard(retrieveStub, history);
-    if (!out.needsRetrieval) {
-        throw new Error("有上文应保留 needsRetrieval");
+    if (!decision.needsRetrieval) {
+        throw new Error("应保留 needsRetrieval");
     }
 });
 
@@ -133,21 +153,24 @@ assertSync("repeat：REPEAT_QUESTION_CACHE_DISABLED=1 时不命中", () => {
     enableRepeatGuardForVerify();
 });
 
-console.log("\n— Intake live + guard —");
+console.log("\n— Intake live + pipeline —");
 
 const assertLive = async (
     name: string,
     history: DbChatTurn[],
-    check: (d: IntakeRoutingDecision) => void
+    check: (result: ReturnType<typeof runIntakePipeline>) => void
 ) => {
     try {
+        const lastUser =
+            [...history].reverse().find((t) => t.role === "user")?.content ??
+            "";
         const raw = await completeIntakeCoordinator(history);
-        const parsed = parseIntakeDecision(raw);
-        if (!parsed) {
-            throw new Error(`Intake JSON 解析失败: ${raw.slice(0, 200)}`);
-        }
-        const decision = applyIntakeCoreferenceGuard(parsed, history);
-        check(decision);
+        const result = runIntakePipeline({
+            intakeRaw: raw,
+            userQuestion: lastUser,
+            intakeHistory: history,
+        });
+        check(result);
         console.log(`  ✓ ${name}`);
     } catch (e) {
         const msg = e instanceof Error ? e.message : String(e);
@@ -157,12 +180,12 @@ const assertLive = async (
 };
 
 await assertLive(
-    "单轮「那个项目呢？」→ clarify",
+    "单轮「那个项目呢？」→ clarify + pipeline 早退",
     [{ role: "user", content: "那个项目呢？" }],
-    (d) => {
-        if (d.intent !== "clarify" || d.needsRetrieval) {
+    ({ decision, earlyExit }) => {
+        if (!earlyExit || decision.intent !== "clarify" || decision.needsRetrieval) {
             throw new Error(
-                `期望 clarify，实际 intent=${d.intent} needsRetrieval=${d.needsRetrieval}`
+                `期望 clarify+earlyExit，实际 earlyExit=${earlyExit} intent=${decision.intent}`
             );
         }
     }
@@ -179,12 +202,14 @@ await assertLive(
         },
         { role: "user", content: "那个项目呢？" },
     ],
-    (d) => {
-        if (!d.needsRetrieval || d.intent === "clarify") {
-            throw new Error(`期望检索，实际 intent=${d.intent}`);
+    ({ decision, earlyExit }) => {
+        if (earlyExit || !decision.needsRetrieval || decision.intent === "clarify") {
+            throw new Error(
+                `期望检索非早退，实际 earlyExit=${earlyExit} intent=${decision.intent}`
+            );
         }
-        if (!/城管|城市管理|urban|platform/i.test(d.searchQuery)) {
-            throw new Error(`searchQuery 应含项目实体: ${d.searchQuery}`);
+        if (!/城管|城市管理|urban|platform/i.test(decision.searchQuery)) {
+            throw new Error(`searchQuery 应含项目实体: ${decision.searchQuery}`);
         }
     }
 );
@@ -199,12 +224,14 @@ await assertLive(
         },
         { role: "user", content: "那个阶段主要负责什么？" },
     ],
-    (d) => {
-        if (!d.needsRetrieval) {
-            throw new Error(`期望 needsRetrieval=true`);
+    ({ decision, earlyExit }) => {
+        if (earlyExit || !decision.needsRetrieval) {
+            throw new Error(
+                `期望 needsRetrieval=true 非早退，earlyExit=${earlyExit}`
+            );
         }
-        if (!/奥卡云|职责|负责|角色/.test(d.searchQuery)) {
-            throw new Error(`searchQuery: ${d.searchQuery}`);
+        if (!/奥卡云|职责|负责|角色/.test(decision.searchQuery)) {
+            throw new Error(`searchQuery: ${decision.searchQuery}`);
         }
     }
 );

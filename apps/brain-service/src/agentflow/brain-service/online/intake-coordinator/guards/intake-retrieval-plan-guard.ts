@@ -1,6 +1,6 @@
 /**
  * Intake 入口兜底：多问时补全 / 规范化 retrievalPlan，与 L2 检索 cache 对齐。
- * 串联在 coreference / chitchat guard 之后、composite route guard 之前。
+ * 串联在 chitchat guard / clarify 早退 之后、composite route guard 之前。
  */
 import {
     buildFallbackRetrievalPlan,
