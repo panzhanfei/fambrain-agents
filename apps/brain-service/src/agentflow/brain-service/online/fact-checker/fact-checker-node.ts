@@ -28,7 +28,6 @@ export const runFactCheckerNode = async (
         const result = await completeFactCheck({
             userQuestion: state.userQuestion,
             intent: decision.intent,
-            needsRetrieval: decision.needsRetrieval,
             searchQuery: decision.searchQuery || state.userQuestion,
             subTasks: decision.subTasks,
             topics: decision.topics,

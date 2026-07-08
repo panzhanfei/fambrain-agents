@@ -29,7 +29,6 @@ export const defaultIntakeDecision = (userQuestion: string): IntakeRoutingDecisi
     );
     return {
         intent: "retrieve_and_answer",
-        needsRetrieval: true,
         searchQuery,
         subTasks:
             fallbackPlan.length >= 2

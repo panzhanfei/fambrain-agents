@@ -32,7 +32,6 @@ export const intakeRetrievalPlanItemSchema = z.object({
 });
 export const intakeRoutingDecisionSchema = z.object({
   intent: intakeIntentSchema,
-  needsRetrieval: z.coerce.boolean(),
   searchQuery: z.coerce.string().transform((s) => String(s).trim()),
   subTasks: nonEmptyStringArray.catch([]),
   topics: nonEmptyStringArray.catch([]),
@@ -65,7 +64,6 @@ const normalizeIntakeRaw = (
   raw: Record<string, unknown>
 ): Record<string, unknown> => ({
   ...raw,
-  needsRetrieval: pickIntakeField(raw, "needsRetrieval", "needs_retrieval"),
   searchQuery: pickIntakeField(raw, "searchQuery", "search_query"),
   subTasks: pickIntakeField(raw, "subTasks", "sub_tasks"),
   queryType: pickIntakeField(raw, "queryType", "query_type"),

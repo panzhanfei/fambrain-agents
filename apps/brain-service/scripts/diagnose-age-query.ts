@@ -177,7 +177,6 @@ const main = async () => {
   console.log("\n— 7. Intake 返回 queryType=default（当前 guard 应修正为 slot）—");
   const intakeWrong = {
     intent: "retrieve_and_answer" as const,
-    needsRetrieval: true,
     searchQuery: USER_QUESTION,
     subTasks: [],
     topics: [],

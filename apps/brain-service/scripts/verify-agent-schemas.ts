@@ -13,7 +13,6 @@ import { buildFallbackAnswer } from "../src/agentflow/brain-service/online/infor
 const testIntake = () => {
     const ok = parseIntakeRoutingDecision({
         intent: "retrieve_and_answer",
-        needsRetrieval: true,
         searchQuery: " 城管平台 ",
         subTasks: ["a", ""],
         topics: ["project"],
@@ -30,7 +29,6 @@ const testIntake = () => {
     assert.equal(ok.queryType, "tech");
     const summarize = parseIntakeRoutingDecision({
         intent: "summarize_content",
-        needsRetrieval: true,
         searchQuery: "城管平台 总结",
         subTasks: [],
         topics: ["project"],
@@ -44,7 +42,6 @@ const testIntake = () => {
     assert.equal(parseIntakeRoutingDecision({ intent: "invalid" }), null);
     const chitchat = parseIntakeRoutingDecision({
         intent: "chitchat",
-        needsRetrieval: false,
         searchQuery: "",
         subTasks: [],
         topics: [],
@@ -86,7 +83,6 @@ const testFactChecker = () => {
     const fallback = buildRuleBasedFactCheck({
         userQuestion: "q",
         intent: "retrieve_and_answer",
-        needsRetrieval: true,
         searchQuery: "q",
         subTasks: [],
         topics: [],

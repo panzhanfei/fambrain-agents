@@ -26,7 +26,6 @@ const WECHAT = "panzf_wx";
 
 const rememberIntake = (): IntakeRoutingDecision => ({
     intent: "remember_user_fact",
-    needsRetrieval: false,
     searchQuery: "",
     subTasks: [],
     topics: [],
@@ -43,7 +42,6 @@ const rememberIntake = (): IntakeRoutingDecision => ({
 
 const recallIntake = (): IntakeRoutingDecision => ({
     intent: "recall_user_fact",
-    needsRetrieval: false,
     searchQuery: "",
     subTasks: [],
     topics: [],
@@ -60,7 +58,6 @@ const recallIntake = (): IntakeRoutingDecision => ({
 
 const wechatRememberIntake = (): IntakeRoutingDecision => ({
     intent: "remember_user_fact",
-    needsRetrieval: false,
     searchQuery: "",
     subTasks: [],
     topics: [],
@@ -132,7 +129,7 @@ assert.ok(isUserFactIntent(recallIntake().intent));
 assert.equal(isUserFactIntent("clarify"), false);
 
 const routed = buildEarlyExitRoutedDecision(rememberIntake());
-assert.equal(routed.needsRetrieval, false);
+assert.equal(routed.intent, "remember_user_fact");
 assert.equal(routed.compositeSlots.length, 0);
 assert.equal(routed.routeReason, "skip_non_retrieve");
 

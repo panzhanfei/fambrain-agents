@@ -24,7 +24,6 @@ import { mergeSubQuestionAnswers } from "../src/agentflow/brain-service/online/i
 
 const retrieveStub: IntakeRoutingDecision = {
   intent: "retrieve_and_answer",
-  needsRetrieval: true,
   searchQuery: "用户原问",
   subTasks: [],
   topics: [],
@@ -166,7 +165,6 @@ assertSync("闲聊 → single", () => {
     {
       ...retrieveStub,
       intent: "chitchat",
-      needsRetrieval: false,
       briefReply: "你好",
     },
     "你好"

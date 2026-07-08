@@ -181,16 +181,15 @@ Intake 产出两层结构：**LLM 层** `IntakeRoutingDecision` → **编排层*
 
 | 字段 | 类型 | 含义 | 典型值 / 规则 |
 |------|------|------|---------------|
-| **intent** | 8 种枚举 | 主意图分类 | 见下表「intent 选用」 |
-| **needsRetrieval** | boolean | 是否需要 KM 查个人语料 | retrieve / summarize 多为 true；chitchat / userFact 为 false |
-| **searchQuery** | string | 检索用词（去寒暄、补实体） | 如 `西安奥卡云 城市管理平台 技术栈 React` |
+| **intent** | 8 种枚举 | 主意图分类；**KM 路由由 intent 决定** | 见下表「intent 选用」 |
+| **searchQuery** | string | 检索用词（去寒暄、补实体） | retrieve 必填；summarize 查库时必填，粘贴长文可空 |
 | **subTasks** | string[] | 子任务标签 | 多问时与 retrievalPlan 对齐 |
 | **topics** | string[] | 语料主题标签 | personal, resume, project, experience, tech-stack… |
 | **language** | zh \| en \| mixed | 用户语言 | Analyst / 短答话术 |
 | **confidence** | 0–1 | 模型对路由的把握 | 日志 / eval 用 |
 | **queryType** | identity \| enumeration \| tech \| default \| null | 检索问法类型 | 与 KM `queryProfile` 对齐；不检索时为 null |
 | **clarifyingQuestion** | string \| null | 澄清追问（只问一个） | 仅 intent=clarify 时填 |
-| **briefReply** | string \| null | 极短直接回复（≤80 字） | chitchat / clarify；**needsRetrieval=true 时必须 null** |
+| **briefReply** | string \| null | 极短直接回复（≤80 字） | chitchat / clarify；retrieve / summarize 必须为 null |
 | **retrievalPlan** | IntakeRetrievalPlanItem[] | 多问并列时每项一次检索 | 单问为 `[]`；≥2 项触发 composite |
 | **userFactKey** | string \| null | 记忆字段 slug | qq / wechat / phone / email / dingtalk… |
 | **userFactLabel** | string \| null | 展示名 | 「QQ号」「微信号」 |
@@ -198,16 +197,16 @@ Intake 产出两层结构：**LLM 层** `IntakeRoutingDecision` → **编排层*
 
 #### intent 选用速查
 
-| intent | 何时 | needsRetrieval |
-|--------|------|----------------|
-| `retrieve_and_answer` | 问经历、项目、技术栈、简历字段 | true |
-| `summarize_content` | 用户要总结/概括某段经历或文档 | 通常 true |
-| `direct_answer` | 通用概念，与用户履历无关 | false |
-| `clarify` | 指代不明且 history 无法推断实体 | false |
-| `chitchat` | 问候、感谢、闲聊 | false |
-| `out_of_scope` | 应拒绝的请求 | false |
-| `remember_user_fact` | 「记住我的 QQ 是…」 | false |
-| `recall_user_fact` | 「我的 QQ 是多少」 | false |
+| intent | 何时 | KM |
+|--------|------|-----|
+| `retrieve_and_answer` | 问经历、项目、技术栈、简历字段 | 必进 |
+| `summarize_content` | 用户要总结/概括某段经历或文档 | searchQuery 非空时先进 KM |
+| `direct_answer` | 通用概念，与用户履历无关 | 不进 |
+| `clarify` | 指代不明且 history 无法推断实体 | 不进 |
+| `chitchat` | 问候、感谢、闲聊 | 不进 |
+| `out_of_scope` | 应拒绝的请求 | 不进 |
+| `remember_user_fact` | 「记住我的 QQ 是…」 | 不进 |
+| `recall_user_fact` | 「我的 QQ 是多少」 | 不进 |
 
 #### queryType 速查
 
@@ -300,8 +299,7 @@ Intake 产出两层结构：**LLM 层** `IntakeRoutingDecision` → **编排层*
 
 LLM 输出 IntakeRoutingDecision:
   intent: retrieve_and_answer
-  needsRetrieval: true
-  searchQuery: "西安奥卡云 城市管理平台 技术栈 React TypeScript"
+    searchQuery: "西安奥卡云 城市管理平台 技术栈 React TypeScript"
   queryType: tech
   retrievalPlan: []
 
@@ -319,8 +317,7 @@ RoutedIntakeDecision:
 ```text
 LLM:
   intent: chitchat
-  needsRetrieval: false
-  briefReply: null   ← 不撰写，由服务端注入
+    briefReply: null   ← 不撰写，由服务端注入
 
 guard_闲聊:
   briefReply → DEFAULT_CHITCHAT_BRIEF_REPLY（固定模板，忽略 LLM 原文）
@@ -335,8 +332,7 @@ pipeline → earlyExit → respondEarly → answer = briefReply
 LLM（读 history）:
   intent: clarify
   clarifyingQuestion: "你指的是哪一段经历或哪个项目？…"
-  needsRetrieval: false
-
+  
 pipeline:
   LLM指代决策 → earlyExit=true
   → 跳过 retrievalPlan / composite
@@ -355,8 +351,7 @@ history:
 LLM:
   intent: retrieve_and_answer
   searchQuery 含「城市管理平台 …」（禁止留指代词）
-  needsRetrieval: true
-
+  
 pipeline:
   LLM指代决策 → earlyExit=false
   → retrievalPlan → composite → retrieval → analyst
@@ -420,8 +415,7 @@ LLM 返回非 JSON / Zod 校验失败
 
 defaultIntakeDecision(userQuestion):
   intent: retrieve_and_answer
-  needsRetrieval: true
-  searchQuery: userQuestion（原句）
+    searchQuery: userQuestion（原句）
   queryType: inferQueryProfile(...)
   retrievalPlan: 多问结构时 buildFallbackRetrievalPlan
 

@@ -21,7 +21,6 @@ const cases: Case[] = [
         input: {
             userQuestion: "React 和 Vue 的区别是什么？",
             intent: "direct_answer",
-            needsRetrieval: false,
             searchQuery: "",
             subTasks: [],
             topics: [],
@@ -41,7 +40,6 @@ const cases: Case[] = [
         input: {
             userQuestion: "城管平台用了什么技术？",
             intent: "retrieve_and_answer",
-            needsRetrieval: true,
             searchQuery: "城管",
             subTasks: ["列出技术栈"],
             topics: ["project"],
@@ -64,7 +62,6 @@ const cases: Case[] = [
         input: {
             userQuestion: "城管平台用了什么技术？",
             intent: "retrieve_and_answer",
-            needsRetrieval: true,
             searchQuery: "西安奥卡云 城市管理平台 React TypeScript",
             subTasks: [],
             topics: ["project"],
@@ -87,7 +84,6 @@ const cases: Case[] = [
         input: {
             userQuestion: "城管平台用了什么技术？",
             intent: "retrieve_and_answer",
-            needsRetrieval: true,
             searchQuery: "城市管理平台 React TypeScript",
             subTasks: ["技术栈"],
             topics: ["project"],
@@ -116,7 +112,6 @@ const cases: Case[] = [
         input: {
             userQuestion: "我的名字",
             intent: "retrieve_and_answer",
-            needsRetrieval: true,
             searchQuery: "姓名",
             subTasks: [],
             topics: ["personal"],
@@ -145,7 +140,6 @@ const cases: Case[] = [
         input: {
             userQuestion: "E-HR 用的什么数据库？",
             intent: "retrieve_and_answer",
-            needsRetrieval: true,
             searchQuery: "E-HR 数据库 Prisma",
             subTasks: [],
             topics: ["project"],
@@ -237,7 +231,6 @@ const main = async () => {
         {
             userQuestion: "姓名",
             intent: "retrieve_and_answer",
-            needsRetrieval: true,
             searchQuery: "姓名",
             subTasks: [],
             topics: [],

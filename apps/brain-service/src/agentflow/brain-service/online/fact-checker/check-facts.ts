@@ -62,7 +62,6 @@ export const completeFactCheck = async (
   logAgentIn("FactChecker", "进入", {
     userQuestion: input.userQuestion,
     intent: input.intent,
-    needsRetrieval: input.needsRetrieval,
     searchQuery: input.searchQuery,
     subTasks: input.subTasks,
     topics: input.topics,

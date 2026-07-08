@@ -42,7 +42,6 @@ const chitchatStub = (
     briefReply: string | null
 ): IntakeRoutingDecision => ({
     intent: "chitchat",
-    needsRetrieval: false,
     searchQuery: "",
     subTasks: [],
     topics: [],
@@ -76,7 +75,6 @@ assertSync("guard：非 chitchat 不改动", () => {
     const retrieve: IntakeRoutingDecision = {
         ...chitchatStub(null),
         intent: "retrieve_and_answer",
-        needsRetrieval: true,
         searchQuery: "姓名",
         queryType: "identity",
     };
@@ -108,8 +106,8 @@ for (let i = 1; i <= runs; i++) {
         if (!earlyExit) {
             throw new Error("chitchat 应 pipeline 早退");
         }
-        if (decision.needsRetrieval) {
-            throw new Error("chitchat 不应 needsRetrieval");
+        if (decision.intent === "chitchat") {
+            throw new Error("chitchat 不应走检索");
         }
         if (reply !== DEFAULT_CHITCHAT_BRIEF_REPLY) {
             throw new Error(`期望固定模板，实际: ${reply}`);

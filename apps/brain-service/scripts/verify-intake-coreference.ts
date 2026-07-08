@@ -28,7 +28,6 @@ const assertSync = (name: string, fn: () => void) => {
 
 const clarifyJson = JSON.stringify({
     intent: "clarify",
-    needsRetrieval: false,
     searchQuery: "",
     subTasks: [],
     topics: ["project"],
@@ -42,7 +41,6 @@ const clarifyJson = JSON.stringify({
 
 const retrieveWithEntityJson = JSON.stringify({
     intent: "retrieve_and_answer",
-    needsRetrieval: true,
     searchQuery: "西安奥卡云 城市管理平台 技术栈",
     subTasks: [],
     topics: ["project"],
@@ -70,7 +68,7 @@ assertSync("pipeline：LLM clarify → earlyExit", () => {
         userQuestion: "那个项目呢？",
         intakeHistory: history,
     });
-    if (!earlyExit || decision.intent !== "clarify" || decision.needsRetrieval) {
+    if (!earlyExit || decision.intent !== "clarify") {
         throw new Error(
             `期望 earlyExit+clarify，实际 earlyExit=${earlyExit} intent=${decision.intent}`
         );
@@ -94,15 +92,14 @@ assertSync("pipeline：LLM retrieve 含实体 → 非早退", () => {
     if (earlyExit) {
         throw new Error("有实体 retrieve 不应 pipeline 早退");
     }
-    if (!decision.needsRetrieval) {
-        throw new Error("应保留 needsRetrieval");
+    if (decision.intent !== "retrieve_and_answer") {
+        throw new Error("应为 retrieve_and_answer");
     }
 });
 
-assertSync("pipeline：retrieve_and_answer + LLM needsRetrieval false → 服务端纠正为 true", () => {
+assertSync("pipeline：多问 retrieve → composite", () => {
     const contradictory = JSON.stringify({
         intent: "retrieve_and_answer",
-        needsRetrieval: false,
         searchQuery: "个人简介 简历 姓名 年龄 项目经历",
         subTasks: ["姓名", "年龄", "项目经历列举"],
         topics: ["personal", "resume", "project"],
@@ -142,9 +139,6 @@ assertSync("pipeline：retrieve_and_answer + LLM needsRetrieval false → 服务
     });
     if (earlyExit) {
         throw new Error("retrieve 不应早退");
-    }
-    if (!decision.needsRetrieval) {
-        throw new Error("needsRetrieval 应被纠正为 true");
     }
     if (decision.routeMode !== "composite") {
         throw new Error(`期望 composite，实际 ${decision.routeMode}`);
@@ -235,7 +229,7 @@ await assertLive(
     "单轮「那个项目呢？」→ clarify + pipeline 早退",
     [{ role: "user", content: "那个项目呢？" }],
     ({ decision, earlyExit }) => {
-        if (!earlyExit || decision.intent !== "clarify" || decision.needsRetrieval) {
+        if (!earlyExit || decision.intent !== "clarify") {
             throw new Error(
                 `期望 clarify+earlyExit，实际 earlyExit=${earlyExit} intent=${decision.intent}`
             );
@@ -255,7 +249,7 @@ await assertLive(
         { role: "user", content: "那个项目呢？" },
     ],
     ({ decision, earlyExit }) => {
-        if (earlyExit || !decision.needsRetrieval || decision.intent === "clarify") {
+        if (earlyExit || decision.intent !== "retrieve_and_answer") {
             throw new Error(
                 `期望检索非早退，实际 earlyExit=${earlyExit} intent=${decision.intent}`
             );
@@ -277,9 +271,9 @@ await assertLive(
         { role: "user", content: "那个阶段主要负责什么？" },
     ],
     ({ decision, earlyExit }) => {
-        if (earlyExit || !decision.needsRetrieval) {
+        if (earlyExit || decision.intent !== "retrieve_and_answer") {
             throw new Error(
-                `期望 needsRetrieval=true 非早退，earlyExit=${earlyExit}`
+                `期望 retrieve 非早退，earlyExit=${earlyExit} intent=${decision.intent}`
             );
         }
         if (!/奥卡云|职责|负责|角色/.test(decision.searchQuery)) {

@@ -54,7 +54,6 @@ const testFormatAndSource = () => {
         userQuestion: "总结城管",
         decision: {
             intent: "summarize_content",
-            needsRetrieval: true,
             searchQuery: "城管平台",
             subTasks: [],
             topics: ["project"],

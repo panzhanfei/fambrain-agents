@@ -8,7 +8,6 @@ import {
   defaultIntakeDecision,
   parseIntakeDecision,
 } from "./parse-intake";
-import { normalizeIntakeDecision } from "./intake-km-routing";
 import { applyCompositeRouteGuard } from "../composite/composite-route-guard";
 import type { RoutedIntakeDecision } from "../composite/composite-route-guard";
 import { applyIntakeChitchatGuard } from "../guards/intake-chitchat-guard";
@@ -20,7 +19,6 @@ const summarizeDecision = (
   decision: IntakeRoutingDecision | RoutedIntakeDecision
 ) => ({
   intent: decision.intent,
-  needsRetrieval: decision.needsRetrieval,
   searchQuery: decision.searchQuery,
   queryType: decision.queryType,
   subTasks: decision.subTasks,
@@ -105,7 +103,7 @@ export type RunIntakePipelineResult = {
  * Intake 规则主流程（LLM 之后）：parse → guard 链 → RoutedIntakeDecision。
  *
  * 步骤一览：
- *   ① 解析 LLM JSON（失败则 defaultIntakeDecision 兜底）+ needsRetrieval 与 intent 对齐
+ *   ① 解析 LLM JSON（失败则 defaultIntakeDecision 兜底）
  *   ② clarify 早退（仅 intent=clarify 时执行）
  *   ③ chitchat guard + respondEarly（仅 intent=chitchat 时跑 guard）
  *   ④ userFact 早退（仅 remember/recall intent）
@@ -119,10 +117,8 @@ export const runIntakePipeline = (
   /** ① 解析：从 intakeRaw 提取 JSON → Zod 校验为 IntakeRoutingDecision */
   const parsed = parseIntakeDecision(input.intakeRaw);
   const parseUsedFallback = parsed === null;
-  /** ① 兜底 + 对齐 needsRetrieval（retrieve_and_answer 恒 true） */
-  let decision = normalizeIntakeDecision(
-    parsed ?? defaultIntakeDecision(input.userQuestion)
-  );
+  /** ① 兜底 */
+  let decision = parsed ?? defaultIntakeDecision(input.userQuestion);
 
   logAgentOut("IntakeCoordinator", "解析LLM输出", {
     parseOk: !parseUsedFallback,

@@ -18,7 +18,7 @@ export const PipelineGraphAnnotation = Annotation.Root({
     context: Annotation<AgentPipelineContext>,
     /** 用户最新一条问题（从 history 提取，供检索与分析） */
     userQuestion: Annotation<string>,
-    /** IntakeCoordinator 路由 JSON：intent、needsRetrieval、searchQuery、routeMode 等 */
+    /** IntakeCoordinator 路由 JSON：intent、searchQuery、routeMode 等 */
     decision: Annotation<RoutedIntakeDecision | null>,
     /** KnowledgeManager 检索命中的文档片段，交给 InformationAnalyst */
     hits: Annotation<InformationAnalystInput["hits"]>,

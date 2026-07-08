@@ -12,6 +12,7 @@
  */
 
 import type { FactCheckerInput, FactCheckerIssue, FactCheckerResult } from "./prompt";
+import { intakeRequiresKmRetrieval } from "@/agentflow/brain-service/online/intake-coordinator/pipeline/intake-km-routing";
 import { hasExperienceCorpusHits, hasPersonalCorpusHits, mergeRetrySearchQuery } from "./refined-search-query";
 import { parseFactCheckerResult } from "./schema";
 
@@ -128,7 +129,7 @@ export const buildRuleBasedFactCheck = (
   );
 
   // ── 分支 A：Intake 判定无需查库（闲聊/direct_answer 等）──
-  if (!input.needsRetrieval) {
+  if (!intakeRequiresKmRetrieval(input)) {
     const result: FactCheckerResult = {
       passed: true,
       evidenceScore: 0.5,

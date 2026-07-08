@@ -58,7 +58,6 @@ const applySlotDecision = (
     return {
         ...decision,
         intent: "retrieve_and_answer",
-        needsRetrieval: true,
         routeMode: mode,
         compositeSlots: slots,
         routeReason,

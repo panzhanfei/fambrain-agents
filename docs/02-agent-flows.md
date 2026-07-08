@@ -56,8 +56,7 @@ flowchart TB
     IC --> P{parseIntakeDecision<br/>LangGraph 路由}
     P -->|remember/recall user_fact| UF[userFact 节点<br/>Mem0 显式读写]
     P -->|clarify / chitchat| R1[briefReply / 澄清]
-    P -->|needsRetrieval| KM[KnowledgeManager<br/>L2 检索 cache]
-    KM --> FC[FactChecker<br/>事实核查员]
+    P -->|    KM --> FC[FactChecker<br/>事实核查员]
     FC -->|passed 或已重试| CO[ContentOrganizer<br/>内容整理师]
     FC -->|未通过且 retry&lt;1| KM
     CO --> IA[InformationAnalyst<br/>信息分析师]
@@ -109,8 +108,7 @@ flowchart TD
 
   C -->|clarify / chitchat + briefReply| D[respondEarly]
   C -->|remember_user_fact / recall_user_fact| UF[userFact → Mem0]
-  C -->|needsRetrieval = true| F[KnowledgeManager]
-  C -->|其它需下游| FC0[FactChecker]
+  C -->|  C -->|其它需下游| FC0[FactChecker]
 
   F --> FC[FactChecker]
   FC -->|checkerPassed 或 retryCount ≥ 1| CO[ContentOrganizer]
@@ -213,8 +211,7 @@ flowchart TD
 | 1 | 拼 prompt | 系统指令定义 intent / searchQuery 等 | `IntakeCoordinator/prompt.ts` | `prompt` |
 | 2 | 调模型 | 一次 `invoke`；模型见 `OLLAMA_MODEL_INTAKE_COORDINATOR` | `IntakeCoordinator/ollama-chat.ts` | `completeIntakeCoordinator()` |
 | 3 | 解析 JSON | 抠 JSON → **Zod parse**；`userFact*` 缺省视为 `null`（勿误 fallback 检索） | `intake-coordinator/pipeline/parse-intake.ts`, `schema.ts` | `parseIntakeDecision()`, `intakeRoutingSchema` |
-| 4 | 兜底 | 解析失败 → `needsRetrieval=true` 保守查库（Golden G1 曾因缺字段触发） | `intake-coordinator/pipeline/parse-intake.ts` | `defaultIntakeDecision()` |
-| 5 | 编排 | LangGraph 条件边 | `pipeline/graph/routes.ts` + `compile.ts` | `routeAfterIntake()` 等 |
+| 4 | 兜底 | 解析失败 → `| 5 | 编排 | LangGraph 条件边 | `pipeline/graph/routes.ts` + `compile.ts` | `routeAfterIntake()` 等 |
 
 **Guard 链（compile intake 节点内）：** **LLM 指代/澄清**（`prompt.ts` 多轮指代补全；`clarify` → pipeline 早退）→ chitchat → **retrievalPlan guard** → **`routeUserFactFromIntake`**（P0-16，优先于 composite）→ **`applyCompositeRouteGuard`**（P0-15）。详见 [坑点 §2.5.3](./04-pitfalls.md#253-p0-15--r6-3--composite-分槽检索-2026-06) · [§2.5.6 Golden](./04-pitfalls.md#256-golden-回归-g1gmem--2026-06) · [§2.6 userFact](./04-pitfalls.md#26-跨会话用户自述事实未召回2026-06--web-联调)。
 
@@ -481,8 +478,7 @@ flowchart LR
 ```mermaid
 flowchart TD
   U[用户: 总结某项目] --> IC[IntakeCoordinator]
-  IC -->|intent=summarize_content| R{needsRetrieval?}
-  R -->|true| KM[KnowledgeManager]
+  IC -->|intent=summarize_content| R{  R -->|true| KM[KnowledgeManager]
   R -->|false| CS[ContentSummarizer]
   KM --> CS
   CS --> OUT[assistant 终稿]
@@ -568,8 +564,7 @@ pnpm --filter @fambrain/brain-service run experiment:bind-tools -- "我的名字
 | 英文字段 | 中文名 | 含义 | 典型去向 |
 |----------|--------|------|----------|
 | `intent` | 意图类型 | 查库回答 / 直接答 / 澄清 / 闲聊 / 拒答 | 编排器分支 |
-| `needsRetrieval` | 是否需要检索 | `true` 时必须走知识管理员 | → KnowledgeManager |
-| `searchQuery` | 检索查询句 | 去掉寒暄后的检索关键词句 | → KnowledgeManager 入参 |
+| `| `searchQuery` | 检索查询句 | 去掉寒暄后的检索关键词句 | → KnowledgeManager 入参 |
 | `subTasks` | 子任务列表 | 复杂问题拆成多句 | → KM / Analyst |
 | `topics` | 主题标签 | 如 `resume`、`aky` | → KnowledgeManager 入参 |
 | `language` | 回复语言 | `zh` / `en` / `mixed` | → InformationAnalyst 入参 |
@@ -586,12 +581,8 @@ pnpm --filter @fambrain/brain-service run experiment:bind-tools -- "我的名字
 |------|----------|--------------|
 | `intent === "clarify"` 且 `clarifyingQuestion` 有值 | `respondEarly` | 澄清提问 |
 | `intent` 为 `chitchat` / `out_of_scope` 且 `briefReply` 有值 | `respondEarly` | 简短回复 |
-| `intent === "summarize_content"` 且 `needsRetrieval === true` | KM → **ContentSummarizer** → 终稿 | SSE：检索 → **生成摘要** |
-| `intent === "summarize_content"` 且 `needsRetrieval === false` | **ContentSummarizer** → 终稿 | SSE：**生成摘要** |
-| `intent` 为 `remember_user_fact` / `recall_user_fact` 且 Intake 填齐 schema | **userFact** → 终稿 | SSE：`user_fact`；**不经 KM / FC / Analyst** |
-| `needsRetrieval === true`（非摘要） | KM → **FactChecker** → **ContentOrganizer** →（可选再打回 KM）→ Analyst | SSE：检索 → 核查 → **整理证据** → 整理回答 |
-| `needsRetrieval === false` 且无 `briefReply` | FactChecker → **ContentOrganizer** → Analyst（`hits` 常为空） | 不查库长答 |
-| FactChecker `passed=false` 且 `retryCount<1` | 再 `retrieval` → 再 **FactChecker** | 同轮可能见两次「核查证据…」 |
+| `intent === "summarize_content"` 且 `| `intent === "summarize_content"` 且 `| `intent` 为 `remember_user_fact` / `recall_user_fact` 且 Intake 填齐 schema | **userFact** → 终稿 | SSE：`user_fact`；**不经 KM / FC / Analyst** |
+| `| `| FactChecker `passed=false` 且 `retryCount<1` | 再 `retrieval` → 再 **FactChecker** | 同轮可能见两次「核查证据…」 |
 | 其余 | `respondEarly` | 简短说明或请用户补充 |
 
 ## 流式 SSE 事件（`POST .../messages`）

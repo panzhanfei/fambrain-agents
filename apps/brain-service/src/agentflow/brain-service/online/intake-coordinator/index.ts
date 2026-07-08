@@ -14,7 +14,6 @@ export {
 export { completeIntakeCoordinator } from "./llm/ollama-chat";
 
 export {
-  normalizeIntakeDecision,
   intakeRequiresKmRetrieval,
 } from "./pipeline/intake-km-routing";
 export {

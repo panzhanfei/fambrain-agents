@@ -81,7 +81,13 @@ const summarizePipelineOut = (
   answerPreview: answer.length > 400 ? `${answer.slice(0, 400)}…` : answer,
   exitEarly: state.exitEarly,
   intent: state.decision?.intent ?? null,
-  needsRetrieval: state.decision?.needsRetrieval ?? null,
+  intent: state.decision?.intent ?? null,
+  requiresKmRetrieval:
+    state.decision && intakeRequiresKmRetrieval(state.decision)
+      ? true
+      : state.decision
+        ? false
+        : null,
   hitCount: state.hits.length,
   coverage: state.coverage,
   checkerPassed: state.checkerPassed,
