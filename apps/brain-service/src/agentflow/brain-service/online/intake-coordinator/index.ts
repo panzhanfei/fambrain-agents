@@ -1,4 +1,4 @@
-/** IntakeCoordinator 对外 API；目录按 contract / llm / pipeline / guards / composite / user-fact 划分。 */
+/** IntakeCoordinator 对外 API；目录按 contract / llm / pipeline / guards / composite 划分。 */
 
 export {
   prompt,
@@ -42,11 +42,6 @@ export {
   applyIntakeRetrievalPlanGuard,
   type IntakeRetrievalPlanGuardReason,
 } from "./guards/intake-retrieval-plan-guard";
-/** @deprecated 仅测试/兼容；pipeline 已改为 intent 判断 + userFact 节点内 routeUserFactFromIntake */
-export {
-  applyUserFactFromIntake,
-  buildUserFactRoutedDecision,
-} from "./guards/intake-user-fact-guard";
 
 export {
   applyCompositeRouteGuard,
@@ -98,22 +93,3 @@ export {
   type CompositeSlotPlan,
   type IncrementalCompositePlan,
 } from "./composite/composite-incremental";
-
-export {
-  routeUserFactFromIntake,
-  isUserFactIntent,
-  parseUserFactRecord,
-  serializeUserFactRecord,
-  memoryBlockHasStructuredUserFacts,
-  normalizeFactKey,
-  validateFactValue,
-  findUserFactValueInTexts,
-  findUserFactValueInMemoryBlock,
-  coalesceRememberValue,
-  buildRememberConfirmAnswer,
-  buildRememberMissingValueAnswer,
-  buildRecallAnswer,
-  buildRecallMissingAnswer,
-  type UserFactRoute,
-  type UserFactRecord,
-} from "../user-fact";

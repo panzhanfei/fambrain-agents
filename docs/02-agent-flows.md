@@ -227,8 +227,8 @@ flowchart TD
 | 层 | 模块 | 行为 |
 |----|------|------|
 | **Intake schema** | `prompt.ts` + `schema.ts` | `intent`: `remember_user_fact` / `recall_user_fact`；字段 `userFactKey` / `userFactLabel` / `userFactValue` |
-| **路由** | `user-fact.ts` → `intake-user-fact-guard.ts` | `routeUserFactFromIntake()` 从 JSON 解析；**不靠问句 regex 词表** |
-| **编排** | `compile.ts` | Intake 后 `decision.userFact` 存在 → **userFact 节点** → END |
+| **路由** | [`user-fact/user-fact.ts`](../apps/brain-service/src/agentflow/brain-service/online/user-fact/user-fact.ts) | `isUserFactIntent` + `routeUserFactFromIntake()`；**不靠问句 regex 词表** |
+| **编排** | `routes.ts` | Intake 后 `remember_user_fact` / `recall_user_fact` → **userFact 节点** → persistTurnEnd |
 | **Mem0** | `mem0/store.ts` | `addStructuredUserFact()` 写入；`searchUserFactMemories(factKey, label, question)` 语义检索 |
 | **值提取** | `user-fact.ts` | `extractByFactKey` + `validateFactValueForKey`；Mem0 行如 `QQ号是734858469` 须提取完整号码（勿误切「码」） |
 

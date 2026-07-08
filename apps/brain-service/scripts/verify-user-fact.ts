@@ -8,15 +8,17 @@ import { mkdtemp, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import {
-    applyUserFactFromIntake,
     buildEarlyExitRoutedDecision,
+    type IntakeRoutingDecision,
+} from "../src/agentflow/brain-service/online/intake-coordinator";
+import {
     findUserFactValueInTexts,
+    isUserFactIntent,
     parseUserFactRecord,
     routeUserFactFromIntake,
     serializeUserFactRecord,
-    type IntakeRoutingDecision,
-} from "../src/agentflow/brain-service/online/intake-coordinator";
-import { userFactNode } from "../src/agentflow/brain-service/online/user-fact";
+    userFactNode,
+} from "../src/agentflow/brain-service/online/user-fact";
 import type { PipelineGraphState } from "../src/agentflow/pipeline/graph/state";
 
 const QQ = "734858469";
@@ -125,10 +127,14 @@ assert.equal(routeUserFactFromIntake({
     intent: "clarify",
 }), null);
 
-const routed = applyUserFactFromIntake(rememberIntake(), rememberRoute!);
+assert.ok(isUserFactIntent(rememberIntake().intent));
+assert.ok(isUserFactIntent(recallIntake().intent));
+assert.equal(isUserFactIntent("clarify"), false);
+
+const routed = buildEarlyExitRoutedDecision(rememberIntake());
 assert.equal(routed.needsRetrieval, false);
-assert.equal(routed.userFact?.factKey, "qq");
 assert.equal(routed.compositeSlots.length, 0);
+assert.equal(routed.routeReason, "skip_non_retrieve");
 
 const wechatRoute = routeUserFactFromIntake(wechatRememberIntake());
 assert.equal(wechatRoute?.factKey, "wechat");

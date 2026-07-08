@@ -59,8 +59,7 @@ intake-coordinator/
 │
 ├── guards/                ← LLM 之后的规则兜底
 │   ├── intake-chitchat-guard.ts
-│   ├── intake-retrieval-plan-guard.ts
-│   └── intake-user-fact-guard.ts
+│   └── intake-retrieval-plan-guard.ts
 │
 ├── composite/             ← 多问 / 分槽 / L3-L4 增量
 │   ├── composite-routing.ts
@@ -69,17 +68,16 @@ intake-coordinator/
 │   ├── composite-facet-key.ts
 │   ├── composite-incremental.ts
 │   └── enumeration-target.ts
-│
-└── user-fact/             ← 已迁至 ../user-fact/
 ```
 
-### 推荐阅读顺序
+用户自述记忆见同级目录 [`../user-fact/`](../user-fact/README.md)。
 
-1. `pipeline/intake-pipeline.ts` — guard 链顺序（5 分钟建立全局观）
+### 推荐阅读顺序
 2. `contract/prompt.ts` — 字段含义 + Prompt 规则
 3. `guards/*` — 每条规则改什么
 4. `composite/*` — 多问怎么拆槽
 5. `llm/ollama-chat.ts` — LLM 输入输出
+6. [`../user-fact/`](../user-fact/README.md) — remember/recall Mem0
 
 ---
 
@@ -135,8 +133,8 @@ LLM 原始 JSON
     ▼ applyIntakeChitchatGuard()         guards/intake-chitchat-guard.ts
     │   chitchat/out_of_scope → pipeline 早退
     │
-    ▼ routeUserFactFromIntake()          user-fact/user-fact.ts
-    │   命中 → pipeline 早退（解析在 userFact 节点）
+    ▼ isUserFactIntent → pipeline 早退
+    │   （解析在 ../user-fact/nodes/user-fact-node.ts）
     │
     ▼ applyIntakeRetrievalPlanGuard()    guards/intake-retrieval-plan-guard.ts
     │
@@ -396,10 +394,9 @@ LLM:
   userFactLabel: QQ号
   userFactValue: 734858469
 
-guard_用户记忆: matched
-applyUserFactFromIntake → userFact: { action:"remember", factKey:"qq", ... }
+guard_用户记忆: matched（intent = remember | recall）
 
-→ userFact 节点 → Mem0 写入 → answer 确认话术
+→ routeAfterIntake → ../user-fact/ userFactNode → Mem0 写入 → answer 确认话术
 → 无 KM / analyst
 ```
 
@@ -470,7 +467,6 @@ defaultIntakeDecision(userQuestion):
 | `intake-pipeline.ts` | parse → LLM指代决策（透传/clarify 早退）→ guard 链 |
 | `intake-chitchat-guard.ts` | chitchat 注入服务端固定 briefReply |
 | `intake-retrieval-plan-guard.ts` | 多问补 retrievalPlan；canonicalize 对齐 L2 cache |
-| `intake-user-fact-guard.ts` | userFact 路由 decision 包装，needsRetrieval=false |
 
 ### composite/
 
@@ -559,7 +555,7 @@ pnpm --filter @fambrain/brain-service run golden:regression   # G1～G5b + GMem
 | `decision.searchQuery` + `queryType` + `topics` | KnowledgeManager（single/slot） |
 | `decision.compositeSlots[]` | KM 多槽并行 + Analyst 分段 |
 | `decision.intent === summarize_content` | ContentSummarizer |
-| `decision.userFact` | user-fact-node → Mem0 |
+| `intent` remember/recall | [`../user-fact/`](../user-fact/) → Mem0 |
 | `decision.clarifyingQuestion` / `briefReply` | respondEarly → 直接 answer |
 | `decision.coverage` 等 | **不产** — 由 KM 写入 state |
 
