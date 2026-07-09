@@ -36,6 +36,13 @@ const main = async (): Promise<void> => {
     }
     ok(`${tools.length} 个 StructuredTool 已注册`);
 
+    console.log("\n— search_web (stub) —");
+    const { searchWebTool } = await import("@/agentflow/tools");
+    const webRaw = await searchWebTool.invoke({ query: "test" });
+    const webParsed = JSON.parse(String(webRaw)) as { status: string };
+    assert.equal(webParsed.status, "disabled");
+    ok("search_web 默认 disabled");
+
     console.log("\n— retrieve_corpus (live, 需 Chroma) —");
 
     const { bootstrapBrainServiceRuntime } = await import("@/config");

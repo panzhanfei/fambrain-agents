@@ -9,6 +9,10 @@ import {
 } from "./analyst-recall-limits";
 import { isProjectEnumeration } from "@/agentflow/brain-service/online/intake-coordinator";
 import { memoryBlockHasStructuredUserFacts } from "@/agentflow/brain-service/online/user-fact";
+import {
+  resolveOrchestratedTool,
+  runOrchestratedSubQuestion,
+} from "@/agentflow/tools/orchestrated/run-sub-question";
 import { composeEnumerationAnswer } from "./compose-message";
 import {
     compactExcerptLine,
@@ -38,6 +42,8 @@ export type SubQuestionAnalyzeInput = {
   /** KM 列举元数据（total/shown） */
   enumerationMeta?: import("@/agentflow/brain-service/online/knowledge-manager").EnumerationMeta | null;
   listIntent?: import("@/agentflow/brain-service/online/intake-coordinator").EnumerationListIntent | null;
+  /** 年龄等编排工具计算基准日 YYYY-MM-DD，默认当天 */
+  asOfDate?: string;
 };
 
 export const shouldSkipSubQuestionLlm = (
@@ -45,7 +51,7 @@ export const shouldSkipSubQuestionLlm = (
 ): boolean =>
   input.hits.length === 0 ||
   input.coverage === "none" ||
-  input.queryType === "enumeration";
+  resolveOrchestratedTool(input) !== null;
 
 /** P0-12：FC 二次放行后 hits 仍空时跳过 Analyst LLM；Mem0 有结构化 user_fact 时不 skip */
 export const shouldSkipAnalystLlm = (input: InformationAnalystInput): boolean => {
@@ -156,21 +162,12 @@ export const buildSubQuestionFallbackAnswer = (
     };
   }
 
+  const orchestrated = runOrchestratedSubQuestion(input);
+  if (orchestrated) return orchestrated;
+
   const profile =
     queryType ??
     resolveAnalystQueryProfile({ userQuestion, subTasks: [userQuestion] });
-
-  if (profile === "enumeration") {
-    return composeEnumerationAnswer({
-      hits,
-      language,
-      topics: input.topics ?? [],
-      label: userQuestion,
-      enumerationMeta: input.enumerationMeta,
-      notes: input.notes,
-      listIntent: input.listIntent,
-    });
-  }
 
   let hitsForAnswer = hits;
   const citations: Citation[] = dedupeCitations(
@@ -205,6 +202,20 @@ export const buildFallbackAnswer = (
       queryType,
     });
   }
+
+  const orchestrated = runOrchestratedSubQuestion({
+    userQuestion,
+    language,
+    hits,
+    coverage,
+    notes,
+    queryType,
+    topics: input.topics ?? [],
+    enumerationMeta: input.enumerationMeta ?? null,
+    listIntent: input.listIntent ?? null,
+    asOfDate: new Date().toISOString().slice(0, 10),
+  });
+  if (orchestrated) return orchestrated;
 
   const profile = resolveAnalystQueryProfile({
     userQuestion,
@@ -265,4 +276,5 @@ export const toSubQuestionInput = (
   topics: input.topics ?? [],
   enumerationMeta: input.enumerationMeta ?? null,
   listIntent: input.listIntent ?? null,
+  asOfDate: new Date().toISOString().slice(0, 10),
 });

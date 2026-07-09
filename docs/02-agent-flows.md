@@ -326,18 +326,24 @@ flowchart TD
 
 **P0-15 composite（2026-06）：** `routeMode=composite` 且 ≥2 槽 → **`stream-composite.ts`** 顺序分问 token 流式；L3 facet cache 命中 instant 回放；新 facet 写回 `composite-answer-cache`。composite ≥2 槽跳过 FactChecker LLM。
 
-**P0-19 / P0-20（2026-06）：** 单问 `identity` / `enumeration` / `default` 走 **plain-text 流式**（与 composite 子问同路径，`think: false`），避免 JSON 解析失败退回「根据知识库摘录」体；hits 上限与 KM **queryProfile** 对齐（`analyst-recall-limits.ts`）；ContentOrganizer 按 profile 设 `maxHits`。详见 [坑点 §2.5.5](./04-pitfalls.md#255-analyst-纯文本流--enumeration-项目公司分流-p0-19--p0-20--2026-06)。
+**P0-19 / P0-20（2026-06）：** 单问 `identity` / `enumeration` / `default` 走 **plain-text 流式**（与 composite 子问同路径，`think: false`），避免 JSON 解析失败退回「根据知识库摘录」体；hits 上限与 KM **queryProfile** 对齐（`analyst-recall-limits.ts`）；ContentOrganizer 按 profile 设 `maxHits`。详见 [坑点 §2.5.5](./04-pitfalls.md#255-analyst-纯文本流--enumeration-项目公司分流-p0-19--p0-20--p0-21--2026-06)。
 
-**技术：** composite / 单问列举 → **plain-text 流式**；`tech` 单问仍 JSON **Zod**；fallback 为紧凑列表（非 raw excerpt 粘贴）。
+**P0-23（2026-07）：** composite / 单问 **identity 年龄槽** → **`resolveOrchestratedTool`** 命中 `compute_age_from_hits`，跳过 Analyst LLM，服务端从 excerpt 算周岁；工具表预留 **`search_web`**（外部事实，默认 disabled）。详见 [坑点 §2.5.7](./04-pitfalls.md#257-identity-年龄编排工具-p0-23--2026-07)。
+
+**技术：** composite / 单问列举 / **identity 年龄** → **编排工具或 plain-text 流式**；`tech` 单问仍 JSON **Zod**；fallback 为紧凑列表（非 raw excerpt 粘贴）。
 
 ```mermaid
 flowchart TD
   IN["userQuestion + hits + queryType + topics"] --> MODE{"analyzeMode"}
-  MODE -->|composite ≥2 槽| COMP["streamCompositeAnalyze()<br/>子问 plain-text"]
+  MODE -->|composite ≥2 槽| COMP["streamCompositeAnalyze()<br/>子问 plain-text / 编排工具"]
   MODE -->|single plain| PLAIN["streamAnalyzeSubQuestion()<br/>identity/enumeration/default"]
   MODE -->|single tech| JSON["streamSingleAnalyze JSON + Zod"]
-  COMP --> MERGE["mergeSubQuestionAnswers()"]
-  PLAIN --> ANS[answer + citations]
+  COMP --> ORCH{"resolveOrchestratedTool"}
+  PLAIN --> ORCH
+  ORCH -->|enumeration / age| TOOL["runOrchestratedSubQuestion<br/>compose_enumeration / compute_age_from_hits"]
+  ORCH -->|null| LLM["streamAnalyzeSubQuestion LLM"]
+  TOOL --> ANS[answer + citations]
+  LLM --> MERGE["mergeSubQuestionAnswers()"]
   JSON -->|parse 失败| FB["buildFallbackAnswer 紧凑列表"]
   JSON --> ANS
   MERGE --> ANS

@@ -11,6 +11,7 @@ import {
     maxAnalystHitsForProfile,
     resolveAnalystQueryProfile,
 } from "./analyst-recall-limits";
+import { resolveOrchestratedTool } from "@/agentflow/tools/orchestrated/run-sub-question";
 import {
     buildSubQuestionFallbackAnswer,
     normalizeAnalystResult,
@@ -71,10 +72,28 @@ export async function* streamAnalyzeSubQuestion(
         queryType: input.queryType,
     });
     const hits = sliceHitsForAnalyst(input);
-    const payload = { ...input, hits, queryType: profile, topics: input.topics ?? [] };
+    const payload = {
+        ...input,
+        hits,
+        queryType: profile,
+        topics: input.topics ?? [],
+        asOfDate: input.asOfDate ?? new Date().toISOString().slice(0, 10),
+    };
     const fallback = buildSubQuestionFallbackAnswer(payload);
 
     if (shouldSkipSubQuestionLlm(payload)) {
+        const toolId = resolveOrchestratedTool(payload);
+        logAgentOut("InformationAnalyst", "子问流式出去", {
+            label: input.userQuestion,
+            source: toolId
+                ? `orchestrated_${toolId}`
+                : "rules_empty_hits_skip_llm",
+            hitCount: hits.length,
+            answerPreview:
+                fallback.answer.length > 120
+                    ? `${fallback.answer.slice(0, 120)}…`
+                    : fallback.answer,
+        });
         yield { type: "assistant", text: fallback.answer };
         return fallback;
     }
@@ -158,14 +177,26 @@ export const completeAnalyzeSubQuestion = async (
         queryType: input.queryType,
     });
     const hits = sliceHitsForAnalyst(input);
-    const payload = { ...input, hits, queryType: profile };
+    const payload = {
+        ...input,
+        hits,
+        queryType: profile,
+        asOfDate: input.asOfDate ?? new Date().toISOString().slice(0, 10),
+    };
     const fallback = buildSubQuestionFallbackAnswer(payload);
 
     if (shouldSkipSubQuestionLlm(payload)) {
+        const toolId = resolveOrchestratedTool(payload);
         logAgentOut("InformationAnalyst", "子问出去", {
             label: input.userQuestion,
-            source: "rules_empty_hits_skip_llm",
+            source: toolId
+                ? `orchestrated_${toolId}`
+                : "rules_empty_hits_skip_llm",
             hitCount: hits.length,
+            answerPreview:
+                fallback.answer.length > 120
+                    ? `${fallback.answer.slice(0, 120)}…`
+                    : fallback.answer,
         });
         return fallback;
     }

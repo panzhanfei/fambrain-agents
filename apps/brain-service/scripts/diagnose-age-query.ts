@@ -127,14 +127,41 @@ const main = async () => {
   const hasAgeInExcerpt = retrieval.hits.some((h) =>
     /年龄|出生|周岁|19\d{2}|20\d{2}/.test(h.excerpt)
   );
+  const { runOrchestratedSubQuestion } = await import(
+    "../src/agentflow/tools/orchestrated/run-sub-question"
+  );
+  const orchestrated = runOrchestratedSubQuestion({
+    userQuestion: USER_QUESTION,
+    language: "zh",
+    hits: retrieval.hits,
+    coverage: retrieval.coverage,
+    notes: retrieval.notes,
+    queryType: "identity",
+    asOfDate: new Date().toISOString().slice(0, 10),
+  });
+  if (orchestrated) {
+    console.log(
+      JSON.stringify(
+        {
+          tool: "compute_age_from_hits",
+          answer: orchestrated.answer,
+          insufficientEvidence: orchestrated.insufficientEvidence,
+        },
+        null,
+        2
+      )
+    );
+  }
   if (retrieval.hits.length === 0) {
     console.log("❌ hitCount=0 → Analyst 走 rules_empty_hits_skip_llm + 年龄兜底文案");
     console.log("   可能：Chroma 未索引 / 服务不可达 / sparse 也未命中");
   } else if (!hasAgeInExcerpt) {
-    console.log("⚠️  有 hits 但 excerpt 无年龄/出生 → Analyst 会调 LLM，prompt 要求勿推算");
+    console.log("⚠️  有 hits 但 excerpt 无年龄/出生 → orchestrated 工具 insufficient 兜底");
     console.log("   可能：语料无年龄字段，或 pickExcerpt 未摘到表格年龄行");
+  } else if (orchestrated && !orchestrated.insufficientEvidence) {
+    console.log("✅ orchestrated compute_age_from_hits 已算出周岁（非 LLM 推算）");
   } else {
-    console.log("✅ hits 含年龄相关 excerpt，Web 上不应出现「未标注年龄」兜底");
+    console.log("⚠️  excerpt 含日期但未能解析出生 → 检查 excerpt 格式");
   }
 
   console.log("\n— 6. 对比：错误 searchQuery（模拟路由未 canonical）—");
