@@ -35,23 +35,43 @@ export const cachedFacetToAnalystResult = (
     citations: cached.citations,
     confidence: cached.confidence,
     insufficientEvidence: cached.insufficientEvidence,
+    blocks: cached.blocks,
 });
+
+const enumBlockFromResult = (
+    result: InformationAnalystResult
+): { page?: number; total?: number; listKind?: "project" | "experience" } => {
+    const block = result.blocks?.find((b) => b.type === "enumeration");
+    if (!block || block.type !== "enumeration") return {};
+    return {
+        page: block.page,
+        total: block.total,
+        listKind: block.listKind === "employer" ? "experience" : "project",
+    };
+};
 
 export const analystResultToCachedFacet = (
     facetKey: string,
     label: string,
     result: InformationAnalystResult,
     coverage: CachedFacetAnswer["coverage"]
-): CachedFacetAnswer => ({
-    facetKey,
-    label,
-    answer: result.answer,
-    citations: result.citations,
-    coverage,
-    insufficientEvidence: result.insufficientEvidence,
-    confidence: result.confidence,
-    cachedAt: Date.now(),
-});
+): CachedFacetAnswer => {
+    const meta = enumBlockFromResult(result);
+    return {
+        facetKey,
+        label,
+        answer: result.answer,
+        citations: result.citations,
+        coverage,
+        insufficientEvidence: result.insufficientEvidence,
+        confidence: result.confidence,
+        cachedAt: Date.now(),
+        blocks: result.blocks,
+        enumerationPage: meta.page,
+        enumerationTotal: meta.total,
+        listKind: meta.listKind,
+    };
+};
 
 export const resolveIncrementalCompositePlan = async (input: {
     session: CompositeSessionKey;

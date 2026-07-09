@@ -40,5 +40,11 @@ export {
     type CompositeSessionKey,
     type CompositeAnswerCacheBackend,
 } from "./cache/composite-answer-cache";
+export {
+    getEnumerationListSession,
+    upsertEnumerationListSession,
+    clearMemoryEnumerationListSessions,
+    type EnumerationListSession,
+} from "./cache/enumeration-list-session";
 export { tryConsumeRedisRateLimit } from "./rate-limit/redis-rate-limit";
 export * from "./queue/index";

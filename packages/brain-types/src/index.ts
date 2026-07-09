@@ -3,6 +3,13 @@ export type DbChatTurn = {
     role: "user" | "assistant" | "system";
     content: string;
 };
+
+export type {
+    AssistantMessageBlock,
+    AssistantMessagePayload,
+    EnumerationListItem,
+    EnumerationListKind,
+} from "./message-blocks";
 /** 编排上下文：由 HTTP 层注入，Agent 不直接读 session */
 export type AgentPipelineContext = {
     /** 当前登录用户 */
@@ -56,7 +63,7 @@ export type PipelineLogEntry = {
     preview?: string;
 };
 
-/** Orchestrator 向 HTTP 层推送的流式事件 */
+import type { AssistantMessageBlock } from "./message-blocks";
 export type AgentStreamEvent = {
     type: "step";
     name: PipelineStepName;
@@ -84,9 +91,22 @@ export type AgentStreamEvent = {
     /** 结构化 Agent 日志（Web 运行日志面板） */
     type: "pipeline_log";
     entry: PipelineLogEntry;
+} | {
+    /** 结构化 UI 块（列举表格等） */
+    type: "ui_block";
+    block: AssistantMessageBlock;
+} | {
+    /** 本轮助手消息结构化 payload（pipeline 结束前） */
+    type: "assistant_message";
+    message: {
+        plainText: string;
+        blocks: AssistantMessageBlock[];
+    };
 };
 export type AgentPipelineResult = {
     answer: string;
+    /** 结构化块；Web 优先渲染 blocks，content 存 plainText */
+    blocks?: AssistantMessageBlock[];
     /** D5-2：同会话字面重复问，复用 history 答 */
     repeatQuestionHit?: boolean;
     retrievalCacheHit?: boolean;

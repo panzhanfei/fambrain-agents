@@ -23,9 +23,12 @@ import {
 import { cachedFacetToAnalystResult } from "@/agentflow/brain-service/online/intake-coordinator";
 import { streamCompositeAnalyze } from "./stream-composite";
 
+import type { AssistantMessageBlock } from "@fambrain/brain-types";
+
 type AnalystStreamChunk =
     | { type: "thinking"; text: string }
-    | { type: "assistant"; text: string };
+    | { type: "assistant"; text: string }
+    | { type: "ui_block"; block: AssistantMessageBlock };
 
 const useCompositeParallelAnalyze = (
     input: InformationAnalystInput
@@ -90,12 +93,16 @@ async function* streamSingleAnalyze(
             insufficientEvidence: l3Cached.insufficientEvidence,
             confidence: l3Cached.confidence,
             citationCount: l3Cached.citations.length,
+            blockCount: l3Cached.blocks?.length ?? 0,
             answerPreview:
                 l3Cached.answer.length > 400
                     ? `${l3Cached.answer.slice(0, 400)}…`
                     : l3Cached.answer,
         });
         yield { type: "assistant", text: l3Cached.answer };
+        for (const block of l3Cached.blocks ?? []) {
+            yield { type: "ui_block", block };
+        }
         return l3Cached;
     }
 
@@ -124,7 +131,11 @@ async function* streamSingleAnalyze(
     }
 
     if (prefersPlainTextAnalystStream(profile)) {
-        return yield* streamSinglePlainAnalyze(input, profile);
+        const result = yield* streamSinglePlainAnalyze(input, profile);
+        for (const block of result.blocks ?? []) {
+            yield { type: "ui_block", block };
+        }
+        return result;
     }
 
     try {

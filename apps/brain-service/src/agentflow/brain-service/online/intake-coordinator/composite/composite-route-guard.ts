@@ -21,6 +21,8 @@ export type CompositeRouteReason =
     | "query_type_template"
     | "single_default";
 
+export type EnumerationListIntent = "preview" | "continue" | "exhaustive";
+
 export type RoutedIntakeDecision = IntakeRoutingDecision & {
     routeMode: IntakeRouteMode;
     compositeSlots: CompositeRetrievalSlot[];
@@ -28,6 +30,11 @@ export type RoutedIntakeDecision = IntakeRoutingDecision & {
     routePlanSource?: CompositeRoutePlanSource;
     /** P0-16：用户自述联系方式 remember/recall，不经 KM */
     userFact?: UserFactRoute | null;
+    /** 列举分页：preview=首屏8条；exhaustive=单问穷举；continue=续页 */
+    listIntent?: EnumerationListIntent | null;
+    enumerationPage?: number;
+    enumerationPageSize?: number;
+    enumerationListKind?: "project" | "experience";
 };
 
 const sourceToReason = (

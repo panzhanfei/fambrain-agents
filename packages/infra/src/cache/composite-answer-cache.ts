@@ -1,3 +1,4 @@
+import type { AssistantMessageBlock } from "@fambrain/brain-types";
 import { getInfraConfig } from "../config";
 import { getRedisClient } from "../redis/client";
 import { normalizeSearchQuery } from "./keys";
@@ -12,6 +13,11 @@ export type CachedFacetAnswer = {
   insufficientEvidence: boolean;
   confidence: number;
   cachedAt: number;
+  /** 列举型 UI 块；L3 命中时优先于 prose 重渲染 */
+  blocks?: AssistantMessageBlock[];
+  enumerationPage?: number;
+  enumerationTotal?: number;
+  listKind?: "project" | "experience";
 };
 
 export type CompositeSessionSnapshot = {

@@ -1,6 +1,7 @@
 "use client";
 import type { ConversationListItem } from "@fambrain/db";
-import type { PipelineLogEntry, PipelineStepName, PipelineTiming } from "@fambrain/brain-types";
+import type { PipelineLogEntry, PipelineStepName, PipelineTiming, AssistantMessageBlock, } from "@fambrain/brain-types";
+import { AssistantMessageContent } from "@/components/chat/assistant-message-content";
 import { ConversationLogPanel } from "@/components/chat/conversation-log-panel";
 import {
   createTurnLog,
@@ -31,6 +32,7 @@ type ChatMessage = {
   content: string;
   timing?: MessageTiming;
   retrievalPaths?: string[];
+  blocks?: AssistantMessageBlock[];
 };
 
 const STEP_TIMING_LABELS: Record<PipelineStepName, string> = {
@@ -476,6 +478,7 @@ export const ChatShell = ({ initialConversations, viewer }: ChatShellProps) => {
   const [thinkingPanelVisible, setThinkingPanelVisible] = useState(false);
   const [streamThinking, setStreamThinking] = useState("");
   const [streamAnswerPreview, setStreamAnswerPreview] = useState("");
+  const [streamBlocks, setStreamBlocks] = useState<AssistantMessageBlock[]>([]);
   const [editingSidebarId, setEditingSidebarId] = useState<string | null>(null);
   const [editSidebarTitleDraft, setEditSidebarTitleDraft] = useState("");
   const [uploadNotice, setUploadNotice] = useState<string | null>(null);
@@ -789,13 +792,14 @@ export const ChatShell = ({ initialConversations, viewer }: ChatShellProps) => {
     },
     [updateLogsForConversation]
   );
-  const sendMessage = useCallback(async () => {
-    const trimmed = draft.trim();
+  const sendMessageWithContent = useCallback(async (content: string) => {
+    const trimmed = content.trim();
     if (!trimmed || sendBusy) return;
     setSendBusy(true);
     setSendError(null);
     setStreamThinking("");
     setStreamAnswerPreview("");
+    setStreamBlocks([]);
     setThinkingPanelVisible(false);
     const tempUserId = `temp:${crypto.randomUUID()}`;
     pendingUserTempIdRef.current = tempUserId;
@@ -1008,6 +1012,30 @@ export const ChatShell = ({ initialConversations, viewer }: ChatShellProps) => {
           }
         }
         if (
+          event === "ui_block" &&
+          payload &&
+          typeof payload === "object" &&
+          payload !== null
+        ) {
+          const block = (payload as { block?: AssistantMessageBlock }).block;
+          if (block && typeof block === "object") {
+            setStreamBlocks((prev) => [...prev, block]);
+          }
+        }
+        if (
+          event === "assistant_message" &&
+          payload &&
+          typeof payload === "object" &&
+          payload !== null
+        ) {
+          const message = (payload as {
+            message?: { blocks?: AssistantMessageBlock[] };
+          }).message;
+          if (message?.blocks?.length) {
+            setStreamBlocks(message.blocks);
+          }
+        }
+        if (
           event === "assistant" &&
           payload &&
           typeof payload === "object" &&
@@ -1068,6 +1096,11 @@ export const ChatShell = ({ initialConversations, viewer }: ChatShellProps) => {
               )
                 ? ((p.assistantMessage as { retrievalPaths: string[] }).retrievalPaths)
                 : undefined,
+              blocks: Array.isArray(
+                (p.assistantMessage as { blocks?: unknown }).blocks
+              )
+                ? ((p.assistantMessage as { blocks: AssistantMessageBlock[] }).blocks)
+                : undefined,
             };
             flushSync(() => {
               setMessages((prev) => {
@@ -1075,9 +1108,11 @@ export const ChatShell = ({ initialConversations, viewer }: ChatShellProps) => {
                 return [...rest, assistant];
               });
               setStreamAnswerPreview("");
+              setStreamBlocks([]);
             });
           } else {
             setStreamAnswerPreview("");
+            setStreamBlocks([]);
           }
         }
         if (
@@ -1125,7 +1160,10 @@ export const ChatShell = ({ initialConversations, viewer }: ChatShellProps) => {
       setStreamAnswerPreview("");
       pendingUserTempIdRef.current = null;
     }
-  }, [activeConversationId, draft, loadConversations, patchActiveTurnLog, releaseSendLock, updateLogsForConversation]);
+  }, [activeConversationId, loadConversations, patchActiveTurnLog, releaseSendLock, sendBusy, updateLogsForConversation]);
+  const sendMessage = useCallback(async () => {
+    await sendMessageWithContent(draft);
+  }, [draft, sendMessageWithContent]);
   const applySuggestion = (text: string) => {
     setDraft(text);
     setSendError(null);
@@ -1541,7 +1579,15 @@ export const ChatShell = ({ initialConversations, viewer }: ChatShellProps) => {
                           : "bg-[#f3f4f6] text-[#111827]",
                       ].join(" ")}
                     >
-                      {m.content}
+                      {m.role === "assistant" ? (
+                        <AssistantMessageContent
+                          content={m.content}
+                          blocks={m.blocks}
+                          onAction={(prompt) => void sendMessageWithContent(prompt)}
+                        />
+                      ) : (
+                        m.content
+                      )}
                       {m.role === "assistant" && m.timing ? (
                         <MessageTimingLine timing={m.timing} />
                       ) : null}
@@ -1568,10 +1614,14 @@ export const ChatShell = ({ initialConversations, viewer }: ChatShellProps) => {
                     </div>
                   </li>
                 ) : null}
-                {streamAnswerPreview ? (
+                {streamAnswerPreview || streamBlocks.length > 0 ? (
                   <li className="flex justify-start">
                     <div className="max-w-[85%] rounded-2xl border border-[#e5e7eb] bg-[#f9fafb] px-4 py-2.5 text-[15px] leading-relaxed text-[#374151] whitespace-pre-wrap">
-                      {streamAnswerPreview}
+                      <AssistantMessageContent
+                        content={streamAnswerPreview}
+                        blocks={streamBlocks}
+                        onAction={(prompt) => void sendMessageWithContent(prompt)}
+                      />
                     </div>
                   </li>
                 ) : null}

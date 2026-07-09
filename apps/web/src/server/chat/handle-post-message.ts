@@ -1,4 +1,4 @@
-import type { AgentPipelineContext, AgentPipelineResult, DbChatTurn, } from "@fambrain/brain-types";
+import type { AgentPipelineContext, AgentPipelineResult, DbChatTurn, AssistantMessageBlock, } from "@fambrain/brain-types";
 import { encodeSseEvent, sseResponse } from "@/lib/chat/sse";
 import { appendAssistantMessage, appendUserMessage, maybeUpdateConversationTitle, } from "@fambrain/db";
 import { streamAgentPipeline } from "./brain-service-client";
@@ -59,9 +59,14 @@ export const createPostMessageStreamResponse = (options: {
                 const assistantRow = await appendAssistantMessage(
                     options.conversationId,
                     finalContent,
-                    pipelineResult?.retrievalPaths?.length ?
-                        {
-                            retrievalPaths: pipelineResult.retrievalPaths,
+                    pipelineResult?.retrievalPaths?.length || pipelineResult?.blocks?.length
+                        ? {
+                            ...(pipelineResult?.retrievalPaths?.length
+                                ? { retrievalPaths: pipelineResult.retrievalPaths }
+                                : {}),
+                            ...(pipelineResult?.blocks?.length
+                                ? { blocks: pipelineResult.blocks }
+                                : {}),
                         }
                     :   undefined
                 );
@@ -76,6 +81,7 @@ export const createPostMessageStreamResponse = (options: {
                         role: mapRole(assistantRow.role),
                         content: assistantRow.content,
                         retrievalPaths: pipelineResult?.retrievalPaths,
+                        blocks: pipelineResult?.blocks,
                     },
                     timing: pipelineResult?.timing,
                 });

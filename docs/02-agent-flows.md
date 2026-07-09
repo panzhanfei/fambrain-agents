@@ -213,7 +213,7 @@ flowchart TD
 | 3 | 解析 JSON | 抠 JSON → **Zod parse**；`userFact*` 缺省视为 `null`（勿误 fallback 检索） | `intake-coordinator/pipeline/parse-intake.ts`, `schema.ts` | `parseIntakeDecision()`, `intakeRoutingSchema` |
 | 4 | 兜底 | 解析失败 → `| 5 | 编排 | LangGraph 条件边 | `pipeline/graph/routes.ts` + `compile.ts` | `routeAfterIntake()` 等 |
 
-**Guard 链（compile intake 节点内）：** **LLM 指代/澄清**（`prompt.ts` 多轮指代补全；`clarify` → pipeline 早退）→ chitchat → **retrievalPlan guard** → **`routeUserFactFromIntake`**（P0-16，优先于 composite）→ **`applyCompositeRouteGuard`**（P0-15）。详见 [坑点 §2.5.3](./04-pitfalls.md#253-p0-15--r6-3--composite-分槽检索-2026-06) · [§2.5.6 Golden](./04-pitfalls.md#256-golden-回归-g1gmem--2026-06) · [§2.6 userFact](./04-pitfalls.md#26-跨会话用户自述事实未召回2026-06--web-联调)。
+**Guard 链（compile intake 节点内）：** **列举续问短路**（「更多项目 / 列出全部」→ `resolveEnumerationContinuation()`，跳过 LLM）→ LLM 路由 → **LLM 指代/澄清** → chitchat → **retrievalPlan guard** → **`routeUserFactFromIntake`**（P0-16）→ **`applyCompositeRouteGuard`**（P0-15）→ **`applyEnumerationListIntentGuard`**（单问穷举 → `listIntent=exhaustive`）。详见 [坑点 §2.5.6](./04-pitfalls.md#256-综合问项目段只列-2-个-p0-22--2026-07)。
 
 ### 2.5 跨会话用户事实 userFact — P0-16 ✅
 
@@ -349,10 +349,11 @@ flowchart TD
 | 1 | 输入 | hits + **queryType** / **topics**（来自 Intake） | `InformationAnalyst/prompt.ts` | `InformationAnalystInput` |
 | 2 | 空 hits 短路 | **P0-12** 不调 LLM | `analyze-helpers.ts` | `shouldSkipAnalystLlm()` |
 | 3 | profile 上限 | enumeration **8** / identity **4**（非固定 4） | `analyst-recall-limits.ts` | `maxAnalystHitsForProfile()` |
-| 4 | 流式 | composite + 单问列举 → plain-text；tech → JSON | `stream.ts`, `complete-analyze.ts` | `streamAnalyzeInformation()`, `streamAnalyzeSubQuestion()` |
-| 5 | 子问 prompt | **project** topics：只列 projects/ 项目名，禁止答公司 | `sub-question-prompt.ts` | `buildSubQuestionStreamPrompt(profile, topics)` |
-| 6 | fallback | 紧凑 bullet 列表，非「根据知识库摘录」 | `analyze-helpers.ts` | `buildFallbackAnswer()`, `formatHitsAsAnswerList()` |
-| 7 | 落库 | LangGraph `analyst` 节点 + SSE custom 流 | `information-analyst/analyst-node.ts`、`runtime/stream.ts` | `runAnalystNode()`, `streamAnalyzeInformation()` |
+| 4 | 流式 | composite + 单问列举 → **rules Composer**（不调 LLM）+ `ui_block`；tech → JSON | `compose-message.ts`, `stream-composite.ts` | `composeEnumerationAnswer()`, SSE `ui_block` |
+| 5 | 子问 prompt | identity/tech 仍 LLM；**enumeration 不走 LLM** | `analyze-helpers.ts` | `shouldSkipSubQuestionLlm()` |
+| 6 | fallback / blocks | **序号 + 项目名**（无 excerpt）；`enumeration` 表格块 + `paginationHint` | `enumeration-format.ts`, `compose-message.ts` | `formatHitsAsAnswerList()`, `buildEnumerationBlock()` |
+| 7 | 落库 | `Message.content` = plainText；`metadata.blocks` | `handle-post-message.ts` | `appendAssistantMessage(..., { blocks })` |
+| 8 | Web UI | `#` + 项目名称表格；分页说明；续问按钮 **自动发送** | `assistant-message-content.tsx`, `chat-shell.tsx` | `EnumerationBlockView`, `sendMessageWithContent()` |
 
 ### 6. ContentOrganizer — 内容整理师（D6）✅
 

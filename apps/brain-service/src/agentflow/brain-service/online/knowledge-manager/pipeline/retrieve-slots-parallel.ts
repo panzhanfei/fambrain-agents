@@ -27,6 +27,7 @@ export const retrieveCompositeSlotsParallel = async (input: {
                 coverage: retrieval.coverage,
                 notes: retrieval.notes,
                 confidenceTier: retrieval.confidenceTier,
+                enumerationMeta: retrieval.enumerationMeta,
                 cacheHit,
             };
             return sub;

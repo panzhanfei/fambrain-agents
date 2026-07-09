@@ -4,6 +4,7 @@ import type {
 } from "@/agentflow/brain-service/online/intake-coordinator";
 import type {
     ConfidenceTier,
+    EnumerationMeta,
     KnowledgeHit,
     KnowledgeRetrievalResult,
 } from "@/agentflow/brain-service/online/knowledge-manager";
@@ -17,6 +18,7 @@ export type CompositeSubRetrieval = {
     coverage: KnowledgeRetrievalResult["coverage"];
     notes: string | null;
     confidenceTier?: ConfidenceTier;
+    enumerationMeta?: EnumerationMeta;
     cacheHit: boolean;
     /** L3 子问终稿 cache 命中（跳过 KM + Analyst） */
     facetAnswerCacheHit?: boolean;

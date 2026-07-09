@@ -55,7 +55,7 @@ export const organizeHits = (hits: KnowledgeHit[], maxHits = MAX_HITS): Knowledg
     }
     return [...byPath.values()]
         .sort((a, b) => b.relevance - a.relevance)
-        .slice(0, MAX_HITS);
+        .slice(0, maxHits);
 };
 export const dedupeCitations = (citations: Citation[]): Citation[] => {
     const byPath = new Map<string, Citation>();

@@ -87,6 +87,7 @@
 | R6-2 | Analyst / 上下文 | **同会话追问**（如「用表格列出来 时间 职位 公司名称」）：上一轮已确认 **西安奥卡云**，本轮却称「没有明确列出具体公司」 | 见 §2.4 | 全链路重检 + 表格追问保留 grounded 公司 | ✅ **已解决**（2026-06 · `verify:r6-no-cache`）← §2.4 |
 | R6-3 | Intake / KM / Analyst | **同会话**：综合问首轮 **4 家**；编号子问或重复问后仅 **2 家** | 见 §2.7 | composite 分槽 + eval **`G-履历综合`** + `verify:r6-no-cache` | ✅ **已解决**（2026-06 · eval 4/4 + 无 cache 11/11）← §2.7 |
 | P0-19 | Analyst | 单问列举/档案走 **JSON+think** 解析失败 → 终稿变「**根据知识库摘录**」+ 整段 excerpt（像内部检索结果） | 单问与 composite 子问路径不一致；JSON parse 失败静默 `buildFallbackAnswer` 旧格式 | **plain-text 流式**（`prefersPlainTextAnalystStream`）；fallback 改 **紧凑列表** | ✅ **已解决**（2026-06）← §2.5.5 |
+| P0-22 | Analyst / KM / Web UI | **综合问**项目段只列 **2/36**；单问「列出全部」误解为应一页穷尽 | LLM 压缩；hybrid Top-8；分页 pageSize=20 | **enumeration skip LLM** + 分页 API + 序号仅项目名 + 分页文案 | ✅ **已解决**（2026-07）← §2.5.6 |
 | P0-20 | Analyst / KM / composite | **综合问**公司段只列 2 家；子问「2～8 句」压缩；Organizer 固定 cap **5** | `MAX_SUB_QUESTION_HITS=4`；子问 prompt 句数限制；CO 未跟 profile | **`maxAnalystHitsForProfile`** + CO **`queryProfile` maxHits**；enumeration 子问 prompt「须列全 hits」 | ✅ **已解决**（2026-06）← §2.5.5 |
 | P0-21 | Intake / KM / Analyst | composite 槽 label「**具体项目名称**」→ 答 **云联智慧/友谊时光** 等公司 | 所有 enumeration 共用 **experience fill**；Intake 误标 `topics:experience` → canonical 到 employers | **`resolveEnumerationTarget`**（label 优先）+ KM **projects/** 专扫 + Analyst project prompt | ✅ **已解决**（2026-06）← §2.5.5 |
 
@@ -346,9 +347,64 @@ Web：「我今年多大了」→ `routeMode=slot`，KM hits 含 `出生日期 |
 pnpm --filter @fambrain/brain-service run verify:analyst-empty-hits   # P0-19 fallback 形态
 pnpm --filter @fambrain/brain-service run verify:composite-route      # P0-21 label「具体项目名称」→ projects 槽
 pnpm --filter @fambrain/brain-service run verify:r6-no-cache          # 回归 R6 / P0-15
+pnpm --filter @fambrain/brain-service run verify:enumeration-compose  # P0-22 列举 blocks
 ```
 
-#### 2.5.6 Golden 回归 G1～GMem（✅ 2026-06）
+#### 2.5.6 综合问项目列举 + 分页（✅ P0-22 · 2026-07）
+
+**现象 A：** 综合问「姓名 + 年龄 + **全部项目**」时，语料 `projects/` 有 **36** 个 md，回答里项目段只有 **2** 条（如 agents-monorepo、my-mini-react）。
+
+**现象 B：** 单问「列出全部项目」只出 20 条，用户误以为检索不全；列表带 `#`/`>`/长 excerpt，难以阅读。
+
+**根因链 A（实测 `diagnose-projects-query.ts`）：**
+
+| 层 | 问题 | 说明 |
+|----|------|------|
+| **KM** | `PROFILE_MAX_HITS.enumeration=8` | 单次 hybrid 最多 8 条；36 项不可能一次全进 hits |
+| **ContentOrganizer** | `parseKnowledgeHits.max(5)` + `organizeHits` 忽略 `maxHits` | 8 条被截成 **5**（已修） |
+| **Analyst LLM** | composite 项目子问仍调 LLM 摘要 | 5 条常被压成 **2** 条（P0-20 同类） |
+
+**产品策略（三档，均为有意设计）：**
+
+| 场景 | 路径 | 条数 / 页 |
+|------|------|-----------|
+| composite 内「项目段」 | hybrid KM + fill | **预览 8**，序号 1–8 |
+| 单问「列出全部 / 都列出来」 | `list-corpus-entries` 分页 API | **每页 20**（如 36 项 → 2 页） |
+| 续问「更多项目」 | 读 `enumeration-list-session` → 下一页 | 序号连续（如 21–36） |
+
+**对策（已实现）：**
+
+| 模块 | 改动 |
+|------|------|
+| `compose-message.ts` | **enumeration 确定性 Composer**：blocks + actions |
+| `enumeration-format.ts` | **序号 + 仅项目名**；`formatEnumerationPaginationHint()` 分页文案 |
+| `analyze-helpers.ts` | `shouldSkipSubQuestionLlm`：enumeration 有 hits 也 skip LLM |
+| `contract/schema.ts` + `organize-hits.ts` | profile 感知 cap（enumeration **8**；分页时 `maxHitsOverride=pageSize`） |
+| `retrieve.ts` | `enumerationMeta`（total / page / hasMore） |
+| `list-corpus-entries.ts` + `/enumeration/list` | **分页 API**（path 排序 slice，不经 hybrid） |
+| `enumeration-list-intent.ts` | 续问「更多项目 / 列出全部」→ 跳过 Intake LLM；`listIntent` |
+| `enumeration-list-session.ts` | 会话记住 listKind / lastPage |
+| `composite-answer-cache` | L3 **存 blocks**，命中恢复表格 UI |
+| `packages/brain-types` | `AssistantMessageBlock` + `paginationHint` / `startIndex` |
+| `assistant-message-content.tsx` | 表格 **# + 项目名称**；底部分页说明 |
+| `chat-shell.tsx` | 续问按钮 → **自动 send**（非仅填 draft） |
+
+**分页文案示例（纯文本 footer 与 Web `paginationHint` 一致）：**
+
+- 预览：`语料共 36 个项目 · 本节预览 8 个，序号 1–8 · 发送「列出全部项目」可分页浏览完整列表，每页 20 条，共 2 页`
+- 第 1 页穷举：`语料共 36 个项目 · 第 1/2 页 · 序号 1–20 · 发送「更多项目」查看下一页`
+- 最后一页：`… 第 2/2 页 · 序号 21–36 · 已全部列出`
+
+**验证：**
+
+```bash
+FAMBRAIN_CORPUS_USER_ID=cmp9ihokn00000mbmhwh6gn0b \
+  pnpm --filter @fambrain/brain-service exec tsx --env-file=../../.env scripts/diagnose-projects-query.ts
+pnpm --filter @fambrain/brain-service run verify:enumeration-compose
+pnpm --filter @fambrain/brain-service run verify:enumeration-pagination
+```
+
+#### 2.5.7 Golden 回归 G1～GMem（✅ 2026-06）
 
 **命令：**
 
@@ -779,6 +835,7 @@ pnpm run verify:fact-checker
 - [x] **P0-13**（Golden Day 2）：chitchat 无乱称呼 ← `verify:intake-chitchat` ✅ 2026-06-18
 - [x] **P0-14**（Golden Day 2）：corpus/Mem0 不矛盾 ← KM 优化 ✅ 2026-06
 - [x] **P0-15**（Golden Day 2 实录）：无赵一/陈明、复合问法稳定 ← `verify:r6-no-cache` ✅ 2026-06
+- [x] **P0-22**（项目列举 blocks + 分页 + 序号列表）← §2.5.6 · `verify:enumeration-compose` · `verify:enumeration-pagination` · `diagnose-projects-query.ts` ✅ 2026-07
 - [x] **P0-19 / P0-20 / P0-21**（Analyst + enumeration 分流）← §2.5.5 · `verify:analyst-empty-hits` + `verify:composite-route` ✅ 2026-06
 - [x] **P0-16**（Web 联调）：对话 A 记 QQ → 对话 B 问 QQ 可召回 ← §2.6 · `verify:user-fact` ✅（含「码」误提取修复）
 - [x] R6-1：「哪几家公司上过班」类问题 → answer 枚举 **4 家**且同句再问一致 ← `verify:r6-no-cache` ✅ 2026-06

@@ -11,6 +11,8 @@ export type ContentOrganizerInput = {
     notes: string | null;
     /** 按 queryProfile 限制合并后 hits 上限（默认 default=5） */
     queryProfile?: QueryProfile;
+    /** 列举分页时覆盖 profile maxHits（如 pageSize=20） */
+    maxHitsOverride?: number;
 };
 export type ContentOrganizerResult = {
     hits: KnowledgeHit[];

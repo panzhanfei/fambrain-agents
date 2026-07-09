@@ -21,6 +21,8 @@
     "verify:intake-coreference": "tsx --env-file=../../.env scripts/verify-intake-coreference.ts",
     "verify:intake-chitchat": "tsx --env-file=../../.env scripts/verify-intake-chitchat.ts",
     "verify:composite-route": "tsx scripts/verify-composite-route.ts",
+    "verify:enumeration-compose": "tsx scripts/verify-enumeration-compose.ts",
+    "verify:enumeration-pagination": "tsx scripts/verify-enumeration-pagination.ts",
     "verify:composite-incremental": "tsx scripts/verify-composite-incremental.ts",
     "verify:r6-no-cache": "tsx --env-file=../../.env scripts/verify-r6-no-cache.ts",
     "verify:repeat-question-smoke": "tsx --env-file=../../.env scripts/verify-repeat-question-smoke.ts",

@@ -62,6 +62,10 @@ knowledge-manager/
 │   ├── fusion-rrf.ts      # RRF 融合
 │   └── retrieve-helpers.ts # rank / excerpt / guard / enumeration fill
 │
+├── list/                  ← 列举分页（P0-22 · 2026-07）
+│   ├── list-corpus-entries.ts   # 按 path 排序扫 projects|experience
+│   └── retrieve-enumeration-page.ts
+│
 └── profile/               ← 配置与分档
     ├── km-config.ts       # topK、pathBoost、RRF 常量
     ├── query-profile.ts   # identity / enumeration / tech / default
@@ -94,6 +98,8 @@ routeAfterIntake()                    pipeline/graph/routes.ts
 nodes/retrieval-node.ts               runRetrievalNode()
     │
     ├─ routeMode=single
+    │     ├─ listIntent=exhaustive|continue
+    │     │     └─ retrieveEnumerationPage()   list/retrieve-enumeration-page.ts（语料 path 分页，不经 hybrid）
     │     ├─ getRetrievalFromCache()     L2 命中 → 直接返回 hits
     │     └─ retrieveKnowledge()         recall/retrieve.ts
     │           hybridRecall → rank → confidenceTier
@@ -166,3 +172,8 @@ KnowledgeRetrievalResult { hits, coverage, notes, confidenceTier }
 | `pnpm --filter @fambrain/brain-service run verify:composite-route` | merge composite hits |
 | `pnpm --filter @fambrain/brain-service run verify:agent-schemas` | schema 合同 |
 | `pnpm --filter @fambrain/brain-service run verify:retrieval-cache` | L2 cache normalize |
+| `pnpm --filter @fambrain/brain-service run verify:enumeration-compose` | P0-22 列举 blocks + skip LLM + 序号/文案 |
+| `pnpm --filter @fambrain/brain-service run verify:enumeration-pagination` | 续问路由 + 分页 API + L3 blocks |
+| `pnpm exec tsx --env-file=../../.env scripts/diagnose-projects-query.ts` | 语料 36 项 vs KM/Organizer/规则路径 |
+
+**HTTP（brain-service）：** `POST /enumeration/list` — body `{ corpusUserId, listKind, page, pageSize }`；Web BFF：`POST /api/corpus/enumeration`。

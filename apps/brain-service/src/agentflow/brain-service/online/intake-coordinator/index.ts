@@ -45,11 +45,19 @@ export {
   applyIntakeRetrievalPlanGuard,
   type IntakeRetrievalPlanGuardReason,
 } from "./guards/intake-retrieval-plan-guard";
+export {
+  applyEnumerationListIntentGuard,
+  resolveEnumerationContinuation,
+  buildEnumerationListDecision,
+  detectEnumerationContinuationKind,
+  isExhaustiveListRequest,
+} from "./guards/enumeration-list-intent";
 
 export {
   applyCompositeRouteGuard,
   isCompositeProfileQuestion,
   type CompositeRouteReason,
+  type EnumerationListIntent,
   type IntakeRouteMode,
   type RoutedIntakeDecision,
 } from "./composite/composite-route-guard";

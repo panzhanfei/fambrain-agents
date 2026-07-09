@@ -1,13 +1,23 @@
 import { resolveIncrementalCompositePlan } from "@/agentflow/brain-service/online/intake-coordinator";
+import { resolveEnumerationTarget } from "@/agentflow/brain-service/online/intake-coordinator/composite/enumeration-target";
 import { retrieveKnowledge } from "@/agentflow/brain-service/online/knowledge-manager";
+import { retrieveEnumerationPage } from "@/agentflow/brain-service/online/knowledge-manager/list/retrieve-enumeration-page";
 import type { PipelineGraphState } from "@/agentflow/pipeline/graph/state";
 import {
     getRetrievalFromCache,
     setRetrievalCache,
+    upsertEnumerationListSession,
 } from "@fambrain/infra";
 import { retrieveCompositeIncremental } from "../pipeline/retrieve-composite-incremental";
 
-/** LangGraph retrieval 节点：单问 L2 cache + composite 增量检索 */
+const isPaginatedEnumeration = (
+    decision: NonNullable<PipelineGraphState["decision"]>
+): boolean =>
+    decision.routeMode === "single" &&
+    decision.queryType === "enumeration" &&
+    (decision.listIntent === "continue" || decision.listIntent === "exhaustive");
+
+/** LangGraph retrieval 节点：单问 L2 cache + composite 增量检索 + 列举分页 */
 export const runRetrievalNode = async (
     state: PipelineGraphState
 ): Promise<Partial<PipelineGraphState>> => {
@@ -61,6 +71,57 @@ export const runRetrievalNode = async (
         }
     }
 
+    if (isPaginatedEnumeration(decision)) {
+        const listKind =
+            decision.enumerationListKind ??
+            resolveEnumerationTarget({
+                label: state.userQuestion,
+                searchQuery: decision.searchQuery,
+                topics: decision.topics,
+                subTasks: decision.subTasks,
+            });
+        const page = decision.enumerationPage ?? 1;
+        const pageSize = decision.enumerationPageSize ?? 20;
+        try {
+            const retrieval = await retrieveEnumerationPage({
+                corpusUserId: state.context.corpusUserId,
+                listKind,
+                page,
+                pageSize,
+            });
+            await upsertEnumerationListSession(
+                {
+                    conversationId: state.context.conversationId,
+                    corpusUserId: state.context.corpusUserId,
+                },
+                listKind,
+                {
+                    lastPage: page,
+                    pageSize,
+                    total: retrieval.enumerationMeta?.totalExpected ?? 0,
+                }
+            );
+            return {
+                hits: retrieval.hits,
+                coverage: retrieval.coverage,
+                notes: retrieval.notes,
+                confidenceTier: retrieval.confidenceTier ?? null,
+                enumerationMeta: retrieval.enumerationMeta ?? null,
+                retrievalCacheHit: false,
+                retrievalCacheSlotHits: null,
+                compositeSubResults: null,
+                retryCount: fromRetry ? state.retryCount + 1 : state.retryCount,
+            };
+        }
+        catch (e) {
+            const msg = e instanceof Error ? e.message : "列举分页检索失败";
+            return {
+                error: msg,
+                retryCount: fromRetry ? state.retryCount + 1 : state.retryCount,
+            };
+        }
+    }
+
     const searchQuery = decision.searchQuery || state.userQuestion;
     const queryType = decision.queryType ?? "default";
     const cacheKey = {
@@ -97,11 +158,30 @@ export const runRetrievalNode = async (
             confidenceTier: retrieval.confidenceTier,
             confidenceScore: retrieval.confidenceScore,
         });
+        const sessionKey = {
+            conversationId: state.context.conversationId,
+            corpusUserId: state.context.corpusUserId,
+        };
+        if (
+            retrieval.enumerationMeta &&
+            decision.queryType === "enumeration"
+        ) {
+            await upsertEnumerationListSession(
+                sessionKey,
+                retrieval.enumerationMeta.listKind,
+                {
+                    lastPage: 1,
+                    pageSize: retrieval.hits.length,
+                    total: retrieval.enumerationMeta.totalExpected,
+                }
+            ).catch(() => undefined);
+        }
         return {
             hits: retrieval.hits,
             coverage: retrieval.coverage,
             notes: retrieval.notes,
             confidenceTier: retrieval.confidenceTier ?? null,
+            enumerationMeta: retrieval.enumerationMeta ?? null,
             retrievalCacheHit: false,
             retrievalCacheSlotHits: null,
             compositeSubResults: null,

@@ -7,7 +7,11 @@ export const knowledgeHitSchema = z.object({
     excerpt: z.string().trim().min(1),
     relevance: unitInterval,
 });
-export const knowledgeHitsSchema = z.array(knowledgeHitSchema).max(5);
+export const knowledgeHitsSchema = z.array(knowledgeHitSchema).max(20);
+
+/** profile 感知的 hits 上限（enumeration 8，default 5） */
+export const knowledgeHitsSchemaForMax = (maxHits: number) =>
+    z.array(knowledgeHitSchema).max(Math.min(maxHits, 20));
 export const knowledgeCoverageSchema = z.enum([
     "sufficient",
     "partial",
@@ -20,8 +24,12 @@ export const knowledgeRetrievalResultSchema = z.object({
     confidenceTier: z.enum(["high", "mid", "low"]).optional(),
     confidenceScore: unitInterval.optional(),
 });
-export const parseKnowledgeHits = (raw: unknown): KnowledgeHit[] => {
-    const parsed = knowledgeHitsSchema.safeParse(raw);
+export const parseKnowledgeHits = (
+    raw: unknown,
+    maxHits = 5
+): KnowledgeHit[] => {
+    const cap = Math.min(Math.max(1, maxHits), 20);
+    const parsed = knowledgeHitsSchemaForMax(cap).safeParse(raw);
     if (parsed.success)
         return parsed.data;
     if (!Array.isArray(raw))
@@ -35,7 +43,7 @@ export const parseKnowledgeHits = (raw: unknown): KnowledgeHit[] => {
         relevance: Math.min(1, Math.max(0, Number(h.relevance) || 0)),
     }))
         .filter((h) => h.path && h.excerpt)
-        .slice(0, 5);
+        .slice(0, cap);
 };
 export const parseKnowledgeRetrievalResult = (raw: unknown, fallback: KnowledgeRetrievalResult): KnowledgeRetrievalResult => {
     const parsed = knowledgeRetrievalResultSchema.safeParse(raw);

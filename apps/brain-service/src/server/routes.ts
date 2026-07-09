@@ -63,6 +63,9 @@ export const handlePipelineStream = async (req: IncomingMessage, res: ServerResp
         const gen = runAgentStream(parsed.data.history, parsed.data.context);
         let pipelineResult: {
             answer: string;
+            blocks?: import("@fambrain/brain-types").AssistantMessageBlock[];
+            retrievalCacheHit?: boolean;
+            timing?: import("@fambrain/brain-types").PipelineTiming;
         } | undefined;
         while (true) {
             const next = await gen.next();
@@ -74,6 +77,7 @@ export const handlePipelineStream = async (req: IncomingMessage, res: ServerResp
         }
         writeSse(res, "pipeline_done", {
             answer: pipelineResult?.answer ?? "",
+            blocks: pipelineResult?.blocks,
             retrievalCacheHit: pipelineResult?.retrievalCacheHit,
             timing: pipelineResult?.timing,
         });

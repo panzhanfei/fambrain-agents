@@ -518,6 +518,11 @@ const finalizeHits = (
             notes: tierNotes(assessment.tier, notes),
             confidenceTier: assessment.tier,
             confidenceScore: assessment.score,
+            enumerationMeta: {
+                listKind: fillTarget === "project" ? "project" : "experience",
+                totalExpected: expectedEnumerationPaths.length,
+                shown: result.hits.length,
+            },
         };
     } else {
         const assessment = assessConfidence({

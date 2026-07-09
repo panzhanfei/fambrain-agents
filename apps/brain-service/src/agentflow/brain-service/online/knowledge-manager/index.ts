@@ -23,6 +23,7 @@ export {
     type KnowledgeCandidate,
     type RecallChannel,
     type RecallSource,
+    type EnumerationMeta,
 } from "./contract/types";
 export {
     mergeCompositeHits,
@@ -34,6 +35,14 @@ export { retrieveCompositeIncremental } from "./pipeline/retrieve-composite-incr
 export { retrieveCompositeSlotsParallel } from "./pipeline/retrieve-slots-parallel";
 export { retrieveSlotWithCache } from "./pipeline/retrieve-with-cache";
 export { runRetrievalNode } from "./nodes/retrieval-node";
+export {
+    listCorpusEntriesPage,
+    listAllCorpusEntries,
+    ENUMERATION_PREVIEW_PAGE_SIZE,
+    ENUMERATION_EXHAUSTIVE_PAGE_SIZE,
+    type CorpusListKind,
+} from "./list/list-corpus-entries";
+export { retrieveEnumerationPage } from "./list/retrieve-enumeration-page";
 export {
     assessConfidence,
     deriveCoverageFromTier,

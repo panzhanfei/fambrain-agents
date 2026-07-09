@@ -14,11 +14,17 @@ export const runContentOrganizerNode = async (
               decision.queryType
           )
         : undefined;
+    const maxHitsOverride =
+        decision?.listIntent === "exhaustive" ||
+        decision?.listIntent === "continue"
+            ? decision.enumerationPageSize
+            : undefined;
     const organized = organizeKnowledge({
         hits: state.hits,
         coverage: state.coverage,
         notes: state.notes,
         queryProfile,
+        maxHitsOverride,
     });
     return {
         hits: organized.hits,

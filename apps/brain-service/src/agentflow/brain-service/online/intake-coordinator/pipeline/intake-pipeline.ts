@@ -12,6 +12,7 @@ import { applyCompositeRouteGuard } from "../composite/composite-route-guard";
 import type { RoutedIntakeDecision } from "../composite/composite-route-guard";
 import { applyIntakeChitchatGuard } from "../guards/intake-chitchat-guard";
 import { applyIntakeRetrievalPlanGuard } from "../guards/intake-retrieval-plan-guard";
+import { applyEnumerationListIntentGuard } from "../guards/enumeration-list-intent";
 import type { IntakeRoutingDecision } from "../contract/prompt";
 import { isUserFactIntent } from "@/agentflow/brain-service/online/user-fact";
 
@@ -217,7 +218,21 @@ export const runIntakePipeline = (
     })),
   });
 
-  /** ⑦ 出口：decision 写入 state，由 compile.ts routeAfterIntake 决定去 retrieval / respondEarly 等 */
-  logAgentOut("IntakeCoordinator", "最终路由", summarizeDecision(routed));
-  return { decision: routed, parseUsedFallback, earlyExit: false };
+  /** ⑦ 列举分页：单问穷举 → list API */
+  const withListIntent = applyEnumerationListIntentGuard(
+    routed,
+    input.userQuestion
+  );
+  if (withListIntent.listIntent === "exhaustive") {
+    logAgentOut("IntakeCoordinator", "guard_列举分页", {
+      listIntent: withListIntent.listIntent,
+      page: withListIntent.enumerationPage,
+      pageSize: withListIntent.enumerationPageSize,
+      listKind: withListIntent.enumerationListKind,
+    });
+  }
+
+  /** ⑧ 出口：decision 写入 state，由 compile.ts routeAfterIntake 决定去 retrieval / respondEarly 等 */
+  logAgentOut("IntakeCoordinator", "最终路由", summarizeDecision(withListIntent));
+  return { decision: withListIntent, parseUsedFallback, earlyExit: false };
 };

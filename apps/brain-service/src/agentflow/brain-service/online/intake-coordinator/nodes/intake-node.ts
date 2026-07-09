@@ -1,12 +1,24 @@
 import { completeIntakeCoordinator } from "../llm/ollama-chat";
+import { resolveEnumerationContinuation } from "../guards/enumeration-list-intent";
 import { runIntakePipeline } from "../pipeline/intake-pipeline";
 import type { PipelineGraphState } from "@/agentflow/pipeline/graph/state";
 
-/** LangGraph intake 节点：LLM 路由 + guard pipeline */
+/** LangGraph intake 节点：列举续问短路 + LLM 路由 + guard pipeline */
 export const runIntakeNode = async (
     state: PipelineGraphState
 ): Promise<Partial<PipelineGraphState>> => {
     try {
+        const continued = await resolveEnumerationContinuation({
+            userQuestion: state.userQuestion,
+            session: {
+                conversationId: state.context.conversationId,
+                corpusUserId: state.context.corpusUserId,
+            },
+        });
+        if (continued) {
+            return { decision: continued };
+        }
+
         const intakeRaw = await completeIntakeCoordinator(state.intakeHistory, {
             memoryBlock: state.memoryBlock,
             intakeHistory: state.intakeHistory,

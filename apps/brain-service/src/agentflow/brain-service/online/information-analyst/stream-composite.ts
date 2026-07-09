@@ -1,4 +1,5 @@
 import { logAgentIn, logAgentOut } from "@fambrain/brain-shared/agent-log";
+import type { AssistantMessageBlock } from "@fambrain/brain-types";
 import { upsertFacetAnswers } from "@fambrain/infra";
 import { organizeKnowledge } from "@/agentflow/brain-service/online/content-organizer";
 import { resolveQueryProfile } from "@/agentflow/brain-service/online/knowledge-manager";
@@ -11,12 +12,14 @@ import {
     mergeSubQuestionAnswers,
     type SubQuestionAnalyzeInput,
 } from "./analyze-helpers";
+import { mergeCompositeWithBlocks } from "./compose-message";
 import { streamAnalyzeSubQuestion } from "./complete-analyze";
 import type { InformationAnalystInput, InformationAnalystResult } from "./prompt";
 
 type AnalystStreamChunk =
     | { type: "thinking"; text: string }
-    | { type: "assistant"; text: string };
+    | { type: "assistant"; text: string }
+    | { type: "ui_block"; block: AssistantMessageBlock };
 
 type SubQuestionDone = {
     order: number;
@@ -50,6 +53,7 @@ const buildSubInput = (
         notes: sub.notes ?? null,
         queryType,
         topics: [...plan.topics],
+        enumerationMeta: sub.enumerationMeta ?? null,
     };
 };
 
@@ -59,8 +63,26 @@ const findSubResult = (
     order: number
 ) => input.compositeSubResults?.[order];
 
+const emitSectionBlocks = function* (
+    sectionNo: number,
+    label: string,
+    result: InformationAnalystResult
+): Generator<AnalystStreamChunk> {
+    if (result.blocks?.length) {
+        yield { type: "ui_block", block: { type: "heading", text: label, sectionNo } };
+        for (const block of result.blocks) {
+            yield { type: "ui_block", block };
+        }
+        return;
+    }
+    yield {
+        type: "assistant",
+        text: `${sectionNo}. ${label}\n${result.answer.trim()}`,
+    };
+};
+
 /**
- * composite：L3 命中 instant 展示 + 新 facet 顺序 token 流式；结束写回 session cache。
+ * composite：L3 命中 instant 展示 + 新 facet 顺序流式；列举槽 deterministic + ui_block。
  */
 export async function* streamCompositeAnalyze(
     input: InformationAnalystInput,
@@ -81,7 +103,6 @@ export async function* streamCompositeAnalyze(
     }
 
     const completed: SubQuestionDone[] = [];
-    let newFacetCount = 0;
 
     for (let order = 0; order < plans.length; order++) {
         const plan = plans[order]!;
@@ -111,7 +132,7 @@ export async function* streamCompositeAnalyze(
             });
             yield {
                 type: "assistant",
-                text: mergeSubQuestionAnswers(
+                text: mergeCompositeWithBlocks(
                     completed.map((s) => ({
                         order: s.order,
                         label: s.label,
@@ -119,10 +140,16 @@ export async function* streamCompositeAnalyze(
                     }))
                 ).answer,
             };
+            yield {
+                type: "ui_block",
+                block: { type: "heading", text: plan.label, sectionNo },
+            };
+            for (const block of result.blocks ?? []) {
+                yield { type: "ui_block", block };
+            }
             continue;
         }
 
-        newFacetCount++;
         yield {
             type: "thinking",
             text: `正在回答第 ${sectionNo}/${plans.length} 项：${plan.label}…`,
@@ -130,20 +157,17 @@ export async function* streamCompositeAnalyze(
 
         const subInput = buildSubInput(input, plan, sub);
         const gen = streamAnalyzeSubQuestion(subInput);
-        let sectionBody = "";
         let result: InformationAnalystResult | undefined;
 
         let next = await gen.next();
         while (!next.done) {
-            sectionBody = next.value.text;
             yield {
                 type: "assistant",
-                text: `${prefix}${sectionNo}. ${plan.label}\n${sectionBody}`,
+                text: `${prefix}${sectionNo}. ${plan.label}\n${next.value.text}`,
             };
             next = await gen.next();
         }
         result = next.value;
-        sectionBody = result.answer;
 
         completed.push({
             order,
@@ -152,9 +176,10 @@ export async function* streamCompositeAnalyze(
             result,
             fromFacetCache: false,
         });
+
         yield {
             type: "assistant",
-            text: mergeSubQuestionAnswers(
+            text: mergeCompositeWithBlocks(
                 completed.map((s) => ({
                     order: s.order,
                     label: s.label,
@@ -162,9 +187,10 @@ export async function* streamCompositeAnalyze(
                 }))
             ).answer,
         };
+        yield* emitSectionBlocks(sectionNo, plan.label, result);
     }
 
-    const merged = mergeSubQuestionAnswers(
+    const merged = mergeCompositeWithBlocks(
         completed.map((s) => ({
             order: s.order,
             label: s.label,
@@ -193,7 +219,7 @@ export async function* streamCompositeAnalyze(
     logAgentOut("InformationAnalyst", "composite 增量流式出去", {
         subCount: subs.length,
         facetCacheHits: completed.filter((s) => s.fromFacetCache).length,
-        newFacetCount,
+        blockCount: merged.blocks?.length ?? 0,
         citationCount: merged.citations.length,
         answerPreview:
             merged.answer.length > 400
@@ -202,4 +228,4 @@ export async function* streamCompositeAnalyze(
     });
 
     return merged;
-}
+};

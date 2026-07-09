@@ -4,6 +4,7 @@ import { handleAsync } from "@/server/handle-async";
 import { handleHealth, handleNotFound, handlePipelineStream, } from "@/server/routes";
 import { handleDocumentsUpload } from "@/server/documents-upload";
 import { handleLearningApply } from "@/server/learning-apply";
+import { handleEnumerationList } from "@/server/enumeration-list";
 
 const { langSmith, port } = bootstrapBrainServiceRuntime();
 
@@ -23,6 +24,10 @@ const server = createServer((req, res) => {
     }
     if (url === "/learning/apply") {
         handleAsync(handleLearningApply)(req, res);
+        return;
+    }
+    if (url === "/enumeration/list") {
+        handleAsync(handleEnumerationList)(req, res);
         return;
     }
     handleNotFound(res);

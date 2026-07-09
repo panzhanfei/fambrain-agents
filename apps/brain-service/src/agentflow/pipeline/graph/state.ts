@@ -1,5 +1,6 @@
 import { Annotation } from "@langchain/langgraph";
 import type { AgentPipelineContext, DbChatTurn, } from "@fambrain/brain-types";
+import type { AssistantMessageBlock } from "@fambrain/brain-types";
 import type {
     IncrementalCompositePlan,
     RoutedIntakeDecision,
@@ -8,6 +9,7 @@ import type { InformationAnalystInput } from "@/agentflow/brain-service/online/i
 import type {
     ConfidenceTier,
     CompositeSubRetrieval,
+    EnumerationMeta,
 } from "@/agentflow/brain-service/online/knowledge-manager";
 /**
  * LangGraph 编排共享状态（Intake → KM → FactChecker → ContentOrganizer → Analyst；摘要分支 Intake → KM → ContentSummarizer）。
@@ -30,8 +32,12 @@ export const PipelineGraphAnnotation = Annotation.Root({
     notes: Annotation<InformationAnalystInput["notes"]>,
     /** EV-04：KM 置信分档 */
     confidenceTier: Annotation<ConfidenceTier | null>,
+    /** 列举分页元数据（total/page/hasMore） */
+    enumerationMeta: Annotation<EnumerationMeta | null>,
     /** 澄清 / 闲聊 / briefReply 等提前结束时的终稿（不经 Analyst） */
     answer: Annotation<string | null>,
+    /** 结构化 UI 块（列举表格等） */
+    assistantBlocks: Annotation<AssistantMessageBlock[] | null>,
     /** 某节点失败时的错误信息，SSE 层会推 error 事件 */
     error: Annotation<string | null>,
     /** true 表示图在 respondEarly 结束，不再进入 Analyst */

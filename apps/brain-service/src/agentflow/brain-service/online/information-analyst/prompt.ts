@@ -33,6 +33,8 @@ export type InformationAnalystResult = {
    * 且不得捏造用户经历。
    */
   insufficientEvidence: boolean;
+  /** 结构化 UI 块（列举表格等）；Web 优先渲染 */
+  blocks?: import("@fambrain/brain-types").AssistantMessageBlock[];
 };
 /** 编排器传入本 Agent 的上下文（写入 HumanMessage） */
 export type InformationAnalystInput = {
@@ -58,6 +60,7 @@ export type InformationAnalystInput = {
     coverage: KnowledgeRetrievalResult["coverage"];
     notes?: string | null;
     facetAnswerCacheHit?: boolean;
+    enumerationMeta?: import("@/agentflow/brain-service/online/knowledge-manager").EnumerationMeta;
   }>;
   /** L4 增量 plan（含 L3 facet cache 命中标记） */
   compositeIncrementalPlan?: {
@@ -72,6 +75,10 @@ export type InformationAnalystInput = {
   searchQuery?: string;
   /** Intake topics（项目/经历列举分流） */
   topics?: string[];
+  /** KM 列举元数据（分页 total/shown/page） */
+  enumerationMeta?: import("@/agentflow/brain-service/online/knowledge-manager").EnumerationMeta | null;
+  /** 列举分页意图（preview / exhaustive / continue） */
+  listIntent?: import("@/agentflow/brain-service/online/intake-coordinator").EnumerationListIntent | null;
 };
 export const prompt = `你是 FamBrain 系统中的「信息分析师」（InformationAnalyst）。
 

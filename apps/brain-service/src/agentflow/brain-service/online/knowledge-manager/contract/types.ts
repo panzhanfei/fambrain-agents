@@ -16,6 +16,16 @@ export type RecallSource =
 /** EV-04：检索置信分档 */
 export type ConfidenceTier = "high" | "mid" | "low";
 
+/** 列举型检索元数据（项目/公司穷举 UI） */
+export type EnumerationMeta = {
+    listKind: "project" | "experience";
+    totalExpected: number;
+    shown: number;
+    page?: number;
+    pageSize?: number;
+    hasMore?: boolean;
+};
+
 /** HY-05：统一候选（向量 L2 / BM25 rawScore + 可选 fusionScore） */
 export type KnowledgeCandidate = {
     path: string;
@@ -49,6 +59,8 @@ export type KnowledgeRetrievalResult = {
     confidenceTier?: ConfidenceTier;
     /** EV-01：0–1 综合置信分（日志 / eval 用） */
     confidenceScore?: number;
+    /** 列举型：语料总数 vs 本次 hits 数 */
+    enumerationMeta?: EnumerationMeta;
 };
 export type KnowledgeManagerInput = {
     corpusUserId: string;

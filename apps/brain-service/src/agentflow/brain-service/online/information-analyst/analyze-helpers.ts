@@ -9,6 +9,12 @@ import {
 } from "./analyst-recall-limits";
 import { isProjectEnumeration } from "@/agentflow/brain-service/online/intake-coordinator";
 import { memoryBlockHasStructuredUserFacts } from "@/agentflow/brain-service/online/user-fact";
+import { composeEnumerationAnswer } from "./compose-message";
+import {
+    compactExcerptLine,
+    formatHitsAsAnswerList,
+    hitDisplayTitle,
+} from "./enumeration-format";
 import type {
   Citation,
   InformationAnalystInput,
@@ -16,6 +22,7 @@ import type {
 } from "./prompt";
 import { parseAnalystResult } from "./schema";
 export { parseAnalystResult as normalizeAnalystResult };
+export { formatHitsAsAnswerList, hitDisplayTitle, compactExcerptLine } from "./enumeration-format";
 
 /** 单个子问题 Analyst 输入（composite map） */
 export type SubQuestionAnalyzeInput = {
@@ -28,44 +35,17 @@ export type SubQuestionAnalyzeInput = {
   queryType?: QueryProfile;
   /** 槽位 topics（区分项目列举 vs 公司列举） */
   topics?: string[];
+  /** KM 列举元数据（total/shown） */
+  enumerationMeta?: import("@/agentflow/brain-service/online/knowledge-manager").EnumerationMeta | null;
+  listIntent?: import("@/agentflow/brain-service/online/intake-coordinator").EnumerationListIntent | null;
 };
-
-const hitDisplayTitle = (hit: KnowledgeHit): string => {
-  const title = hit.title?.trim();
-  if (title) return title;
-  const base = hit.path.split("/").pop() ?? hit.path;
-  return base.replace(/\.md$/i, "");
-};
-
-/** 从 excerpt 取首条实质行，避免 fallback 整段粘贴 Markdown 表格 */
-const compactExcerptLine = (excerpt: string, max = 180): string => {
-  for (const line of excerpt.split("\n")) {
-    const t = line.replace(/\|/g, " ").replace(/\s+/g, " ").trim();
-    if (t.length >= 6 && !/^[-#|*\s]+$/.test(t)) {
-      return t.length <= max ? t : `${t.slice(0, max - 1)}…`;
-    }
-  }
-  const flat = excerpt.replace(/\s+/g, " ").trim();
-  return flat.length <= max ? flat : `${flat.slice(0, max - 1)}…`;
-};
-
-export const formatHitsAsAnswerList = (
-  hits: KnowledgeHit[],
-  language: "zh" | "en" | "mixed"
-): string =>
-  hits
-    .map((h) => {
-      const title = hitDisplayTitle(h);
-      const detail = compactExcerptLine(h.excerpt);
-      return language === "en"
-        ? `- **${title}**: ${detail}`
-        : `- **${title}**：${detail}`;
-    })
-    .join("\n");
 
 export const shouldSkipSubQuestionLlm = (
   input: SubQuestionAnalyzeInput
-): boolean => input.hits.length === 0 || input.coverage === "none";
+): boolean =>
+  input.hits.length === 0 ||
+  input.coverage === "none" ||
+  input.queryType === "enumeration";
 
 /** P0-12：FC 二次放行后 hits 仍空时跳过 Analyst LLM；Mem0 有结构化 user_fact 时不 skip */
 export const shouldSkipAnalystLlm = (input: InformationAnalystInput): boolean => {
@@ -179,32 +159,30 @@ export const buildSubQuestionFallbackAnswer = (
   const profile =
     queryType ??
     resolveAnalystQueryProfile({ userQuestion, subTasks: [userQuestion] });
-  let hitsForAnswer = hits;
-  if (
-    profile === "enumeration" &&
-    isProjectEnumeration({
-      label: userQuestion,
-      searchQuery: userQuestion,
+
+  if (profile === "enumeration") {
+    return composeEnumerationAnswer({
+      hits,
+      language,
       topics: input.topics ?? [],
-    })
-  ) {
-    const projectHits = hits.filter((h) =>
-      h.path.replace(/\\/g, "/").toLowerCase().includes("/projects/")
-    );
-    if (projectHits.length > 0) hitsForAnswer = projectHits;
+      label: userQuestion,
+      enumerationMeta: input.enumerationMeta,
+      notes: input.notes,
+      listIntent: input.listIntent,
+    });
   }
+
+  let hitsForAnswer = hits;
   const citations: Citation[] = dedupeCitations(
     hitsForAnswer.map((h) => ({ path: h.path, excerpt: h.excerpt }))
   );
 
   const answer =
-    profile === "enumeration"
-      ? formatHitsAsAnswerList(hitsForAnswer, language)
-      : hitsForAnswer.length === 1
-        ? language === "en"
-          ? `${hitDisplayTitle(hitsForAnswer[0]!)}: ${compactExcerptLine(hitsForAnswer[0]!.excerpt)}`
-          : `${hitDisplayTitle(hitsForAnswer[0]!)}：${compactExcerptLine(hitsForAnswer[0]!.excerpt)}`
-        : formatHitsAsAnswerList(hitsForAnswer, language);
+    hitsForAnswer.length === 1
+      ? language === "en"
+        ? `${hitDisplayTitle(hitsForAnswer[0]!)}: ${compactExcerptLine(hitsForAnswer[0]!.excerpt)}`
+        : `${hitDisplayTitle(hitsForAnswer[0]!)}：${compactExcerptLine(hitsForAnswer[0]!.excerpt)}`
+      : formatHitsAsAnswerList(hitsForAnswer, language);
 
   return {
     answer,
@@ -233,6 +211,19 @@ export const buildFallbackAnswer = (
     subTasks,
     queryType,
   });
+
+  if (profile === "enumeration") {
+    return composeEnumerationAnswer({
+      hits,
+      language,
+      topics: input.topics ?? [],
+      label: userQuestion,
+      enumerationMeta: input.enumerationMeta,
+      notes,
+      listIntent: input.listIntent,
+    });
+  }
+
   const citations: Citation[] = dedupeCitations(
     hits.map((h) => ({
       path: h.path,
@@ -240,10 +231,7 @@ export const buildFallbackAnswer = (
     }))
   );
 
-  let answer =
-    profile === "enumeration"
-      ? formatHitsAsAnswerList(hits, language)
-      : formatHitsAsAnswerList(hits, language);
+  let answer = formatHitsAsAnswerList(hits, language);
 
   if (coverage === "partial") {
     answer +=
@@ -275,4 +263,6 @@ export const toSubQuestionInput = (
   notes: input.notes,
   queryType: profile,
   topics: input.topics ?? [],
+  enumerationMeta: input.enumerationMeta ?? null,
+  listIntent: input.listIntent ?? null,
 });

@@ -26,6 +26,8 @@ export const runAnalystNode = async (
             queryType: decision.queryType,
             searchQuery: decision.searchQuery,
             topics: decision.topics,
+            enumerationMeta: state.enumerationMeta ?? null,
+            listIntent: decision.listIntent ?? null,
             compositeSubResults: state.compositeSubResults ?? undefined,
             compositeIncrementalPlan:
                 state.compositeIncrementalPlan ?? undefined,
@@ -39,7 +41,7 @@ export const runAnalystNode = async (
             write?.(result.value);
             result = await gen.next();
         }
-        return { answer: result.value.answer };
+        return { answer: result.value.answer, assistantBlocks: result.value.blocks ?? [] };
     }
     catch (e) {
         const msg = e instanceof Error ? e.message : "信息分析师调用失败";

@@ -16,6 +16,7 @@ import type {
   AgentPipelineContext,
   AgentPipelineResult,
   AgentStreamEvent,
+  AssistantMessageBlock,
   DbChatTurn,
   PipelineStepName,
   PipelineTiming,
@@ -32,31 +33,38 @@ import { PipelineTimingTracker } from "./pipeline-timing";
 
 /** Analyst 经 LangGraph custom 通道推送的流式 chunk 形状 */
 type AnalystStreamChunk =
-  | {
-      type: "thinking";
-      text: string;
-    }
-  | {
-      type: "assistant";
-      text: string;
-    };
+  | { type: "thinking"; text: string }
+  | { type: "assistant"; text: string }
+  | { type: "ui_block"; block: AssistantMessageBlock };
 
 /** 向 SSE 推送一条 assistant 终稿/流式文本事件 */
 function* emitAssistant(answer: string): Generator<AgentStreamEvent> {
   yield { type: "assistant", text: answer };
 }
 
-/** 类型守卫：判断 LangGraph custom 流 payload 是否为 Analyst 的 thinking/assistant chunk */
 const isAnalystStreamChunk = (value: unknown): value is AnalystStreamChunk => {
   if (!value || typeof value !== "object") return false;
   const chunk = value as {
     type?: unknown;
     text?: unknown;
+    block?: unknown;
   };
+  if (chunk.type === "ui_block") {
+    return chunk.block != null && typeof chunk.block === "object";
+  }
   return (
     (chunk.type === "thinking" || chunk.type === "assistant") &&
     typeof chunk.text === "string"
   );
+};
+
+const analystChunkToStreamEvent = (
+  chunk: AnalystStreamChunk
+): AgentStreamEvent => {
+  if (chunk.type === "ui_block") {
+    return { type: "ui_block", block: chunk.block };
+  }
+  return chunk;
 };
 
 /** 从 finalState.hits 提取去重后的 corpus path，供 AgentPipelineResult */
@@ -204,7 +212,7 @@ async function* runPipelineStreamInner(
     if (mode === "custom") {
       if (isAnalystStreamChunk(payload)) {
         timing.markFirstToken();
-        yield payload;
+        yield analystChunkToStreamEvent(payload);
       }
       continue;
     }
@@ -397,8 +405,16 @@ async function* runPipelineStreamInner(
     "出去",
     summarizePipelineOut(finalState, answer, pipelineTiming)
   );
+  const blocks = finalState.assistantBlocks ?? undefined;
+  if (blocks?.length) {
+    yield {
+      type: "assistant_message",
+      message: { plainText: answer, blocks },
+    };
+  }
   return {
     answer,
+    blocks,
     repeatQuestionHit: finalState.repeatQuestionHit,
     retrievalCacheHit: finalState.retrievalCacheHit,
     compositeFacetCacheHits: finalState.compositeFacetCacheHits,

@@ -1,4 +1,5 @@
 import { getAuthSession, getAuthToken } from "@fambrain/auth";
+import type { AssistantMessageBlock } from "@fambrain/brain-types";
 import { conversationIdSchema, postConversationMessageBodySchema } from "@fambrain/db";
 import { forbiddenIfUntrustedMutation } from "@/lib/security/same-origin";
 import { rejectIfPayloadTooLarge } from "@/lib/security/request-limits";
@@ -37,13 +38,17 @@ export const GET = async (_request: Request, context: {
         const messages = rows.map((m) => {
             const meta =
                 m.metadata && typeof m.metadata === "object" ?
-                    (m.metadata as { retrievalPaths?: string[] })
+                    (m.metadata as {
+                        retrievalPaths?: string[];
+                        blocks?: AssistantMessageBlock[];
+                    })
                 :   undefined;
             return {
                 id: m.id,
                 role: mapRole(m.role),
                 content: m.content,
                 retrievalPaths: meta?.retrievalPaths,
+                blocks: meta?.blocks,
             };
         });
         return NextResponse.json(messages);
