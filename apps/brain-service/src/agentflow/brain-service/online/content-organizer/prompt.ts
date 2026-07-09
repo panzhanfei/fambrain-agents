@@ -1,6 +1,6 @@
 import type { KnowledgeHit, KnowledgeRetrievalResult, } from "@/agentflow/brain-service/online/knowledge-manager";
-import type { QueryProfile } from "@/agentflow/brain-service/online/knowledge-manager/query-profile";
-import { getProfileRecallParams } from "@/agentflow/brain-service/online/knowledge-manager/km-config";
+import type { QueryProfile } from "@/agentflow/brain-service/online/knowledge-manager";
+import { getProfileRecallParams } from "@/agentflow/brain-service/online/knowledge-manager";
 /**
  * ContentOrganizer 输入：FactChecker 之后的证据包。
  * 职责：按 path 去重 hits、合并 excerpt、统一字段；不调用 LLM。

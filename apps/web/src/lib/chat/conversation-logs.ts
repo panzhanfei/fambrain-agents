@@ -70,4 +70,5 @@ export const AGENT_LABELS: Record<string, string> = {
     InformationAnalyst: "回答",
     Mem0: "记忆",
     UserFact: "用户事实",
+    Learning: "学习写入",
 };

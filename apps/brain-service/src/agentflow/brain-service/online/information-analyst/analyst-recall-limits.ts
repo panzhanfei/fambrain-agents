@@ -1,11 +1,11 @@
 import {
     getProfileRecallParams,
     PROFILE_MAX_HITS,
-} from "@/agentflow/brain-service/online/knowledge-manager/km-config";
+} from "@/agentflow/brain-service/online/knowledge-manager";
 import {
     resolveQueryProfile,
     type QueryProfile,
-} from "@/agentflow/brain-service/online/knowledge-manager/query-profile";
+} from "@/agentflow/brain-service/online/knowledge-manager";
 
 /** Analyst 子问 / 单问可见 hits 上限（与 KM profile 对齐，非固定 4）。 */
 export const maxAnalystHitsForProfile = (profile: QueryProfile): number =>

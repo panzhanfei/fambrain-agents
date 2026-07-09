@@ -14,7 +14,8 @@ export type AgentLogName =
   | "KnowledgeIndexer"
   | "Pipeline"
   | "Mem0"
-  | "UserFact";
+  | "UserFact"
+  | "Learning";
 
 export const AGENT_LOG_LABEL_IN = "进入";
 export const AGENT_LOG_LABEL_OUT = "出去";
@@ -34,6 +35,7 @@ const AGENT_EMOJI: Record<AgentLogName, string> = {
   Pipeline: "🛤️",
   Mem0: "💾",
   UserFact: "🪪",
+  Learning: "📖",
 };
 
 const MAX_JSON_CHARS = 6000;

@@ -191,7 +191,7 @@ pnpm run dev
 | `getCompiledPipelineGraph` | `pipeline/graph/compile.ts` + `routes.ts` | **prepareTurnStart** → Intake → … → **persistTurnEnd** → END |
 | `userFactNode` / `routeUserFactFromIntake` | `user-fact/nodes/user-fact-node.ts`、`user-fact/user-fact.ts` | P0-16：跨会话 remember/recall；绕过 KM / FC / Analyst |
 | `parseIntakeDecision` / `defaultIntakeDecision` | `intake-coordinator/pipeline/parse-intake.ts` | 解析 Intake 路由 JSON |
-| `runRetrievalNode` | `knowledge-manager/pipeline-retrieval/` | L2/L3 cache + composite 增量检索 |
+| `runRetrievalNode` | `knowledge-manager/nodes/retrieval-node.ts` + `pipeline/` | L2/L3 cache + composite 增量检索 |
 | `addStructuredUserFact` / `searchUserFactMemories` | `packages/brain-memory/src/mem0/store.ts` | Mem0 结构化写入 + 按 factKey 语义检索 |
 | `completeIntakeCoordinator` | `agentflow/brain-service/online/intake-coordinator/` | 一次 `invoke` → 路由 JSON |
 | `retrieveKnowledge` | `agentflow/brain-service/online/knowledge-manager/` | 向量 + 关键词扫盘 + **规则精排**（无 LLM）；v3 业界对标见 [km-retrieval-design.md](./km-retrieval-design.md) |
@@ -209,7 +209,7 @@ pnpm run dev
 | `summarizeContent` | `agentflow/brain-service/online/content-summarizer/` | 在线摘要分支 + CLI（D9） |
 | `listVaultFiles` | `agentflow/knowledge/list-vault-files.ts` | vault 只读列举（MCP 共用） |
 | `recallSparseRetrieve` | `packages/corpus/src/recall-keyword-retrieve.ts` | BM25 sparse 检索（HY-01） |
-| `hybridRecall` / `fuseRrf` | `knowledge-manager/hybrid-recall.ts`、`fusion-rrf.ts` | 并行 Hybrid + RRF（HY-02～03） |
+| `hybridRecall` / `fuseRrf` | `knowledge-manager/recall/hybrid-recall.ts`、`fusion-rrf.ts` | 并行 Hybrid + RRF（HY-02～03） |
 | `@fambrain/infra` | `packages/infra/` | Redis 连接、L2/L3 cache、BullMQ 队列、限流；相对 import **不带 `.ts` 后缀**（`packages/infra/tsconfig.json`） |
 | `verify:retrieval-cache` | `apps/brain-service/scripts/` | D5-2 L2 cache normalize + memory/Redis |
 | `verify:repeat-question-smoke` | `apps/brain-service/scripts/` | D5-2 同问短路冒烟（无 Ollama） |

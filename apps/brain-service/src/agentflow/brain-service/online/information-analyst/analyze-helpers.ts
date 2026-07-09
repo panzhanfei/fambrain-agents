@@ -3,7 +3,7 @@ import type {
   KnowledgeHit,
   KnowledgeRetrievalResult,
 } from "@/agentflow/brain-service/online/knowledge-manager";
-import type { QueryProfile } from "@/agentflow/brain-service/online/knowledge-manager/query-profile";
+import type { QueryProfile } from "@/agentflow/brain-service/online/knowledge-manager";
 import {
   resolveAnalystQueryProfile,
 } from "./analyst-recall-limits";

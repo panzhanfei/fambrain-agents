@@ -8,8 +8,8 @@ import {
     assessConfidence,
     deriveCoverageFromTier,
     shouldCoalesceEmptyHits,
-} from "../src/agentflow/brain-service/online/knowledge-manager/score-candidate";
-import { retrieveKnowledge } from "../src/agentflow/brain-service/online/knowledge-manager/retrieve";
+} from "../src/agentflow/brain-service/online/knowledge-manager/profile/score-candidate";
+import { retrieveKnowledge } from "../src/agentflow/brain-service/online/knowledge-manager/recall/retrieve";
 
 const assert = (name: string, fn: () => void) => {
     try {

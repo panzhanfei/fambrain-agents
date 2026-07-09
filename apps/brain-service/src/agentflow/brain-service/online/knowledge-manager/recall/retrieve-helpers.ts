@@ -9,9 +9,8 @@ import {
     PATH_BOOST_LEARNED,
     PATH_BOOST_PROJECTS_RESUME,
     FEEDBACK_BOOST_MAX,
-} from "./km-config";
-import type { QueryProfile } from "./types";
-import type { KnowledgeHit } from "./types";
+} from "../profile/km-config";
+import type { QueryProfile, KnowledgeHit } from "../contract/types";
 
 /** 与 retrieve.ts CandidateRow / KnowledgeCandidate 对齐 */
 export type VectorChunkRow = {

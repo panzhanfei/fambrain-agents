@@ -6,15 +6,15 @@ import {
     CONFIDENCE_MID_MIN,
     CONFIDENCE_COALESCE_LOW_MIN,
 } from "./km-config";
-import type { RankedCandidate } from "./retrieve-helpers";
-import { getPathBoost, isPersonalResumePath } from "./retrieve-helpers";
+import type { RankedCandidate } from "../recall/retrieve-helpers";
+import { getPathBoost, isPersonalResumePath } from "../recall/retrieve-helpers";
 import type {
     ConfidenceTier,
     KnowledgeCandidate,
     KnowledgeHit,
     QueryProfile,
     RecallSource,
-} from "./types";
+} from "../contract/types";
 
 export type { ConfidenceTier };
 

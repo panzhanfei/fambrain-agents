@@ -4,7 +4,7 @@ import {
     buildFallbackRetrievalPlan,
 } from "../composite/composite-routing";
 import { canonicalizePlanItem } from "../composite/composite-slot-queries";
-import { inferQueryProfile } from "@/agentflow/brain-service/online/knowledge-manager/query-profile";
+import { inferQueryProfile } from "@/agentflow/brain-service/online/knowledge-manager";
 import { parseJsonObject } from "@/agentflow/utils";
 
 export const parseIntakeDecision = (raw: string): IntakeRoutingDecision | null => {

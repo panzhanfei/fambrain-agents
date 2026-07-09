@@ -5,8 +5,10 @@ import type {
     RoutedIntakeDecision,
 } from "@/agentflow/brain-service/online/intake-coordinator";
 import type { InformationAnalystInput } from "@/agentflow/brain-service/online/information-analyst";
-import type { ConfidenceTier } from "@/agentflow/brain-service/online/knowledge-manager/types";
-import type { CompositeSubRetrieval } from "@/agentflow/brain-service/online/knowledge-manager/pipeline-retrieval";
+import type {
+    ConfidenceTier,
+    CompositeSubRetrieval,
+} from "@/agentflow/brain-service/online/knowledge-manager";
 /**
  * LangGraph 编排共享状态（Intake → KM → FactChecker → ContentOrganizer → Analyst；摘要分支 Intake → KM → ContentSummarizer）。
  * 初始值由 `runtime/initial-state.ts` 的 `buildInitialState()` 注入；prepareTurnStart 填充 memory 字段；节点只返回需要更新的字段。

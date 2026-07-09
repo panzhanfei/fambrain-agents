@@ -1,10 +1,11 @@
-export { retrieveKnowledge } from "./retrieve";
+export { retrieveKnowledge } from "./recall/retrieve";
 export {
     MAX_CANDIDATES,
     getKmRetrievalConfig,
     getProfileRecallParams,
-} from "./km-config";
-export { inferQueryProfile, resolveQueryProfile } from "./query-profile";
+    PROFILE_MAX_HITS,
+} from "./profile/km-config";
+export { inferQueryProfile, resolveQueryProfile } from "./profile/query-profile";
 export { searchCorpusVectors } from "@fambrain/corpus/corpus-vector";
 export {
     knowledgeHitSchema,
@@ -12,26 +13,31 @@ export {
     knowledgeRetrievalResultSchema,
     parseKnowledgeHits,
     parseKnowledgeRetrievalResult,
-} from "./schema";
+} from "./contract/schema";
 export {
     type KnowledgeHit,
     type KnowledgeManagerInput,
     type KnowledgeRetrievalResult,
     type QueryProfile,
     type ConfidenceTier,
-} from "./types";
+    type KnowledgeCandidate,
+    type RecallChannel,
+    type RecallSource,
+} from "./contract/types";
 export {
     mergeCompositeHits,
     mergeCompositeRetrieval,
-    retrieveCompositeIncremental,
-    retrieveCompositeSlotsParallel,
-    retrieveSlotWithCache,
-    runRetrievalNode,
     type CompositeRetrievePlan,
     type CompositeSubRetrieval,
-} from "./pipeline-retrieval";
+} from "./pipeline/merge-composite-retrieval";
+export { retrieveCompositeIncremental } from "./pipeline/retrieve-composite-incremental";
+export { retrieveCompositeSlotsParallel } from "./pipeline/retrieve-slots-parallel";
+export { retrieveSlotWithCache } from "./pipeline/retrieve-with-cache";
+export { runRetrievalNode } from "./nodes/retrieval-node";
 export {
     assessConfidence,
     deriveCoverageFromTier,
     shouldCoalesceEmptyHits,
-} from "./score-candidate";
+} from "./profile/score-candidate";
+export { hybridRecall } from "./recall/hybrid-recall";
+export { fuseRrf } from "./recall/fusion-rrf";

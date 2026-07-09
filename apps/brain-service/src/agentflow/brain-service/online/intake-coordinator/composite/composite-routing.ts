@@ -2,7 +2,7 @@
  * Composite 路由：Intake retrievalPlan 为主信号，结构检测 + queryType 模板为兜底。
  * 不依赖用户问句关键词词表决定槽位。
  */
-import { inferQueryProfile } from "@/agentflow/brain-service/online/knowledge-manager/query-profile";
+import { inferQueryProfile } from "@/agentflow/brain-service/online/knowledge-manager";
 import type { CompositeRetrievalSlot } from "./composite-slot-queries";
 import {
     facetTemplateForQueryType,

@@ -6,7 +6,7 @@ import { runIntakeNode } from "@/agentflow/brain-service/online/intake-coordinat
 import { runRespondEarlyNode } from "@/agentflow/brain-service/online/respond-early";
 import { userFactNode } from "@/agentflow/brain-service/online/user-fact";
 import { runAnalystNode } from "@/agentflow/brain-service/online/information-analyst/analyst-node";
-import { runRetrievalNode } from "@/agentflow/brain-service/online/knowledge-manager/pipeline-retrieval";
+import { runRetrievalNode } from "@/agentflow/brain-service/online/knowledge-manager";
 import {
   runPreparePipelineMemory,
   runPrepareTurnStart,

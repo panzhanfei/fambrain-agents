@@ -92,7 +92,7 @@ flowchart TB
 | 层 | 位置 | Key / 条件 | 命中后 | 关闭 |
 |----|------|------------|--------|------|
 | **同问短路** | **`repeatQuestionGuard` 节点**（`repeat-question-guard/nodes/repeat-question-node.ts`） | `normalize(userQuestion)` + history 中已有 assistant 答 | `repeat_respond_early` → 复用答案（`repeatQuestionHit`）→ `persistTurnEnd` | `REPEAT_QUESTION_CACHE_DISABLED=1` |
-| **检索结果 cache** | `knowledge-manager/pipeline-retrieval/`（`runRetrievalNode`） | `{prefix}:retrieval:v1:{corpusUserId}:{queryType}:{normalize(searchQuery)}` | 跳过 KM；仍走 FC / Analyst（`retrievalCacheHit`） | `RETRIEVAL_CACHE_DISABLED=1` |
+| **检索结果 cache** | `knowledge-manager/nodes/retrieval-node.ts`（`runRetrievalNode`） | `{prefix}:retrieval:v1:{corpusUserId}:{queryType}:{normalize(searchQuery)}` | 跳过 KM；仍走 FC / Analyst（`retrievalCacheHit`） | `RETRIEVAL_CACHE_DISABLED=1` |
 | **composite 终稿 cache** | `composite-answer-cache.ts` | 同会话 `conversationId` + `corpusUserId` + **facetKey** | composite/slot 增量：命中槽跳过 KM；**slot 单槽**时 Analyst 读 cache 或 citations 还原 hits | `COMPOSITE_ANSWER_CACHE_DISABLED=1` |
 
 清空 Redis / memory：`pnpm --filter @fambrain/brain-service exec tsx --env-file=../../.env scripts/clear-pipeline-cache.ts`（改 env 后须**重启 agents** 清进程内 memory）。

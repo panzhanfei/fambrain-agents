@@ -5,7 +5,7 @@ import {
     getRetrievalFromCache,
     setRetrievalCache,
 } from "@fambrain/infra";
-import { retrieveCompositeIncremental } from "./retrieve-composite-incremental";
+import { retrieveCompositeIncremental } from "../pipeline/retrieve-composite-incremental";
 
 /** LangGraph retrieval 节点：单问 L2 cache + composite 增量检索 */
 export const runRetrievalNode = async (

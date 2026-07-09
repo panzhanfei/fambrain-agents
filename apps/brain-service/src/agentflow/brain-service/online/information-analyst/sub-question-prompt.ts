@@ -1,4 +1,4 @@
-import type { QueryProfile } from "@/agentflow/brain-service/online/knowledge-manager/query-profile";
+import type { QueryProfile } from "@/agentflow/brain-service/online/knowledge-manager";
 import { isProjectEnumeration } from "@/agentflow/brain-service/online/intake-coordinator";
 
 const streamRulesBase = `- 无 hits：只写一句「知识库未覆盖此点」。

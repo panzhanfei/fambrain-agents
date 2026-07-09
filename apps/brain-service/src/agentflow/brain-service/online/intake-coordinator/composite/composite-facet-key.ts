@@ -2,7 +2,7 @@
  * L3/L4：稳定 facetKey（canonical 槽语义，非用户口语）。
  */
 import { normalizeSearchQuery } from "@fambrain/infra";
-import { inferQueryProfile } from "@/agentflow/brain-service/online/knowledge-manager/query-profile";
+import { inferQueryProfile } from "@/agentflow/brain-service/online/knowledge-manager";
 import { canonicalizePlanItem } from "./composite-slot-queries";
 import { resolveEnumerationTarget } from "./enumeration-target";
 import type { CompositeRetrievalSlot } from "./composite-slot-queries";

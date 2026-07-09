@@ -1,4 +1,4 @@
-import type { QueryProfile } from "./query-profile";
+import type { QueryProfile } from "../profile/query-profile";
 
 export type { QueryProfile };
 

@@ -13,10 +13,10 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import type { AgentPipelineContext, DbChatTurn } from "@fambrain/brain-types";
 import { listCorpusUserIds } from "@/agentflow/brain-service/offline/knowledge-indexer/list-corpus-users";
-import { hybridRecall } from "@/agentflow/brain-service/online/knowledge-manager/hybrid-recall";
-import { getProfileRecallParams } from "@/agentflow/brain-service/online/knowledge-manager/km-config";
-import { resolveQueryProfile } from "@/agentflow/brain-service/online/knowledge-manager/query-profile";
-import { retrieveKnowledge } from "@/agentflow/brain-service/online/knowledge-manager/retrieve";
+import { hybridRecall } from "@/agentflow/brain-service/online/knowledge-manager/recall/hybrid-recall";
+import { getProfileRecallParams } from "@/agentflow/brain-service/online/knowledge-manager/profile/km-config";
+import { resolveQueryProfile } from "@/agentflow/brain-service/online/knowledge-manager/profile/query-profile";
+import { retrieveKnowledge } from "@/agentflow/brain-service/online/knowledge-manager/recall/retrieve";
 import { runPipelineStream } from "@/agentflow/index";
 import { bootstrapBrainServiceRuntime } from "@/config";
 import {

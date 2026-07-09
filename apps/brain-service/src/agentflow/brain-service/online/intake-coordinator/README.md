@@ -114,7 +114,7 @@ state.decision 写入 PipelineGraphState
 routeAfterIntake()                        pipeline/graph/routes.ts
     ├─ userFact        → user-fact-node.ts → persistTurnEnd
     ├─ respondEarly    → respond-early-node.ts → persistTurnEnd
-    ├─ retrieval       → knowledge-manager/pipeline-retrieval → … → analyst → persistTurnEnd
+    ├─ retrieval       → knowledge-manager/nodes/retrieval-node → … → analyst → persistTurnEnd
     ├─ contentSummarizer
     └─ factChecker     → （无检索的 direct_answer 等）
 ```
@@ -506,7 +506,7 @@ Pipeline 内主要调用点：
 | `pipeline/graph/state.ts` | `RoutedIntakeDecision`, `IncrementalCompositePlan` |
 | `user-fact/nodes/user-fact-node.ts` | userFact 图节点 |
 | `intake-coordinator/pipeline/parse-intake.ts` | `parseIntakeDecision`, `defaultIntakeDecision` |
-| `knowledge-manager/retrieve.ts` | `resolveEnumerationTarget` |
+| `knowledge-manager/recall/retrieve.ts` | `resolveEnumerationTarget`（列举扫盘） |
 | `information-analyst/*` | composite 槽类型、enumeration 辅助 |
 
 ---

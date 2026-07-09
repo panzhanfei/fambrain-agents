@@ -4,12 +4,12 @@
  *   FAMBRAIN_CORPUS_USER_ID=xxx pnpm --filter @fambrain/brain-service run verify:km-retrieve:live
  */
 import { listCorpusUserIds } from "../src/agentflow/brain-service/offline/knowledge-indexer/list-corpus-users";
-import { getProfileRecallParams } from "../src/agentflow/brain-service/online/knowledge-manager/km-config";
+import { getProfileRecallParams } from "../src/agentflow/brain-service/online/knowledge-manager/profile/km-config";
 import {
     inferQueryProfile,
     resolveQueryProfile,
-} from "../src/agentflow/brain-service/online/knowledge-manager/query-profile";
-import { retrieveKnowledge } from "../src/agentflow/brain-service/online/knowledge-manager/retrieve";
+} from "../src/agentflow/brain-service/online/knowledge-manager/profile/query-profile";
+import { retrieveKnowledge } from "../src/agentflow/brain-service/online/knowledge-manager/recall/retrieve";
 
 type Case = {
     q: string;

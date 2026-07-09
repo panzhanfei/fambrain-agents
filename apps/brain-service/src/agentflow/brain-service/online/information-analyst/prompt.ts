@@ -7,7 +7,7 @@ import type {
     CompositeSlotPlan,
     IntakeRouteMode,
 } from "@/agentflow/brain-service/online/intake-coordinator";
-import type { QueryProfile } from "@/agentflow/brain-service/online/knowledge-manager/query-profile";
+import type { QueryProfile } from "@/agentflow/brain-service/online/knowledge-manager";
 import type { CompositeSessionKey } from "@fambrain/infra";
 /**
  * InformationAnalyst 系统指令（P0）。

@@ -1,7 +1,7 @@
 import { logAgentIn, logAgentOut } from "@fambrain/brain-shared/agent-log";
 import { upsertFacetAnswers } from "@fambrain/infra";
 import { organizeKnowledge } from "@/agentflow/brain-service/online/content-organizer";
-import { resolveQueryProfile } from "@/agentflow/brain-service/online/knowledge-manager/query-profile";
+import { resolveQueryProfile } from "@/agentflow/brain-service/online/knowledge-manager";
 import {
     analystResultToCachedFacet,
     cachedFacetToAnalystResult,

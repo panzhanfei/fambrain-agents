@@ -32,8 +32,8 @@ import {
     LOG_BODY_PREVIEW,
     MAX_CANDIDATES,
     SCAN_BODY_MAX,
-} from "./km-config";
-import { resolveQueryProfile } from "./query-profile";
+} from "../profile/km-config";
+import { resolveQueryProfile } from "../profile/query-profile";
 import {
     resolveEnumerationTarget,
     type EnumerationTarget,
@@ -56,7 +56,7 @@ import {
     deriveCoverageFromTier,
     shouldCoalesceEmptyHits,
     tierNotes,
-} from "./score-candidate";
+} from "../profile/score-candidate";
 import type {
     ConfidenceTier,
     KnowledgeCandidate,
@@ -65,7 +65,7 @@ import type {
     KnowledgeRetrievalResult,
     QueryProfile,
     RecallSource,
-} from "./types";
+} from "../contract/types";
 
 type CandidateRow = KnowledgeCandidate;
 

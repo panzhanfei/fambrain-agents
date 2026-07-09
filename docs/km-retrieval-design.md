@@ -5,9 +5,9 @@
 > **原则：** 检索层不调 Chat LLM；快、稳、可回归；**Wave A～C 不动** Pipeline 对外合同（`hits / coverage / notes`）；Wave D 起可选扩展字段  
 > **范围：** **KM 为主** + 必须/建议配合的模块；FC / Organizer / Analyst **默认不动**
 
----
+> **代码布局（2026-07）：** 见 `apps/brain-service/src/agentflow/brain-service/online/knowledge-manager/README.md`（`contract/` · `nodes/` · `pipeline/` · `recall/` · `profile/`）。
 
-## 一、业界五层 vs 现状
+---
 
 | 业界层 | 标准能力 | 现状 | v3 目标 |
 |--------|----------|------|---------|

@@ -6,7 +6,7 @@
 import assert from "node:assert/strict";
 import { parseIntakeRoutingDecision } from "../src/agentflow/brain-service/online/intake-coordinator";
 import { parseFactCheckerResult } from "../src/agentflow/brain-service/online/fact-checker/schema";
-import { parseKnowledgeRetrievalResult } from "../src/agentflow/brain-service/online/knowledge-manager/schema";
+import { parseKnowledgeRetrievalResult } from "../src/agentflow/brain-service/online/knowledge-manager/contract/schema";
 import { parseAnalystResult } from "../src/agentflow/brain-service/online/information-analyst/schema";
 import { buildRuleBasedFactCheck } from "../src/agentflow/brain-service/online/fact-checker/check-helpers";
 import { buildFallbackAnswer } from "../src/agentflow/brain-service/online/information-analyst/analyze-helpers";

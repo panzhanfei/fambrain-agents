@@ -7,8 +7,8 @@
  */
 import { recallSparseRetrieve, searchCorpusVectors } from "@fambrain/corpus";
 import { listCorpusUserIds } from "../src/agentflow/brain-service/offline/knowledge-indexer/list-corpus-users";
-import { hybridRecall } from "../src/agentflow/brain-service/online/knowledge-manager/hybrid-recall";
-import { getKmRetrievalConfig } from "../src/agentflow/brain-service/online/knowledge-manager/km-config";
+import { hybridRecall } from "../src/agentflow/brain-service/online/knowledge-manager/recall/hybrid-recall";
+import { getKmRetrievalConfig } from "../src/agentflow/brain-service/online/knowledge-manager/profile/km-config";
 
 const TOP_K = 8;
 

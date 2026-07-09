@@ -7,10 +7,10 @@ import {
     RRF_SPARSE_WEIGHT,
     RRF_VECTOR_WEIGHT,
     VECTOR_FETCH_MULTIPLIER,
-} from "./km-config";
+} from "../profile/km-config";
 import { fuseRrf } from "./fusion-rrf";
 import { dedupeVectorByPath, mergeChunkBodies } from "./retrieve-helpers";
-import type { KnowledgeCandidate, RecallChannel, RecallSource } from "./types";
+import type { KnowledgeCandidate, RecallChannel, RecallSource } from "../contract/types";
 
 export type HybridRecallResult = {
     candidates: KnowledgeCandidate[];
