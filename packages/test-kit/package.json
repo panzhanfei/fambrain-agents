@@ -1,0 +1,21 @@
+{
+  "name": "@fambrain/test-kit",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./check-deps": "./src/check-dependency-tree.ts"
+  },
+  "bin": {
+    "fambrain-check-deps": "./src/cli.ts"
+  },
+  "scripts": {
+    "check:deps": "tsx src/cli.ts"
+  },
+  "devDependencies": {
+    "@types/node": "^20.19.41",
+    "tsx": "^4.22.3",
+    "typescript": "^5"
+  }
+}

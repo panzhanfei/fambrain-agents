@@ -30,7 +30,20 @@
     "experiment:bind-tools": "pnpm --filter @fambrain/brain-service experiment:bind-tools",
     "pack:deploy": "bash scripts/pack-deploy.sh",
     "docker:up": "docker compose up -d --build",
-    "docker:down": "docker compose down"
+    "docker:down": "docker compose down",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:unit": "vitest run",
+    "test:deps": "tsx packages/test-kit/src/cli.ts",
+    "test:deps:json": "tsx packages/test-kit/src/cli.ts --json",
+    "test:all": "pnpm test:deps && pnpm test:unit",
+    "check:deps": "pnpm test:deps",
+    "fambrain-check-deps": "tsx packages/test-kit/src/cli.ts"
+  },
+  "devDependencies": {
+    "tsx": "^4.22.3",
+    "typescript": "^5",
+    "vitest": "^3.2.4"
   },
   "pnpm": {
     "overrides": {

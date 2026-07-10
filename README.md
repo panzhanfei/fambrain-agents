@@ -32,6 +32,8 @@ pnpm run dev    # 一键：Chroma + Redis + Web + Brain Service
 | [05 · 架构 v2 工具编排](docs/05-architecture-v2-tool-orchestration.md) | 四类数据源、ToolOrchestrator/DagExecutor、年龄触发重构 |
 | [06 · 12 日冲刺计划](docs/06-twelve-day-sprint.md) | 复盘 / SLA / eval / OpenAI 可配置 / 上云 / 压测 |
 
+**测试：** `pnpm test:all`（依赖树校验 + 单元测试）· `pnpm test:unit` · `pnpm check:deps`
+
 ## 常用命令
 
 ```bash

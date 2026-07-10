@@ -46,6 +46,8 @@
     "verify:orchestrated-identity": "tsx scripts/verify-orchestrated-identity.ts",
     "verify:tool-orchestration": "tsx scripts/verify-tool-orchestration.ts",
     "verify:dag-hybrid": "tsx scripts/verify-dag-hybrid.ts",
+    "test:unit": "vitest run --config ../../vitest.config.ts",
+    "test:watch": "vitest --config ../../vitest.config.ts",
     "summarize:document": "tsx --env-file=../../.env scripts/summarize-document.ts",
     "experiment:mcp-vault": "tsx scripts/experiments/mcp-vault-server.ts",
     "experiment:recall-compare": "tsx --env-file=../../.env scripts/experiments/compare-recall.ts",

@@ -105,6 +105,11 @@ pnpm run dev
 | `pnpm run experiment:bind-tools -- "问法"` | LangChain **bindTools** ReAct 实验（不进主链） |
 | `cd apps/brain-service && pnpm run verify:content-summarizer` | 摘要师 Zod 单测 |
 | `cd apps/brain-service && pnpm run verify:vault-list` | vault 列举单测 |
+| `pnpm test:all` | **全仓库**：依赖树校验 + Vitest 单元测试（25+ 用例） |
+| `pnpm test:unit` | Vitest 单元测试（`apps/brain-service` + `packages/*` 纯逻辑） |
+| `pnpm check:deps` / `pnpm fambrain-check-deps` | 校验 workspace `exports` / `scripts` 入口文件是否存在 |
+| `pnpm check:deps -- --scan-imports` | 额外扫描脚本入口内的相对 import 断链 |
+| `pnpm check:deps -- --package @fambrain/brain-service` | 仅检查指定包 |
 
 ## 环境变量
 
