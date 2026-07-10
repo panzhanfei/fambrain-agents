@@ -29,6 +29,7 @@ export const runPrepareTurnStart = async (
         conversationId: state.context.conversationId,
     });
 
-    logAgentOut("TurnStart", "出去", { alsReady: true });
-    return {};
+    const asOfDate = new Date().toISOString().slice(0, 10);
+    logAgentOut("TurnStart", "出去", { alsReady: true, asOfDate });
+    return { asOfDate };
 };

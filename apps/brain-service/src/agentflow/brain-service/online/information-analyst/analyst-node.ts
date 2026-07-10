@@ -31,6 +31,8 @@ export const runAnalystNode = async (
             compositeSubResults: state.compositeSubResults ?? undefined,
             compositeIncrementalPlan:
                 state.compositeIncrementalPlan ?? undefined,
+            asOfDate: state.asOfDate,
+            toolResults: state.toolResults,
             sessionKey: {
                 conversationId: state.context.conversationId,
                 corpusUserId: state.context.corpusUserId,

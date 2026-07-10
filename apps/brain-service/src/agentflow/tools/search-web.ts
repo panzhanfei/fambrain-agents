@@ -1,31 +1,87 @@
 import { tool } from "@langchain/core/tools";
 import { z } from "zod";
 
+export type WebSearchSnippet = {
+    title: string;
+    url: string;
+    snippet: string;
+};
+
+const searchTavily = async (
+    query: string,
+    apiKey: string
+): Promise<WebSearchSnippet[]> => {
+    const res = await fetch("https://api.tavily.com/search", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+            api_key: apiKey,
+            query,
+            max_results: 5,
+            include_answer: false,
+        }),
+    });
+    if (!res.ok) {
+        throw new Error(`Tavily HTTP ${res.status}`);
+    }
+    const body = (await res.json()) as {
+        results?: Array<{ title?: string; url?: string; content?: string }>;
+    };
+    return (body.results ?? []).map((r) => ({
+        title: r.title ?? r.url ?? "result",
+        url: r.url ?? "",
+        snippet: (r.content ?? "").slice(0, 400),
+    }));
+};
+
 /**
- * 预留：外部事实检索（公司背景、新闻等）。
- * 主 pipeline 仍 corpus-first；启用需 FAMBRAIN_WEB_SEARCH_ENABLED=1 + 后续 provider 接入。
+ * 外部事实检索。需 TAVILY_API_KEY 或 FAMBRAIN_WEB_SEARCH_ENABLED=1 + key。
+ * corpus-first：主 pipeline 在语料不足或 primaryDataSource=web 时由 ToolOrchestrator 调用。
  */
 export const searchWebTool = tool(
     async (input) => {
-        if (process.env.FAMBRAIN_WEB_SEARCH_ENABLED !== "1") {
+        const apiKey =
+            process.env.TAVILY_API_KEY?.trim() ||
+            process.env.FAMBRAIN_TAVILY_API_KEY?.trim();
+        const enabled =
+            process.env.FAMBRAIN_WEB_SEARCH_ENABLED === "1" || Boolean(apiKey);
+
+        if (!enabled || !apiKey) {
             return JSON.stringify({
                 status: "disabled",
                 query: input.query,
                 message:
-                    "Web search is not configured. Use retrieve_corpus for personal knowledge base facts.",
+                    "Web search is not configured. Set TAVILY_API_KEY or FAMBRAIN_WEB_SEARCH_ENABLED=1.",
             });
         }
-        return JSON.stringify({
-            status: "not_implemented",
-            query: input.query,
-            message:
-                "FAMBRAIN_WEB_SEARCH_ENABLED=1 but no provider is wired yet.",
-        });
+
+        try {
+            const results = await searchTavily(input.query, apiKey);
+            if (results.length === 0) {
+                return JSON.stringify({
+                    status: "empty",
+                    query: input.query,
+                    message: "联网检索无结果。",
+                    results: [],
+                });
+            }
+            return JSON.stringify({
+                status: "ok",
+                query: input.query,
+                results,
+            });
+        } catch (e) {
+            return JSON.stringify({
+                status: "error",
+                query: input.query,
+                message: e instanceof Error ? e.message : String(e),
+            });
+        }
     },
     {
         name: "search_web",
         description:
-            "Reserved: search the public web for external facts (company background, news) when corpus has no coverage. Disabled unless FAMBRAIN_WEB_SEARCH_ENABLED=1.",
+            "Search the public web for external facts (company news, market trends) when corpus has no coverage.",
         schema: z.object({
             query: z.string().min(1).describe("Search query"),
         }),

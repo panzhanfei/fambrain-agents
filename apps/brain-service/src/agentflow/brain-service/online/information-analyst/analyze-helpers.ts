@@ -13,6 +13,11 @@ import {
   resolveOrchestratedTool,
   runOrchestratedSubQuestion,
 } from "@/agentflow/tools/orchestrated/run-sub-question";
+import {
+  pickToolResultForSubQuestion,
+  toolRunToAnalystResult,
+} from "@/agentflow/tool-orchestration";
+import type { PipelineToolResults } from "@/agentflow/tool-orchestration/types";
 import { composeEnumerationAnswer } from "./compose-message";
 import {
     compactExcerptLine,
@@ -44,6 +49,10 @@ export type SubQuestionAnalyzeInput = {
   listIntent?: import("@/agentflow/brain-service/online/intake-coordinator").EnumerationListIntent | null;
   /** 年龄等编排工具计算基准日 YYYY-MM-DD，默认当天 */
   asOfDate?: string;
+  /** composite 槽位 id（toolResults 键 slot_<id>） */
+  slotId?: string;
+  /** ToolOrchestrator 预计算结果（优先于 Analyst 内联编排） */
+  toolResults?: PipelineToolResults | null;
 };
 
 export const shouldSkipSubQuestionLlm = (
@@ -51,6 +60,7 @@ export const shouldSkipSubQuestionLlm = (
 ): boolean =>
   input.hits.length === 0 ||
   input.coverage === "none" ||
+  pickToolResultForSubQuestion(input, input.toolResults) !== null ||
   resolveOrchestratedTool(input) !== null;
 
 /** P0-12：FC 二次放行后 hits 仍空时跳过 Analyst LLM；Mem0 有结构化 user_fact 时不 skip */
@@ -146,6 +156,10 @@ export const buildSubQuestionFallbackAnswer = (
   input: SubQuestionAnalyzeInput
 ): InformationAnalystResult => {
   const { userQuestion, hits, coverage, language, queryType } = input;
+
+  const fromTools = pickToolResultForSubQuestion(input, input.toolResults);
+  if (fromTools) return toolRunToAnalystResult(fromTools);
+
   if (hits.length === 0 || coverage === "none") {
     const empty = buildEmptyHitsFallback({
       userQuestion,
@@ -194,6 +208,25 @@ export const buildFallbackAnswer = (
 ): InformationAnalystResult => {
   const { userQuestion, hits, coverage, notes, language, queryType, subTasks } =
     input;
+
+  const fromTools = pickToolResultForSubQuestion(
+    {
+      userQuestion,
+      language,
+      hits,
+      coverage,
+      notes,
+      queryType,
+      topics: input.topics ?? [],
+      enumerationMeta: input.enumerationMeta ?? null,
+      listIntent: input.listIntent ?? null,
+      asOfDate: input.asOfDate,
+      toolResults: input.toolResults,
+    },
+    input.toolResults
+  );
+  if (fromTools) return toolRunToAnalystResult(fromTools);
+
   if (hits.length === 0 || coverage === "none") {
     return buildEmptyHitsFallback({
       userQuestion,
@@ -276,5 +309,6 @@ export const toSubQuestionInput = (
   topics: input.topics ?? [],
   enumerationMeta: input.enumerationMeta ?? null,
   listIntent: input.listIntent ?? null,
-  asOfDate: new Date().toISOString().slice(0, 10),
+  asOfDate: input.asOfDate ?? new Date().toISOString().slice(0, 10),
+  toolResults: input.toolResults,
 });

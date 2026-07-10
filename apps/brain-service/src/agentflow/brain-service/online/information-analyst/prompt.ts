@@ -79,6 +79,10 @@ export type InformationAnalystInput = {
   enumerationMeta?: import("@/agentflow/brain-service/online/knowledge-manager").EnumerationMeta | null;
   /** 列举分页意图（preview / exhaustive / continue） */
   listIntent?: import("@/agentflow/brain-service/online/intake-coordinator").EnumerationListIntent | null;
+  /** prepareTurnStart 注入的计算基准日 */
+  asOfDate?: string;
+  /** ToolOrchestrator / DagExecutor 预计算（年龄、列举、联网等） */
+  toolResults?: import("@/agentflow/tool-orchestration/types").PipelineToolResults | null;
 };
 export const prompt = `你是 FamBrain 系统中的「信息分析师」（InformationAnalyst）。
 

@@ -47,7 +47,7 @@ export const routeAfterPrepareMemory = (
  */
 export const routeAfterIntake = (
     state: PipelineGraphState
-): "respondEarly" | "userFact" | "retrieval" | "factChecker" | "contentSummarizer" => {
+): "respondEarly" | "userFact" | "retrieval" | "dagExecutor" | "factChecker" | "contentSummarizer" => {
     if (state.exitEarly || state.error)
         return "respondEarly";
 
@@ -60,6 +60,9 @@ export const routeAfterIntake = (
 
     if (shouldRespondEarlyFromIntake(decision))
         return "respondEarly";
+
+    if (decision.routeMode === "dag" && (decision.executionPlan?.length ?? 0) > 0)
+        return "dagExecutor";
 
     if (intakeRequiresKmRetrieval(decision))
         return "retrieval";

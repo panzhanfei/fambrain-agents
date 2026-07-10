@@ -54,7 +54,10 @@ const buildSubInput = (
         queryType,
         topics: [...plan.topics],
         enumerationMeta: sub.enumerationMeta ?? null,
-        asOfDate: new Date().toISOString().slice(0, 10),
+        listIntent: input.listIntent ?? null,
+        asOfDate: input.asOfDate ?? new Date().toISOString().slice(0, 10),
+        slotId: plan.id,
+        toolResults: input.toolResults,
     };
 };
 

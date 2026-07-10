@@ -29,6 +29,7 @@ pnpm run dev    # 一键：Chroma + Redis + Web + Brain Service
 | [02 · Agent 流程图](docs/02-agent-flows.md) | 全链路 / 在线编排 / 单 Agent 实现、SSE 契约 |
 | [03 · 版本规划与进度](docs/03-roadmap.md) | P0/P1/P2、十日排期、17 项技术、验收表 |
 | [04 · 坑点清单](docs/04-pitfalls.md) | 行业常见坑 + 本项目 P0 踩坑 + 调试 checklist |
+| [05 · 架构 v2 工具编排](docs/05-architecture-v2-tool-orchestration.md) | 四类数据源、ToolOrchestrator/DagExecutor、年龄触发重构 |
 | [06 · 12 日冲刺计划](docs/06-twelve-day-sprint.md) | 复盘 / SLA / eval / OpenAI 可配置 / 上云 / 压测 |
 
 ## 常用命令

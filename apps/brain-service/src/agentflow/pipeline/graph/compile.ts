@@ -8,6 +8,10 @@ import { userFactNode } from "@/agentflow/brain-service/online/user-fact";
 import { runAnalystNode } from "@/agentflow/brain-service/online/information-analyst/analyst-node";
 import { runRetrievalNode } from "@/agentflow/brain-service/online/knowledge-manager";
 import {
+  runDagExecutorNode,
+  runToolOrchestratorNode,
+} from "@/agentflow/tool-orchestration";
+import {
   runPreparePipelineMemory,
   runPrepareTurnStart,
 } from "@/agentflow/brain-service/online/prepare-turn-start";
@@ -33,6 +37,8 @@ const buildPipelineGraph = () => {
     .addNode("preparePipelineMemory", runPreparePipelineMemory)
     .addNode("intake", runIntakeNode)
     .addNode("retrieval", runRetrievalNode)
+    .addNode("dagExecutor", runDagExecutorNode)
+    .addNode("toolOrchestrator", runToolOrchestratorNode)
     .addNode("factChecker", runFactCheckerNode)
     .addNode("contentSummarizer", runContentSummarizerNode)
     .addNode("contentOrganizer", runContentOrganizerNode)
@@ -48,9 +54,11 @@ const buildPipelineGraph = () => {
     .addEdge("userFact", "persistTurnEnd")
     .addEdge("repeatRespondEarly", "persistTurnEnd")
     .addConditionalEdges("retrieval", routeAfterRetrieval)
+    .addEdge("dagExecutor", "factChecker")
     .addConditionalEdges("factChecker", routeAfterFactChecker)
     .addEdge("contentSummarizer", "respondEarly")
-    .addEdge("contentOrganizer", "analyst")
+    .addEdge("contentOrganizer", "toolOrchestrator")
+    .addEdge("toolOrchestrator", "analyst")
     .addEdge("analyst", "persistTurnEnd")
     .addEdge("respondEarly", "persistTurnEnd")
     .addEdge("persistTurnEnd", END);

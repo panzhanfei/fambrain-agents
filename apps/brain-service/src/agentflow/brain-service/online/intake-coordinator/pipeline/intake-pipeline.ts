@@ -13,6 +13,7 @@ import type { RoutedIntakeDecision } from "../composite/composite-route-guard";
 import { applyIntakeChitchatGuard } from "../guards/intake-chitchat-guard";
 import { applyIntakeRetrievalPlanGuard } from "../guards/intake-retrieval-plan-guard";
 import { applyEnumerationListIntentGuard } from "../guards/enumeration-list-intent";
+import { applyToolPlanGuard } from "@/agentflow/tool-orchestration/enrich-plan";
 import type { IntakeRoutingDecision } from "../contract/prompt";
 import { isUserFactIntent } from "@/agentflow/brain-service/online/user-fact";
 
@@ -232,7 +233,24 @@ export const runIntakePipeline = (
     });
   }
 
-  /** ⑧ 出口：decision 写入 state，由 compile.ts routeAfterIntake 决定去 retrieval / respondEarly 等 */
-  logAgentOut("IntakeCoordinator", "最终路由", summarizeDecision(withListIntent));
-  return { decision: withListIntent, parseUsedFallback, earlyExit: false };
+  /** ⑧ 工具计划：dataSource / toolId / executionPlan（四类架构） */
+  const withToolPlan = applyToolPlanGuard(withListIntent, input.userQuestion);
+  if (
+    withToolPlan.routeMode === "dag" ||
+    withToolPlan.primaryDataSource === "web" ||
+    (withToolPlan.enrichedPlan ?? []).some((p) => p.toolId)
+  ) {
+    logAgentOut("IntakeCoordinator", "guard_工具计划", {
+      routeMode: withToolPlan.routeMode,
+      primaryDataSource: withToolPlan.primaryDataSource,
+      executionPlanCount: withToolPlan.executionPlan?.length ?? 0,
+      enrichedToolIds: (withToolPlan.enrichedPlan ?? [])
+        .map((p) => p.toolId)
+        .filter(Boolean),
+    });
+  }
+
+  /** ⑨ 出口：decision 写入 state，由 compile.ts routeAfterIntake 决定去 retrieval / dag / respondEarly 等 */
+  logAgentOut("IntakeCoordinator", "最终路由", summarizeDecision(withToolPlan));
+  return { decision: withToolPlan, parseUsedFallback, earlyExit: false };
 };

@@ -11,6 +11,7 @@ import type {
     CompositeSubRetrieval,
     EnumerationMeta,
 } from "@/agentflow/brain-service/online/knowledge-manager";
+import type { PipelineToolResults } from "@/agentflow/tool-orchestration/types";
 /**
  * LangGraph 编排共享状态（Intake → KM → FactChecker → ContentOrganizer → Analyst；摘要分支 Intake → KM → ContentSummarizer）。
  * 初始值由 `runtime/initial-state.ts` 的 `buildInitialState()` 注入；prepareTurnStart 填充 memory 字段；节点只返回需要更新的字段。
@@ -64,5 +65,9 @@ export const PipelineGraphAnnotation = Annotation.Root({
     compositeIncrementalPlan: Annotation<IncrementalCompositePlan | null>,
     /** L3 子问终稿 cache 命中数 */
     compositeFacetCacheHits: Annotation<number | null>,
+    /** prepareTurnStart 注入：年龄等计算基准日 YYYY-MM-DD */
+    asOfDate: Annotation<string>,
+    /** ToolOrchestrator / DagExecutor 产出，Analyst 优先消费 */
+    toolResults: Annotation<PipelineToolResults | null>,
 });
 export type PipelineGraphState = typeof PipelineGraphAnnotation.State;

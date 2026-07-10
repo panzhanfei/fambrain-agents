@@ -40,5 +40,7 @@ export const buildInitialState = (
         compositeSubResults: null,
         compositeIncrementalPlan: null,
         compositeFacetCacheHits: null,
+        asOfDate: new Date().toISOString().slice(0, 10),
+        toolResults: null,
     };
 };

@@ -12,6 +12,7 @@ import {
     resolveAnalystQueryProfile,
 } from "./analyst-recall-limits";
 import { resolveOrchestratedTool } from "@/agentflow/tools/orchestrated/run-sub-question";
+import { pickToolResultForSubQuestion } from "@/agentflow/tool-orchestration";
 import {
     buildSubQuestionFallbackAnswer,
     normalizeAnalystResult,
@@ -82,7 +83,9 @@ export async function* streamAnalyzeSubQuestion(
     const fallback = buildSubQuestionFallbackAnswer(payload);
 
     if (shouldSkipSubQuestionLlm(payload)) {
-        const toolId = resolveOrchestratedTool(payload);
+        const toolId =
+            pickToolResultForSubQuestion(payload, payload.toolResults)?.toolId ??
+            resolveOrchestratedTool(payload);
         logAgentOut("InformationAnalyst", "子问流式出去", {
             label: input.userQuestion,
             source: toolId
@@ -186,7 +189,9 @@ export const completeAnalyzeSubQuestion = async (
     const fallback = buildSubQuestionFallbackAnswer(payload);
 
     if (shouldSkipSubQuestionLlm(payload)) {
-        const toolId = resolveOrchestratedTool(payload);
+        const toolId =
+            pickToolResultForSubQuestion(payload, payload.toolResults)?.toolId ??
+            resolveOrchestratedTool(payload);
         logAgentOut("InformationAnalyst", "子问出去", {
             label: input.userQuestion,
             source: toolId

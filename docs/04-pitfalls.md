@@ -88,7 +88,7 @@
 | R6-3 | Intake / KM / Analyst | **同会话**：综合问首轮 **4 家**；编号子问或重复问后仅 **2 家** | 见 §2.7 | composite 分槽 + eval **`G-履历综合`** + `verify:r6-no-cache` | ✅ **已解决**（2026-06 · eval 4/4 + 无 cache 11/11）← §2.7 |
 | P0-19 | Analyst | 单问列举/档案走 **JSON+think** 解析失败 → 终稿变「**根据知识库摘录**」+ 整段 excerpt（像内部检索结果） | 单问与 composite 子问路径不一致；JSON parse 失败静默 `buildFallbackAnswer` 旧格式 | **plain-text 流式**（`prefersPlainTextAnalystStream`）；fallback 改 **紧凑列表** | ✅ **已解决**（2026-06）← §2.5.5 |
 | P0-22 | Analyst / KM / Web UI | **综合问**项目段只列 **2/36**；单问「列出全部」误解为应一页穷尽 | LLM 压缩；hybrid Top-8；分页 pageSize=20 | **enumeration skip LLM** + 分页 API + 序号仅项目名 + 分页文案 | ✅ **已解决**（2026-07）← §2.5.6 |
-| P0-23 | Analyst | 单问「今年多大」→ excerpt 有 `1993.03` 却只复述「出生日期…可推算」，**不给岁数** | P0-15/18 prompt **禁止 LLM 推算年龄**；pipeline 未注入 asOfDate；无服务端 age tool | **`compute_age_from_hits` 编排工具**（extract birth + 周岁）；`resolveOrchestratedTool` skip LLM；`search_web` 预留 | ✅ **已解决**（2026-07）← §2.5.7 |
+| P0-23 | Analyst | 单问「今年多大」→ excerpt 有 `1993.03` 却只复述「出生日期…可推算」，**不给岁数** | P0-15/18 prompt **禁止 LLM 推算年龄**；pipeline 未注入 asOfDate；无服务端 age tool | **`compute_age_from_hits`**（P0-23 Analyst 内联）→ **P0-24 上移到 ToolOrchestrator** | ✅ **已解决**（2026-07）← §2.5.7 · [架构 v2](./05-architecture-v2-tool-orchestration.md) |
 | P0-20 | Analyst / KM / composite | **综合问**公司段只列 2 家；子问「2～8 句」压缩；Organizer 固定 cap **5** | `MAX_SUB_QUESTION_HITS=4`；子问 prompt 句数限制；CO 未跟 profile | **`maxAnalystHitsForProfile`** + CO **`queryProfile` maxHits**；enumeration 子问 prompt「须列全 hits」 | ✅ **已解决**（2026-06）← §2.5.5 |
 | P0-21 | Intake / KM / Analyst | composite 槽 label「**具体项目名称**」→ 答 **云联智慧/友谊时光** 等公司 | 所有 enumeration 共用 **experience fill**；Intake 误标 `topics:experience` → canonical 到 employers | **`resolveEnumerationTarget`**（label 优先）+ KM **projects/** 专扫 + Analyst project prompt | ✅ **已解决**（2026-06）← §2.5.5 |
 
@@ -405,7 +405,7 @@ pnpm --filter @fambrain/brain-service run verify:enumeration-compose
 pnpm --filter @fambrain/brain-service run verify:enumeration-pagination
 ```
 
-#### 2.5.7 identity 年龄编排工具（✅ P0-23 · 2026-07）
+#### 2.5.7 identity 年龄编排工具（✅ P0-23 · 架构升级 P0-24 · 2026-07）
 
 **现象：** 单问「我今年多大 / 年龄多大」时，KM 已命中 personal 简历，excerpt 含 `| 出生日期 | 1993.03 |`，但 Analyst LLM 只答「简历记载出生日期为 1993.03，可以推算年龄」——**不给具体岁数**，用户体感像「没答」。
 
@@ -415,27 +415,32 @@ pnpm --filter @fambrain/brain-service run verify:enumeration-pagination
 |----|------|------|
 | **Analyst prompt** | P0-15/18 明确 **禁止 LLM 按当前年份推算年龄** | 防幻觉正确，但未配确定性 age 路径 |
 | **Pipeline** | 未向 Analyst 注入 **asOfDate** | LLM 即使想算也缺基准日 |
-| **架构缺口** | enumeration 已有 skip-LLM composer；**identity 年龄无对等 tool** | composite 年龄槽仍走 LLM → 复述 birth |
+| **架构缺口（P0-23）** | enumeration 已有 skip-LLM composer；**identity 年龄写在 Analyst 内联** | composite 年龄槽走 `resolveOrchestratedTool`，非独立编排节点 |
 
-**对策（编排工具表 · 非全链路 ReAct）：**
+**P0-24 架构升级（四类数据源）：**
 
-| 工具 ID | 用途 | 接入 |
-|---------|------|------|
-| `compose_enumeration` | 项目/公司列举 + blocks | `runOrchestratedSubQuestion`（原 enumeration skip LLM） |
-| `compute_age_from_hits` | 从 hits excerpt 提取出生/原文年龄 → **服务端周岁** | identity + 年龄语义槽；`resolveOrchestratedTool` → skip LLM |
-| `search_web` | 外部事实（公司背景等） | **预留 stub**；`FAMBRAIN_WEB_SEARCH_ENABLED=1` 前返回 disabled；corpus-first 不变 |
+| 工具 ID | 用途 | 接入（新） |
+|---------|------|------------|
+| `compose_enumeration` | 项目/公司列举 + blocks | `ToolOrchestrator` → `toolResults.enumeration` |
+| `compute_age_from_hits` | excerpt 提取出生 → **服务端周岁** | `ToolOrchestrator` → `toolResults.age`；`asOfDate` 由 `prepareTurnStart` 注入 |
+| `search_web` | 外部事实（Tavily） | `primaryDataSource=web` 或语料弱命中；需 `TAVILY_API_KEY` |
+| `synthesize_merge` | 混合 DAG 汇合 | `DagExecutor` → `toolResults.synthesis` |
 
-**代码：** `agentflow/tools/lib/compute-age.ts` · `tools/orchestrated/run-sub-question.ts` · `tools/compute-age-from-hits.ts` · `tools/search-web.ts` · Analyst `complete-analyze.ts` / `analyze-helpers.ts`。
+**代码：** `agentflow/tool-orchestration/*` · `pipeline/graph/compile.ts`（`dagExecutor` / `toolOrchestrator` 节点）· `field-catalog.ts` · `tools/search-web.ts` · Analyst 读 `pickToolResultForSubQuestion`。
 
 **验证：**
 
 ```bash
+pnpm --filter @fambrain/brain-service run verify:tool-orchestration
+pnpm --filter @fambrain/brain-service run verify:dag-hybrid
 pnpm --filter @fambrain/brain-service run verify:orchestrated-identity
 pnpm --filter @fambrain/brain-service exec tsx --env-file=../../.env scripts/diagnose-age-query.ts
-pnpm --filter @fambrain/brain-service run verify:langchain-tools   # 含 search_web stub
+pnpm --filter @fambrain/brain-service run verify:langchain-tools
 ```
 
-**日志：** Analyst 子问 skip 时 `source=orchestrated_compute_age_from_hits`（非 `llm`）。
+**日志：** ToolOrchestrator 完成时 `keys=[age|enumeration|web|slot_*]`；Analyst skip 时 `source=orchestrated_compute_age_from_hits` 或 `toolResults`。
+
+详见 [架构 v2 文档](./05-architecture-v2-tool-orchestration.md)。
 
 #### 2.5.8 Golden 回归 G1～GMem（✅ 2026-06）
 
@@ -869,7 +874,8 @@ pnpm run verify:fact-checker
 - [x] **P0-14**（Golden Day 2）：corpus/Mem0 不矛盾 ← KM 优化 ✅ 2026-06
 - [x] **P0-15**（Golden Day 2 实录）：无赵一/陈明、复合问法稳定 ← `verify:r6-no-cache` ✅ 2026-06
 - [x] **P0-22**（项目列举 blocks + 分页 + 序号列表）← §2.5.6 · `verify:enumeration-compose` · `verify:enumeration-pagination` · `diagnose-projects-query.ts` ✅ 2026-07
-- [x] **P0-23**（identity 年龄编排工具 + search_web 预留）← §2.5.7 · `verify:orchestrated-identity` · `diagnose-age-query.ts` ✅ 2026-07
+- [x] **P0-23**（identity 年龄编排工具）← §2.5.7 · `verify:orchestrated-identity` ✅ 2026-07
+- [x] **P0-24**（四类架构 ToolOrchestrator + DagExecutor）← [架构 v2](./05-architecture-v2-tool-orchestration.md) · `verify:tool-orchestration` · `verify:dag-hybrid` ✅ 2026-07
 - [x] **P0-19 / P0-20 / P0-21**（Analyst + enumeration 分流）← §2.5.5 · `verify:analyst-empty-hits` + `verify:composite-route` ✅ 2026-06
 - [x] **P0-16**（Web 联调）：对话 A 记 QQ → 对话 B 问 QQ 可召回 ← §2.6 · `verify:user-fact` ✅（含「码」误提取修复）
 - [x] R6-1：「哪几家公司上过班」类问题 → answer 枚举 **4 家**且同句再问一致 ← `verify:r6-no-cache` ✅ 2026-06

@@ -44,6 +44,8 @@
     "verify:vault-list": "tsx scripts/verify-vault-list.ts",
     "verify:langchain-tools": "tsx --env-file=../../.env scripts/verify-langchain-tools.ts",
     "verify:orchestrated-identity": "tsx scripts/verify-orchestrated-identity.ts",
+    "verify:tool-orchestration": "tsx scripts/verify-tool-orchestration.ts",
+    "verify:dag-hybrid": "tsx scripts/verify-dag-hybrid.ts",
     "summarize:document": "tsx --env-file=../../.env scripts/summarize-document.ts",
     "experiment:mcp-vault": "tsx scripts/experiments/mcp-vault-server.ts",
     "experiment:recall-compare": "tsx --env-file=../../.env scripts/experiments/compare-recall.ts",

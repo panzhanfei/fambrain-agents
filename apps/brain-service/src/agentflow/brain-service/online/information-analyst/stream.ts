@@ -86,6 +86,14 @@ async function* streamSinglePlainAnalyze(
 async function* streamSingleAnalyze(
     input: InformationAnalystInput
 ): AsyncGenerator<AnalystStreamChunk, InformationAnalystResult> {
+    if (input.routeMode === "dag" && input.toolResults?.synthesis?.answer) {
+        input = {
+            ...input,
+            notes: [input.notes, input.toolResults.synthesis.answer]
+                .filter(Boolean)
+                .join("\n\n"),
+        };
+    }
     const l3Cached = resolveSingleSlotCachedAnswer(input);
     if (l3Cached) {
         logAgentOut("InformationAnalyst", "出去", {

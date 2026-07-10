@@ -14,7 +14,9 @@
 | `KnowledgeManager` | 知识管理员 | 检索知识库，返回 `hits` / `coverage` / `notes` |
 | `FactChecker` | 事实核查员 | **检索后、生成前**审查证据包；不足时打回再检索（最多 1 次） |
 | `ContentOrganizer` | 内容整理师 | **核查通过后**对 `hits` 做 Zod 规范化与 path 去重，再交给分析师 |
-| `InformationAnalyst` | 信息分析师 | 对整理后的检索结果分析、归纳并回答 |
+| **`ToolOrchestrator`** | **工具编排器** | KM 之后执行确定性工具（年龄计算、列举合成、联网搜索）；产出 `toolResults` |
+| **`DagExecutor`** | **DAG 执行器** | 混合问句（`routeMode=dag`）并行语料+联网，汇合后交给 Analyst |
+| `InformationAnalyst` | 信息分析师 | 消费 `toolResults` + 整理后的 `hits` 写终稿；无证据时 `insufficientEvidence` |
 
 **里程碑：** 用户提问 → **轮次开始** → 意图识别 → 检索 → **证据核查** → **内容整理** → 分析 → 回答 → **轮次结束**。（LangGraph 编排 **已实现**；KM：**向量 + 关键词 fallback**；FactChecker / ContentOrganizer：**D5/D6 已接入**；**Mem0/LangMem** 在 **PrepareTurnStart** 注入、供 Intake/Analyst 使用；跨轮 **两层 cache**（**同问短路** + **检索结果 cache**）见 [坑点 §2.2](./04-pitfalls.md)。）
 
@@ -328,23 +330,27 @@ flowchart TD
 
 **P0-19 / P0-20（2026-06）：** 单问 `identity` / `enumeration` / `default` 走 **plain-text 流式**（与 composite 子问同路径，`think: false`），避免 JSON 解析失败退回「根据知识库摘录」体；hits 上限与 KM **queryProfile** 对齐（`analyst-recall-limits.ts`）；ContentOrganizer 按 profile 设 `maxHits`。详见 [坑点 §2.5.5](./04-pitfalls.md#255-analyst-纯文本流--enumeration-项目公司分流-p0-19--p0-20--p0-21--2026-06)。
 
-**P0-23（2026-07）：** composite / 单问 **identity 年龄槽** → **`resolveOrchestratedTool`** 命中 `compute_age_from_hits`，跳过 Analyst LLM，服务端从 excerpt 算周岁；工具表预留 **`search_web`**（外部事实，默认 disabled）。详见 [坑点 §2.5.7](./04-pitfalls.md#257-identity-年龄编排工具-p0-23--2026-07)。
+**P0-24（2026-07）：** 四类数据源架构 — Intake `applyToolPlanGuard` 富化 `enrichedPlan` / `executionPlan`；**`toolOrchestrator`** 节点在 CO 之后执行 `compute_age_from_hits` / `compose_enumeration` / `search_web`；混合评估走 **`dagExecutor`**。年龄从 Analyst 内联上移到编排层；`prepareTurnStart` 注入 `asOfDate`。详见 [架构 v2](./05-architecture-v2-tool-orchestration.md)。
+
+**P0-23（2026-07，已被 P0-24 吸收）：** composite / 单问 **identity 年龄槽** → `compute_age_from_hits`；原 `resolveOrchestratedTool` 在 Analyst 内，现优先走 `state.toolResults`。详见 [坑点 §2.5.7](./04-pitfalls.md#257-identity-年龄编排工具-p0-23--2026-07)。
 
 **技术：** composite / 单问列举 / **identity 年龄** → **编排工具或 plain-text 流式**；`tech` 单问仍 JSON **Zod**；fallback 为紧凑列表（非 raw excerpt 粘贴）。
 
 ```mermaid
 flowchart TD
-  IN["userQuestion + hits + queryType + topics"] --> MODE{"analyzeMode"}
-  MODE -->|composite ≥2 槽| COMP["streamCompositeAnalyze()<br/>子问 plain-text / 编排工具"]
-  MODE -->|single plain| PLAIN["streamAnalyzeSubQuestion()<br/>identity/enumeration/default"]
+  IN["userQuestion + hits + toolResults + queryType"] --> MODE{"analyzeMode"}
+  MODE -->|composite ≥2 槽| COMP["streamCompositeAnalyze()<br/>读 toolResults[slot_*]"]
+  MODE -->|single plain| PLAIN["streamAnalyzeSubQuestion()"]
+  MODE -->|routeMode=dag| DAGIN["notes 含 synthesis 材料"]
+  DAGIN --> PLAIN
   MODE -->|single tech| JSON["streamSingleAnalyze JSON + Zod"]
-  COMP --> ORCH{"resolveOrchestratedTool"}
-  PLAIN --> ORCH
-  ORCH -->|enumeration / age| TOOL["runOrchestratedSubQuestion<br/>compose_enumeration / compute_age_from_hits"]
-  ORCH -->|null| LLM["streamAnalyzeSubQuestion LLM"]
+  COMP --> PICK{"pickToolResultForSubQuestion"}
+  PLAIN --> PICK
+  PICK -->|命中| TOOL["toolRunToAnalystResult<br/>跳过 LLM"]
+  PICK -->|null| LLM["streamAnalyzeSubQuestion LLM"]
   TOOL --> ANS[answer + citations]
   LLM --> MERGE["mergeSubQuestionAnswers()"]
-  JSON -->|parse 失败| FB["buildFallbackAnswer 紧凑列表"]
+  JSON -->|parse 失败| FB["buildFallbackAnswer"]
   JSON --> ANS
   MERGE --> ANS
   FB --> ANS

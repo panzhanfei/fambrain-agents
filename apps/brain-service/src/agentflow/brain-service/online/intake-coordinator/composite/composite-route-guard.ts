@@ -10,8 +10,12 @@ import {
 import type { CompositeRetrievalSlot } from "./composite-slot-queries";
 import type { IntakeRoutingDecision } from "../contract/prompt";
 import type { UserFactRoute } from "@/agentflow/brain-service/online/user-fact";
+import type {
+    EnrichedPlanItem,
+    ExecutionPlanNode,
+} from "@/agentflow/tool-orchestration/types";
 
-export type IntakeRouteMode = "single" | "composite" | "slot";
+export type IntakeRouteMode = "single" | "composite" | "slot" | "dag";
 
 export type CompositeRouteReason =
     | "skip_non_retrieve"
@@ -35,6 +39,13 @@ export type RoutedIntakeDecision = IntakeRoutingDecision & {
     enumerationPage?: number;
     enumerationPageSize?: number;
     enumerationListKind?: "project" | "experience";
+    /** 混合 DAG：Intake 规划，DagExecutor 执行 */
+    executionPlan?: ExecutionPlanNode[];
+    /** guard 富化后的计划项（含 dataSource / toolId） */
+    enrichedPlan?: EnrichedPlanItem[];
+    /** 主路径数据源：语料优先，外部事实可走 web */
+    primaryDataSource?: "corpus" | "web";
+    webQuery?: string;
 };
 
 const sourceToReason = (
