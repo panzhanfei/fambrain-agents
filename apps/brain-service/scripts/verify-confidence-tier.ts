@@ -1,5 +1,5 @@
 /**
- * Wave D（EV-01～04）：置信分档单测 + KM live 抽检。
+ * 置信分档单测 + KM live 抽检。
  *
  *   pnpm --filter @fambrain/brain-service run verify:confidence-tier
  */

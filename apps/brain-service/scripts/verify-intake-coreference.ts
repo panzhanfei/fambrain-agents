@@ -1,5 +1,5 @@
 /**
- * Wave C（QU-02）：Intake 多轮指代 — pipeline 早退单测 + Intake live 抽检。
+ * Intake 多轮指代 — pipeline 早退单测 + Intake live 抽检。
  *
  *   pnpm --filter @fambrain/brain-service run verify:intake-coreference
  */

@@ -131,7 +131,7 @@ pnpm --filter @fambrain/brain-service run verify:langchain-tools
 
 ---
 
-## 7. 后续（P1）
+## 7. 后续改进方向
 
 | 项 | 说明 |
 |----|------|

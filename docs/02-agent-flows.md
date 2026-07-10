@@ -1,10 +1,10 @@
 # Agent 流程图
 
-[← 返回 README](../README.md) · [路线图](./03-roadmap.md) · [坑点清单](./04-pitfalls.md)
+[← 返回 README](../README.md) · [坑点清单](./04-pitfalls.md)
 
 本文描述 FamBrain 多 Agent 的 **全局链路**、**在线编排**、**单 Agent 实现**（含规则 / 文件 / 方法），以及路由契约与 SSE 事件。
 
-## P0 在线 Agent 角色
+## 在线 Agent 角色
 
 | 英文名 | 中文名 | 职责 |
 |--------|--------|------|
@@ -18,7 +18,7 @@
 | **`DagExecutor`** | **DAG 执行器** | 混合问句（`routeMode=dag`）并行语料+联网，汇合后交给 Analyst |
 | `InformationAnalyst` | 信息分析师 | 消费 `toolResults` + 整理后的 `hits` 写终稿；无证据时 `insufficientEvidence` |
 
-**里程碑：** 用户提问 → **轮次开始** → 意图识别 → 检索 → **证据核查** → **内容整理** → 分析 → 回答 → **轮次结束**。（LangGraph 编排 **已实现**；KM：**向量 + 关键词 fallback**；FactChecker / ContentOrganizer：**D5/D6 已接入**；**Mem0/LangMem** 在 **PrepareTurnStart** 注入、供 Intake/Analyst 使用；跨轮 **两层 cache**（**同问短路** + **检索结果 cache**）见 [坑点 §2.2](./04-pitfalls.md)。）
+**链路：** 用户提问 → **轮次开始** → 意图识别 → 检索 → **证据核查** → **内容整理** → 分析 → 回答 → **轮次结束**。跨轮 **两层 cache**（同问短路 + 检索结果 cache）见 [坑点 §2.2](./04-pitfalls.md)。
 
 **架构双线（2026-06）：**
 
@@ -71,9 +71,7 @@ flowchart TB
   MD -.->|关键词 fallback| KM
 ```
 
-> **进度（2026-06-02）：** 离线 `KnowledgeIndexer` ✅；在线 KM 向量 + 关键词 fallback；D5～D6 入图；**D7 DocParser**、**D8 Mem0/LangMem**、**D9 ContentSummarizer**（离线摘要）；**MCP / Recall / Vercel AI** 见 [experiments/README.md](../experiments/README.md)。在线 Agent JSON 均走 Zod。
-
-## P0 在线编排流程
+## 在线编排流程
 
 入口接线员只输出 **JSON 路由决策**；**进哪个节点由 LangGraph 查表决定**（`IntakeRoutingDecision` 见 `agentflow/brain-service/online/intake-coordinator/prompt.ts`），不是模型在回复里写「下一个 Agent 名字」。
 
@@ -259,10 +257,7 @@ flowchart TD
 
 **技术：** **纯规则精排**（无 LLM）。**Hybrid 并行召回**（Chroma 向量 ∥ corpus BM25）→ RRF 融合 → `tokenize` + `pickExcerpt` 确定性输出。与业界「检索层不用 Chat LLM、生成留给 Analyst」一致；避免小模型在精排阶段改写 excerpt、编造 `notes`（见 [坑点 P0-4 / D3-3](./04-pitfalls.md)）。
 
-> **v3 进度（Wave A）：** … Wave A 规则层收尾完成。  
-> **Wave B：** HY-01～07 ✅ 并行 Hybrid + RRF 已接入 KM 主链  
-> **Wave C：** QU-01～06 ✅ Intake `queryType` + 多轮指代补全（`verify:intake-coreference`）  
-> **Wave D：** EV-01～07 ✅ `confidenceTier` 分档 + FC 高置信规则快检（`tier_skip_llm`）
+> **v3 设计：** Hybrid（向量 + BM25）+ RRF 已接入；Intake `queryType`、confidenceTier、列举分流见 [km-retrieval-design.md](./km-retrieval-design.md)。
 
 ```mermaid
 flowchart TD
@@ -297,7 +292,7 @@ flowchart TD
 
 **职责：** 审查当轮 `hits` / `coverage` 是否足以回答 `userQuestion`；**不写终稿**。`passed=false` 时产出 `refinedSearchQuery`，编排器最多再打回 KM **1 次**。
 
-**技术：** LangChain `ChatOllama`；**Wave D**：`confidenceTier=high` 时规则快检跳过 LLM（`tier_skip_llm`）；规则兜底 `buildRuleBasedFactCheck()`；输出 **Zod**（`factCheckerResultSchema`）；`retryCount≥1` 时代码强制放行。
+**技术：** LangChain `ChatOllama`；`confidenceTier=high` 时规则快检跳过 LLM（`tier_skip_llm`）；规则兜底 `buildRuleBasedFactCheck()`；输出 **Zod**（`factCheckerResultSchema`）；`retryCount≥1` 时代码强制放行。
 
 ```mermaid
 flowchart TD

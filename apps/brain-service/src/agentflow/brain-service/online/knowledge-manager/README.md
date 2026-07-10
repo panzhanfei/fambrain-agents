@@ -72,7 +72,7 @@ knowledge-manager/
     └── score-candidate.ts # confidenceTier 多维评估
 ```
 
-业界对标与 Wave 计划见 [`docs/km-retrieval-design.md`](../../../../../../docs/km-retrieval-design.md)。
+业界对标见 [`docs/km-retrieval-design.md`](../../../../../../docs/km-retrieval-design.md)。
 
 ### 推荐阅读顺序
 

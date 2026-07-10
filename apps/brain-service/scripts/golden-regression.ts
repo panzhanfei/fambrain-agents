@@ -142,7 +142,7 @@ const runPipelineCase = async (
   };
 };
 
-/** 问法与期望见 docs/03-roadmap.md · Golden 问法（回归） */
+/** Golden 用例定义见本文件 GOLDEN_CASES */
 const GOLDEN_CASES: GoldenCase[] = [
   {
     id: "G1",

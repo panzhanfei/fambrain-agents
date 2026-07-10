@@ -4,9 +4,9 @@
 
 ## FamBrain
 
-基于 **Next.js（App Router）** 的家庭协作型对话应用：注册登录、成员审核、会话与消息持久化，以及 **P0 多 Agent 聊天闭环**（意图路由 → 知识库检索 → 归纳回答，SSE 流式）。
+基于 **Next.js（App Router）** 的家庭协作型对话应用：注册登录、成员审核、会话与消息持久化，以及 **多 Agent 聊天闭环**（意图路由 → 知识库检索 → 归纳回答，SSE 流式）。
 
-**当前进度（2026-06）：** 在线 LangGraph 多 Agent 闭环 ✅（**PrepareTurn 首节点** + Intake → KM → FC → Analyst）；`@fambrain/corpus` / `@fambrain/brain-memory` / `@fambrain/infra` 已抽包；**`pnpm dev` 一键起 Chroma + Redis + Web + Brain Service** ✅；**P0-15 composite 分槽 + L3/L4** ✅；**R6 / Golden / eval 13/13** ✅；**LangChain StructuredTool 层**（5 工具）✅；**LangSmith tracing**（配 API Key 即用）✅；**Learning Phase A–D** ✅；**SLO Token + Web 运行日志** ✅。详见 [路线图](./03-roadmap.md) · [流程图](./02-agent-flows.md)。
+流程与编排见 [02-agent-flows.md](./02-agent-flows.md)。
 
 ## 应用层技术栈
 
@@ -21,8 +21,6 @@
 开发本仓库前，请先阅读根目录 [`AGENTS.md`](../AGENTS.md)：当前 Next.js 与常见教程版本存在差异，以 `node_modules/next/dist/docs/` 为准。
 
 ## Agent 相关技术（摘要）
-
-完整 17 项选型、落地状态与 P1 覆盖计划见 [路线图 · 技术选型总表](./03-roadmap.md#技术选型总表17-项)。
 
 | 技术 | 当前用途 |
 |------|----------|
@@ -219,9 +217,9 @@ pnpm run dev
 | `verify:retrieval-cache` | `apps/brain-service/scripts/` | D5-2 L2 cache normalize + memory/Redis |
 | `verify:repeat-question-smoke` | `apps/brain-service/scripts/` | D5-2 同问短路冒烟（无 Ollama） |
 | `verify:recall-compare` | `apps/brain-service/scripts/` | HY-07 三问 vector/sparse/RRF（需 Chroma） |
-| `verify:confidence-tier` | `apps/brain-service/scripts/` | Wave D：assessConfidence 单测 + KM live tier |
+| `verify:confidence-tier` | `apps/brain-service/scripts/` | 置信分档单测 + KM live tier |
 | `verify:analyst-empty-hits` | `apps/brain-service/scripts/` | P0-12 / D5-5：空 hits skip LLM + insufficientEvidence |
-| `verify:intake-coreference` | `apps/brain-service/scripts/` | Wave C QU-02 + D5-2 repeat guard 单测 |
+| `verify:intake-coreference` | `apps/brain-service/scripts/` | Intake 多轮指代 + repeat guard 单测 |
 | `verify:intake-chitchat` | `apps/brain-service/scripts/` | P0-13：chitchat briefReply 模板兜底 + live ×10 |
 | `verify:composite-route` | `apps/brain-service/scripts/` | P0-15/R6-3：composite 路由 guard + merge + 单问年龄 slot 单测 |
 | `verify:composite-incremental` | `apps/brain-service/scripts/` | P0-15：L3 facet 终稿 cache + L4 增量 composite 单测 |
