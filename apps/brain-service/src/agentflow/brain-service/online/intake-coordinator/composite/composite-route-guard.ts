@@ -1,5 +1,11 @@
 /**
- * P0-15 / R6-3：Intake retrievalPlan 主路由 + 结构/queryType 兜底；动态槽（按需子集）。
+ * Intake guard ⑥：复合路由。
+ *
+ * 输入：LLM + 检索计划 guard 之后的 IntakeRoutingDecision
+ * 输出：RoutedIntakeDecision（多了 routeMode / compositeSlots / routeReason）
+ *
+ * 职责：决定「单问还是多分槽」，不负责真检索。
+ * 检索在 retrieval-node：composite/slot → 增量计划 → 并行 KM。
  */
 import {
     isCompositeProfileQuestion,
@@ -15,8 +21,10 @@ import type {
     ExecutionPlanNode,
 } from "@/agentflow/tool-orchestration/types";
 
+/** 图路由模式：single 普通单问；composite ≥2 槽；slot 单槽结构化；dag 混合执行 */
 export type IntakeRouteMode = "single" | "composite" | "slot" | "dag";
 
+/** 为何走到当前 routeMode（写进日志 routeReason） */
 export type CompositeRouteReason =
     | "skip_non_retrieve"
     | "intake_retrieval_plan"
@@ -27,23 +35,26 @@ export type CompositeRouteReason =
 
 export type EnumerationListIntent = "preview" | "continue" | "exhaustive";
 
+/**
+ * Intake 编排工单（写入 state.decision）。
+ * 比 LLM 原始 JSON 多：routeMode、compositeSlots、列举分页、工具计划等。
+ */
 export type RoutedIntakeDecision = IntakeRoutingDecision & {
     routeMode: IntakeRouteMode;
+    /** 完整槽对象数组；「最终路由」日志只打 count/labels 摘要 */
     compositeSlots: CompositeRetrievalSlot[];
     routeReason?: CompositeRouteReason;
     routePlanSource?: CompositeRoutePlanSource;
-    /** P0-16：用户自述联系方式 remember/recall，不经 KM */
+    /** 用户自述联系方式 remember/recall，不经 KM */
     userFact?: UserFactRoute | null;
-    /** 列举分页：preview=首屏8条；exhaustive=单问穷举；continue=续页 */
+    /** preview=首屏；exhaustive=穷举；continue=续页「更多」 */
     listIntent?: EnumerationListIntent | null;
     enumerationPage?: number;
     enumerationPageSize?: number;
     enumerationListKind?: "project" | "experience";
     /** 混合 DAG：Intake 规划，DagExecutor 执行 */
     executionPlan?: ExecutionPlanNode[];
-    /** guard 富化后的计划项（含 dataSource / toolId） */
     enrichedPlan?: EnrichedPlanItem[];
-    /** 主路径数据源：语料优先，外部事实可走 web */
     primaryDataSource?: "corpus" | "web";
     webQuery?: string;
 };
@@ -65,6 +76,7 @@ const sourceToReason = (
     }
 };
 
+/** ≥1 槽时：强制 retrieve_and_answer，顶层 searchQuery 取首槽（兼容单问字段） */
 const applySlotDecision = (
     decision: IntakeRoutingDecision,
     slots: CompositeRetrievalSlot[],
@@ -92,11 +104,11 @@ const applySlotDecision = (
 export { isCompositeProfileQuestion };
 
 /**
- * Composite 路由：
- * 1. 非检索短路 → single
- * 2. resolveCompositeRoute ≥2 槽 → composite（动态子集）
- * 3. 1 槽 → slot（tech 单问除外 → single）
- * 4. 0 槽 → single（沿用 Intake searchQuery）
+ * Composite 路由主逻辑：
+ * 1. 非 retrieve_and_answer → single（不检索）
+ * 2. resolveCompositeRoute ≥2 槽 → composite
+ * 3. 1 槽：tech 单问例外 → single；否则 → slot
+ * 4. 0 槽 → single（沿用原 searchQuery）
  */
 export const applyCompositeRouteGuard = (
     decision: IntakeRoutingDecision,
@@ -114,6 +126,7 @@ export const applyCompositeRouteGuard = (
         };
     }
 
+    // 真正拆槽：retrievalPlan / subTasks / 句式 / queryType 模板
     const { slots, source } = resolveCompositeRoute(decision, userQuestion);
     const routeReason = sourceToReason(source);
 
@@ -128,6 +141,7 @@ export const applyCompositeRouteGuard = (
     }
 
     if (slots.length === 1) {
+        // 「城管用了什么技术」类 tech 单问：不要误进 slot，走普通单问检索
         if (isTechSingleQuestion(userQuestion, decision)) {
             return {
                 ...decision,

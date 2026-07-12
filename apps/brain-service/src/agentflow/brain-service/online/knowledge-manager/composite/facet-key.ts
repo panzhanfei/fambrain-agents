@@ -1,12 +1,19 @@
 /**
- * L3/L4：稳定 facetKey（canonical 槽语义，非用户口语）。
+ * facetKey：会话内「同一语义槽」的稳定键（KM 执行侧）。
+ *
+ * 用途：
+ * - composite 会话 facets[facetKey] 存 Analyst 终稿（槽答案缓存）
+ * - 同问不同说法（「叫什么」/「姓名」）应对齐到同一 key（如 id:name）
+ *
+ * 键按 queryType 分桶：enum:* / id:* / tech:* / default:*
+ * 槽位模板仍来自 Intake（canonicalizePlanItem）；本文件只负责算 key。
  */
 import { normalizeSearchQuery } from "@fambrain/infra";
-import { inferQueryProfile } from "@/agentflow/brain-service/online/knowledge-manager";
-import { canonicalizePlanItem } from "./composite-slot-queries";
-import { resolveEnumerationTarget } from "./enumeration-target";
-import type { CompositeRetrievalSlot } from "./composite-slot-queries";
-import type { IntakeRetrievalPlanItem } from "../contract/prompt";
+import { canonicalizePlanItem } from "@/agentflow/brain-service/online/intake-coordinator/composite/composite-slot-queries";
+import { resolveEnumerationTarget } from "@/agentflow/brain-service/online/intake-coordinator/composite/enumeration-target";
+import type { CompositeRetrievalSlot } from "@/agentflow/brain-service/online/intake-coordinator/composite/composite-slot-queries";
+import type { IntakeRetrievalPlanItem } from "@/agentflow/brain-service/online/intake-coordinator/contract/prompt";
+import { inferQueryProfile } from "../profile/query-profile";
 
 type FacetSource =
     | Pick<
@@ -15,22 +22,20 @@ type FacetSource =
       >
     | CompositeRetrievalSlot;
 
-const topicHas = (topics: string[], re: RegExp): boolean =>
-    topics.some((t) => re.test(t));
-
 const labelNorm = (label: string): string =>
     normalizeSearchQuery(label).replace(/\s+/g, " ");
 
-/** 用户明确要求重答 composite */
+/** 用户明确要求重答 → resolveIncrementalCompositePlan 会清会话 cache */
 export const detectCompositeRefreshIntent = (userQuestion: string): boolean =>
     /全部重来|重新介绍|重新回答|重新说|再说一遍|从头再来|不对[，,]?重新|重新来/.test(
         userQuestion.trim()
     );
 
 /**
- * 从 plan 槽推导 facetKey。
- * - enumeration：projects / employers 二分
- * - identity：按 label 语义分桶（姓名/年龄/学历/邮箱/电话…）
+ * 从 plan/槽推导 facetKey。
+ * - enumeration → enum:projects | enum:employers | enum:employers:roles
+ * - identity → id:name | id:age | …
+ * - tech / default → 带 label 前缀的弱键
  */
 export const buildFacetKey = (source: FacetSource): string => {
     const item =
@@ -85,6 +90,7 @@ export const buildFacetKey = (source: FacetSource): string => {
     return `default:${ln.slice(0, 32) || canonical.queryType}`;
 };
 
+/** 给槽挂上 facetKey，供增量计划查槽答案缓存 */
 export const attachFacetKey = (
     slot: CompositeRetrievalSlot
 ): CompositeRetrievalSlot & { facetKey: string } => ({

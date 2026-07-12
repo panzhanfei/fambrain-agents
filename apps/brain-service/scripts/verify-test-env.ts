@@ -6,7 +6,7 @@ export const enableRepeatGuardForVerify = (): void => {
     resetInfraConfigForTests();
 };
 
-/** verify 脚本内覆盖 .env：L2 走 memory fallback 且启用 cache */
+/** verify 脚本内覆盖 .env：检索 hits 缓存走 memory fallback 且启用 cache */
 export const enableMemoryRetrievalCacheForVerify = (): void => {
     process.env.REDIS_ENABLED = "0";
     delete process.env.REDIS_URL;

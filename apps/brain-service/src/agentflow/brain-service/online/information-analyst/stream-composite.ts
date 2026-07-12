@@ -1,13 +1,13 @@
-import { logAgentIn, logAgentOut } from "@fambrain/brain-shared/agent-log";
-import type { AssistantMessageBlock } from "@fambrain/brain-types";
-import { upsertFacetAnswers } from "@fambrain/infra";
-import { organizeKnowledge } from "@/agentflow/brain-service/online/content-organizer";
-import { resolveQueryProfile } from "@/agentflow/brain-service/online/knowledge-manager";
 import {
     analystResultToCachedFacet,
     cachedFacetToAnalystResult,
+    resolveQueryProfile,
     type CompositeSlotPlan,
-} from "@/agentflow/brain-service/online/intake-coordinator";
+} from "@/agentflow/brain-service/online/knowledge-manager";
+import { organizeKnowledge } from "@/agentflow/brain-service/online/content-organizer";
+import { logAgentIn, logAgentOut } from "@fambrain/brain-shared/agent-log";
+import type { AssistantMessageBlock } from "@fambrain/brain-types";
+import { upsertFacetAnswers } from "@fambrain/infra";
 import {
     mergeSubQuestionAnswers,
     type SubQuestionAnalyzeInput,
@@ -86,7 +86,7 @@ const emitSectionBlocks = function* (
 };
 
 /**
- * composite：L3 命中 instant 展示 + 新 facet 顺序流式；列举槽 deterministic + ui_block。
+ * composite：槽答案缓存命中 instant 展示 + 新 facet 顺序流式；列举槽 deterministic + ui_block。
  */
 export async function* streamCompositeAnalyze(
     input: InformationAnalystInput,

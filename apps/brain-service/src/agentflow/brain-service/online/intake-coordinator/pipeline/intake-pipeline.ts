@@ -189,7 +189,7 @@ export const runIntakePipeline = (
     return { decision: routed, parseUsedFallback, earlyExit: true };
   }
 
-  /** ⑤ 检索计划：多问并列时补全/规范化 retrievalPlan（与 L2 cache key 对齐） */
+  /** ⑤ 检索计划：多问并列时补全/规范化 retrievalPlan（与 检索 hits 缓存 key 对齐） */
   const afterPlan = applyIntakeRetrievalPlanGuard(
     decision,
     input.userQuestion

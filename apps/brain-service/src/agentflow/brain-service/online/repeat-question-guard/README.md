@@ -2,7 +2,7 @@
 
 同会话 **normalize 后字面相同** 的 user 问 → 复用 history 中已有 assistant 答，跳过 Mem0 / Intake / KM / FC / Analyst。
 
-与 **检索结果 cache（L2）** 互补：L1 按 user 原问匹配；L2 按 Intake 产出的 `searchQuery` 匹配。
+与 **检索结果缓存** 互补：同问短路按 user 原问匹配；检索 hits 缓存按 Intake 产出的 `searchQuery` 匹配。
 
 ---
 

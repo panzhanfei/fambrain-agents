@@ -35,7 +35,7 @@ export const LOG_BODY_PREVIEW = 160;
 export const SCAN_BODY_MAX = 4000;
 
 /**
- * 向量召回后，同一 path 最多保留几个 chunk（L2 最优）。
+ * 向量召回后，同一 path 最多保留几个 chunk（按距离最优）。
  * 用于：dedupeVectorByPath（KM-02）。
  */
 export const MAX_CHUNKS_PER_PATH = 2;
@@ -66,13 +66,13 @@ export const RRF_VECTOR_WEIGHT = 0.85;
 export const RRF_SPARSE_WEIGHT = 1.2;
 
 /**
- * Chroma L2 距离：越小越相似。
+ * Chroma 欧氏距离：越小越相似。
  * HY-04 前用于 isVectorConfident；Hybrid 主路径不再串行 gating。
  */
 export const VECTOR_CONFIDENT_TOP1_MAX = 1.25;
 
 /**
- * top1 与 top2 的 L2 距离差 ≥ 此值视为「无歧义」。
+ * top1 与 top2 的欧氏距离差 ≥ 此值视为「无歧义」。
  * 与 TOP1_MAX 一起决定是否仅走向量候选。用于：isVectorConfident。
  */
 export const VECTOR_CONFIDENT_GAP_MIN = 0.12;

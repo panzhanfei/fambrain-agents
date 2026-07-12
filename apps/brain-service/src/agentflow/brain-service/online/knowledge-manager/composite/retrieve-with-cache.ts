@@ -1,13 +1,12 @@
-import type { CompositeRetrievalSlot } from "@/agentflow/brain-service/online/intake-coordinator";
-import {
-    retrieveKnowledge,
-    type KnowledgeRetrievalResult,
-} from "@/agentflow/brain-service/online/knowledge-manager";
+import type { CompositeRetrievalSlot } from "@/agentflow/brain-service/online/intake-coordinator/composite/composite-slot-queries";
+import { retrieveKnowledge } from "../recall/retrieve";
+import type { KnowledgeRetrievalResult } from "../contract/types";
 import {
     getRetrievalFromCache,
     setRetrievalCache,
 } from "@fambrain/infra";
 
+/** 单槽检索：先查 hits 缓存，miss 再 retrieveKnowledge（单问与 composite 槽共用） */
 export const retrieveSlotWithCache = async (input: {
     corpusUserId: string;
     slot: CompositeRetrievalSlot;

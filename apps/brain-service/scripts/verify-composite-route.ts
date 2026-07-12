@@ -19,7 +19,7 @@ import {
 import {
   mergeCompositeHits,
   mergeCompositeRetrieval,
-} from "../src/agentflow/brain-service/online/knowledge-manager/pipeline/merge-composite-retrieval";
+} from "../src/agentflow/brain-service/online/knowledge-manager/composite/merge";
 import { mergeSubQuestionAnswers } from "../src/agentflow/brain-service/online/information-analyst/analyze-helpers";
 
 const retrieveStub: IntakeRoutingDecision = {
@@ -268,7 +268,7 @@ assertSync("多问但 plan 空 → guard 补 fallback", () => {
   }
 });
 
-assertSync("plan identity 项 → canonical searchQuery（L2 cache）", () => {
+assertSync("plan identity 项 → canonical searchQuery（检索 hits 缓存）", () => {
   const guarded = applyIntakeRetrievalPlanGuard(
     {
       ...retrieveStub,

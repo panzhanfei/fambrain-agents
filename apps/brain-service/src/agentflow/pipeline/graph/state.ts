@@ -1,15 +1,13 @@
 import { Annotation } from "@langchain/langgraph";
 import type { AgentPipelineContext, DbChatTurn, } from "@fambrain/brain-types";
 import type { AssistantMessageBlock } from "@fambrain/brain-types";
-import type {
-    IncrementalCompositePlan,
-    RoutedIntakeDecision,
-} from "@/agentflow/brain-service/online/intake-coordinator";
+import type { RoutedIntakeDecision } from "@/agentflow/brain-service/online/intake-coordinator";
 import type { InformationAnalystInput } from "@/agentflow/brain-service/online/information-analyst";
 import type {
     ConfidenceTier,
     CompositeSubRetrieval,
     EnumerationMeta,
+    IncrementalCompositePlan,
 } from "@/agentflow/brain-service/online/knowledge-manager";
 import type { PipelineToolResults } from "@/agentflow/tool-orchestration/types";
 /**
@@ -57,13 +55,13 @@ export const PipelineGraphAnnotation = Annotation.Root({
     repeatQuestionHit: Annotation<boolean>,
     /** D5-2：本轮 retrieval 是否命中 KM cache */
     retrievalCacheHit: Annotation<boolean>,
-    /** composite：本轮 L2 命中的槽位数 */
+    /** composite：本轮 检索 hits 缓存命中的槽位数 */
     retrievalCacheSlotHits: Annotation<number | null>,
     /** composite / slot：分槽检索结果，供 Analyst 分段写 */
     compositeSubResults: Annotation<CompositeSubRetrieval[] | null>,
-    /** L4 增量 composite 槽计划（含 L3 facet cache 命中） */
+    /** composite 增量 槽计划（含 槽答案缓存 命中） */
     compositeIncrementalPlan: Annotation<IncrementalCompositePlan | null>,
-    /** L3 子问终稿 cache 命中数 */
+    /** 槽答案缓存 命中数 */
     compositeFacetCacheHits: Annotation<number | null>,
     /** prepareTurnStart 注入：年龄等计算基准日 YYYY-MM-DD */
     asOfDate: Annotation<string>,

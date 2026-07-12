@@ -1,5 +1,5 @@
 /**
- * L3/L4 composite 增量 cache 单测。
+ * composite 槽答案缓存 + 增量计划 单测。
  *
  *   pnpm --filter @fambrain/brain-service run verify:composite-incremental
  */
@@ -11,9 +11,9 @@ import {
 import {
     analystResultToCachedFacet,
     buildFacetKey,
-    planItemToSlot,
     resolveIncrementalCompositePlan,
-} from "../src/agentflow/brain-service/online/intake-coordinator";
+} from "../src/agentflow/brain-service/online/knowledge-manager";
+import { planItemToSlot } from "../src/agentflow/brain-service/online/intake-coordinator";
 
 process.env.REDIS_ENABLED = "0";
 process.env.COMPOSITE_ANSWER_CACHE_DISABLED = "0";
@@ -68,7 +68,7 @@ console.log("verify-composite-incremental\n— facetKey —");
     ok("姓名 / 邮箱 / 项目 / 职位 分桶");
 }
 
-console.log("\n— L3 session —");
+console.log("\n— 槽答案会话 —");
 
 await upsertFacetAnswers(session, {
     facets: [

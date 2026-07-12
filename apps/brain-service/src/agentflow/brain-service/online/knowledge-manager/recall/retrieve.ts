@@ -4,10 +4,10 @@
  * 不做 LLM 精排：excerpt / coverage 由确定性规则生成，避免小模型改写 excerpt、
  * 编造 notes，并与业界「检索层不用 Chat LLM、生成留给 Analyst」一致。
  *
- * L1a：Chroma 向量语义召回（与 sparse 并行）
- * L1b：corpus BM25 sparse 召回（与向量并行）
- * L1c：RRF 融合候选（HY-02～03）
- * L2：内存关键词打分 + pickExcerpt（唯一输出路径）
+ * 向量召回：Chroma 向量语义召回（与 sparse 并行）
+ * sparse 召回：corpus BM25 sparse 召回（与向量并行）
+ * RRF 融合：RRF 融合候选（HY-02～03）
+ * 打分与摘录：内存关键词打分 + pickExcerpt（唯一输出路径）
  *
  * KM-01 topics 分流：topics 仅拼入向量 query；sparse 用 searchQuery + subTasks。
  * KM-05 rank：relevance = token + vector/sparse + pathBoost（封顶 1.0）。

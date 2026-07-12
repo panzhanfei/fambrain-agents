@@ -1,11 +1,11 @@
-import type { CompositeRetrievalSlot } from "@/agentflow/brain-service/online/intake-coordinator";
+import type { CompositeRetrievalSlot } from "@/agentflow/brain-service/online/intake-coordinator/composite/composite-slot-queries";
 import { retrieveSlotWithCache } from "./retrieve-with-cache";
 import {
     mergeCompositeRetrieval,
     type CompositeSubRetrieval,
-} from "./merge-composite-retrieval";
+} from "./merge";
 
-/** 多分问 composite：各槽 KM 并行检索（L2 cache key 仍按槽独立） */
+/** 多分问 composite：各槽并行检索（hits 缓存 key 仍按槽独立） */
 export const retrieveCompositeSlotsParallel = async (input: {
     corpusUserId: string;
     slots: CompositeRetrievalSlot[];

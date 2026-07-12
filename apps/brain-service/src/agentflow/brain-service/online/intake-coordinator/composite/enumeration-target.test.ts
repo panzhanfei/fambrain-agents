@@ -1,3 +1,4 @@
+/** enumeration-target 单元测试：label 优先于误标 topics */
 import { describe, expect, it } from "vitest";
 import {
     isProjectEnumeration,

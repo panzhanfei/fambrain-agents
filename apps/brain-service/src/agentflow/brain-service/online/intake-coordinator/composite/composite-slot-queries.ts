@@ -1,6 +1,11 @@
 /**
- * Composite 检索槽：canonical 模板 + Intake retrievalPlan 动态项。
- * L2 cache key = corpusUserId + searchQuery + queryType（按槽独立）。
+ * 检索槽定义 + canonical 模板。
+ *
+ * CompositeRetrievalSlot = 一次独立 KM 调用的参数包。
+ * 检索 hits 缓存 key = corpusUserId + searchQuery + queryType（按槽独立）。
+ *
+ * canonicalizePlanItem：把 Intake 口语 searchQuery 对齐到模板 query，
+ * 避免同义问句打出不同 cache key。
  */
 import type { IntakeRetrievalPlanItem } from "../contract/prompt";
 import type { IntakeRoutingDecision } from "../contract/prompt";
@@ -18,9 +23,10 @@ export const COMPOSITE_FACET_IDS = [
 
 export type CompositeFacetId = (typeof COMPOSITE_FACET_IDS)[number];
 
-/** 槽 id：已知 facet 或 plan-N 动态项 */
+/** 槽 id：已知 facet（identity/projects…）或 plan-N 动态项 */
 export type CompositeSlotId = CompositeFacetId | `plan-${number}` | string;
 
+/** 一个检索槽：并行 KM 时每个 Promise 对应一个 */
 export type CompositeRetrievalSlot = {
     id: CompositeSlotId;
     label: string;
@@ -30,6 +36,7 @@ export type CompositeRetrievalSlot = {
     subTasks: string[];
 };
 
+/** canonical：个人档案 */
 export const IDENTITY_SLOT: CompositeRetrievalSlot = {
     id: "identity",
     label: "姓名与档案",
@@ -39,6 +46,7 @@ export const IDENTITY_SLOT: CompositeRetrievalSlot = {
     subTasks: [],
 };
 
+/** canonical：项目列举 */
 export const PROJECTS_SLOT: CompositeRetrievalSlot = {
     id: "projects",
     label: "项目经历",
@@ -48,6 +56,7 @@ export const PROJECTS_SLOT: CompositeRetrievalSlot = {
     subTasks: [],
 };
 
+/** canonical：公司/任职列举 */
 export const EMPLOYERS_SLOT: CompositeRetrievalSlot = {
     id: "employers",
     label: "工作经历",
@@ -57,6 +66,7 @@ export const EMPLOYERS_SLOT: CompositeRetrievalSlot = {
     subTasks: [],
 };
 
+/** canonical：近况 */
 export const RECENT_SLOT: CompositeRetrievalSlot = {
     id: "recent",
     label: "近两年",
@@ -85,7 +95,10 @@ export const getCompositeSlot = (
 const topicHas = (topics: string[], re: RegExp): boolean =>
     topics.some((t) => re.test(t));
 
-/** queryType + topics/label 映射 canonical 模板 */
+/**
+ * queryType + topics → 取 canonical 模板。
+ * tech / default → null（不强制模板，保留 Intake 原 query）。
+ */
 export const facetTemplateForQueryType = (
     queryType: IntakeRoutingDecision["queryType"],
     topics: string[],
@@ -111,7 +124,10 @@ export const facetTemplateForQueryType = (
     return null;
 };
 
-/** 将 plan 项 searchQuery 对齐 canonical 模板，稳定 L2 cache key */
+/**
+ * 对齐检索 hits 缓存 key：有模板则用模板 searchQuery/topics，
+ * label 仍保留用户/LLM 原 label（展示用）。
+ */
 export const canonicalizePlanItem = (
     item: IntakeRetrievalPlanItem
 ): IntakeRetrievalPlanItem => {
@@ -130,6 +146,7 @@ export const canonicalizePlanItem = (
     };
 };
 
+/** retrievalPlan 一项 → CompositeRetrievalSlot（供并行 KM） */
 export const planItemToSlot = (
     item: IntakeRetrievalPlanItem,
     index: number

@@ -2,12 +2,12 @@
  * 清空 Pipeline cache（同问短路 / 检索结果 / composite 终稿 cache 均可在 .env 用 DISABLED=1 关闭）。
  *
  *   pnpm --filter @fambrain/brain-service exec tsx --env-file=../../.env scripts/clear-pipeline-cache.ts
- *   CONVERSATION_ID=xxx CORPUS_USER_ID=yyy ...  # 可选，仅清该会话 L3
+ *   CONVERSATION_ID=xxx CORPUS_USER_ID=yyy ...  # 可选，仅清该会话槽答案缓存
  *
  * Env 开关：
  *   REPEAT_QUESTION_CACHE_DISABLED=1   — 同问短路（需重启 agents）
- *   RETRIEVAL_CACHE_DISABLED=1         — L2 检索 cache
- *   COMPOSITE_ANSWER_CACHE_DISABLED=1  — L3 composite facet cache
+ *   RETRIEVAL_CACHE_DISABLED=1         — 检索 hits 缓存
+ *   COMPOSITE_ANSWER_CACHE_DISABLED=1  — 槽答案 facet cache
  */
 import {
     clearCompositeSession,
@@ -69,21 +69,21 @@ const main = async () => {
             corpusUserId,
         });
         console.log(
-            `  ✓ L3 session cleared: ${conversationId} / ${corpusUserId}`
+            `  ✓ 槽答案会话 cleared: ${conversationId} / ${corpusUserId}`
         );
     }
 
-    const l2Before = await flushRedisByPattern(`${cfg.retrievalCache.keyPrefix}:*`);
-    const l3Before = await flushRedisByPattern(
+    const retrievalKeysDeleted = await flushRedisByPattern(`${cfg.retrievalCache.keyPrefix}:*`);
+    const facetKeysDeleted = await flushRedisByPattern(
         `${cfg.compositeAnswerCache.keyPrefix}:*`
     );
 
     await closeRedisClient().catch(() => undefined);
 
     console.log("clear-pipeline-cache OK");
-    console.log(`  L2 retrieval keys deleted (redis): ${l2Before}`);
-    console.log(`  L3 composite keys deleted (redis): ${l3Before}`);
-    if (l2Before === 0 && l3Before === 0 && cfg.redisUrl) {
+    console.log(`  检索 hits keys deleted (redis): ${retrievalKeysDeleted}`);
+    console.log(`  槽答案 keys deleted (redis): ${facetKeysDeleted}`);
+    if (retrievalKeysDeleted === 0 && facetKeysDeleted === 0 && cfg.redisUrl) {
         console.log(
             "  （Redis 中本就没有 fambrain cache key，可能已 TTL 过期，或 agents 在用进程 memory 未写 Redis）"
         );

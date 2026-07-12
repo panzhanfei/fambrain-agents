@@ -3,7 +3,7 @@ import { getInfraConfig } from "../config";
 import { getRedisClient } from "../redis/client";
 import { normalizeSearchQuery } from "./keys";
 
-/** L3：单 facet 子问终稿（会话级 composite 增量 cache） */
+/** 槽答案缓存：单 facet 子问终稿（会话级 composite 增量 cache） */
 export type CachedFacetAnswer = {
   facetKey: string;
   label: string;
@@ -13,7 +13,7 @@ export type CachedFacetAnswer = {
   insufficientEvidence: boolean;
   confidence: number;
   cachedAt: number;
-  /** 列举型 UI 块；L3 命中时优先于 prose 重渲染 */
+  /** 列举型 UI 块；槽答案缓存命中时优先于 prose 重渲染 */
   blocks?: AssistantMessageBlock[];
   enumerationPage?: number;
   enumerationTotal?: number;

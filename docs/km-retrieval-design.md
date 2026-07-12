@@ -10,16 +10,16 @@
 
 | 业界层 | 标准能力 | 现状 | v3 目标 |
 |--------|----------|------|---------|
-| **L1 查询理解** | 意图分类、指代补全、query 改写 | Intake 出 `searchQuery/topics/subTasks` | Intake 增 `queryType`；KM 内规则 profile 作 fallback |
-| **L2 混合召回** | 向量 ∥ BM25/sparse → RRF | 串行：向量 → 低置信才扫盘 | **并行 Hybrid + RRF** |
-| **L3 置信评估** | 融合分 + 分档路由 | L2 阈值 + `coverage` 规则 | 多维置信 + 可选 `confidenceTier` |
-| **L4 加工** | dedupe、excerpt、Cross-Encoder | 规则 rank + pickExcerpt | pathBoost、guard、表格 excerpt、可选 rerank |
-| **L5 多级兜底** | 改写重查 → FAQ → 无知识标识 | scan + ensureNonEmptyHits | 分级兜底；FC retry 保留 |
+| **查询理解** | 意图分类、指代补全、query 改写 | Intake 出 `searchQuery/topics/subTasks` | Intake 增 `queryType`；KM 内规则 profile 作 fallback |
+| **混合召回** | 向量 ∥ BM25/sparse → RRF | 串行：向量 → 低置信才扫盘 | **并行 Hybrid + RRF** |
+| **置信评估** | 融合分 + 分档路由 | 向量距离阈值 + `coverage` 规则 | 多维置信 + 可选 `confidenceTier` |
+| **结果加工** | dedupe、excerpt、Cross-Encoder | 规则 rank + pickExcerpt | pathBoost、guard、表格 excerpt、可选 rerank |
+| **多级兜底** | 改写重查 → FAQ → 无知识标识 | scan + ensureNonEmptyHits | 分级兜底；FC retry 保留 |
 
 **Pipeline 分工：**
 
 ```text
-Intake（L1）→ KM（L2～L5）→ FactChecker → ContentOrganizer → Analyst
+Intake（查询理解）→ KM（混合召回～兜底）→ FactChecker → ContentOrganizer → Analyst
                   ↑ 主战场
 ```
 
@@ -31,7 +31,7 @@ Intake（L1）→ KM（L2～L5）→ FactChecker → ContentOrganizer → Analys
 |------|----------|------------|
 | **knowledge-manager** | 最大 | 主战场 |
 | **packages/corpus** | 大 | Hybrid 稀疏路 / 向量 raw topK |
-| **intake-coordinator** | 中 | L1 查询理解上移 |
+| **intake-coordinator** | 中 | 查询理解上移到 Intake |
 | **pipeline**（compile / parse-intake / state） | 小 | 传 `queryType`、retry 语义 |
 | **brain-shared**（agent-log） | 小 | 可观测字段 |
 | **scripts** | 小 | verify / compare-recall |

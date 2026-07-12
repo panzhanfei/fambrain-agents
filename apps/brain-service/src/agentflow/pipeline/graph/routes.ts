@@ -5,33 +5,31 @@ import { isUserFactIntent } from "@/agentflow/brain-service/online/user-fact";
 
 /** clarify / 闲聊 / 越界 / direct_answer 等可直接出 briefReply 的路径 */
 const shouldRespondEarlyFromIntake = (
-    decision: IntakeRoutingDecision
+  decision: IntakeRoutingDecision
 ): boolean => {
-    if (decision.intent === "clarify" && decision.clarifyingQuestion)
-        return true;
-    if (
-        (decision.intent === "chitchat" || decision.intent === "out_of_scope") &&
-        decision.briefReply
-    ) {
-        return true;
-    }
-    if (decision.intent === "direct_answer" && decision.briefReply)
-        return true;
-    return false;
+  if (decision.intent === "clarify" && decision.clarifyingQuestion) return true;
+  if (
+    (decision.intent === "chitchat" || decision.intent === "out_of_scope") &&
+    decision.briefReply
+  ) {
+    return true;
+  }
+  if (decision.intent === "direct_answer" && decision.briefReply) return true;
+  return false;
 };
 
 export const routeAfterRepeat = (
-    state: PipelineGraphState
+  state: PipelineGraphState
 ): "repeatRespondEarly" | "preparePipelineMemory" => {
-    if (state.repeatQuestionHit) return "repeatRespondEarly";
-    return "preparePipelineMemory";
+  if (state.repeatQuestionHit) return "repeatRespondEarly";
+  return "preparePipelineMemory";
 };
 
 export const routeAfterPrepareMemory = (
-    state: PipelineGraphState
+  state: PipelineGraphState
 ): "respondEarly" | "intake" => {
-    if (state.exitEarly || state.error) return "respondEarly";
-    return "intake";
+  if (state.exitEarly || state.error) return "respondEarly";
+  return "intake";
 };
 
 /**
@@ -46,51 +44,50 @@ export const routeAfterPrepareMemory = (
  *   6. 兜底 → factChecker（如 direct_answer 无 briefReply，hits 常空）
  */
 export const routeAfterIntake = (
-    state: PipelineGraphState
-): "respondEarly" | "userFact" | "retrieval" | "dagExecutor" | "factChecker" | "contentSummarizer" => {
-    if (state.exitEarly || state.error)
-        return "respondEarly";
+  state: PipelineGraphState
+):
+  | "respondEarly"
+  | "userFact"
+  | "retrieval"
+  | "dagExecutor"
+  | "factChecker"
+  | "contentSummarizer" => {
+  if (state.exitEarly || state.error) return "respondEarly";
 
-    const decision = state.decision;
-    if (!decision)
-        return "respondEarly";
+  const decision = state.decision;
+  if (!decision) return "respondEarly";
 
-    if (isUserFactIntent(decision.intent))
-        return "userFact";
+  if (isUserFactIntent(decision.intent)) return "userFact";
 
-    if (shouldRespondEarlyFromIntake(decision))
-        return "respondEarly";
+  if (shouldRespondEarlyFromIntake(decision)) return "respondEarly";
 
-    if (decision.routeMode === "dag" && (decision.executionPlan?.length ?? 0) > 0)
-        return "dagExecutor";
+  if (decision.routeMode === "dag" && (decision.executionPlan?.length ?? 0) > 0)
+    return "dagExecutor";
 
-    if (intakeRequiresKmRetrieval(decision))
-        return "retrieval";
+  if (intakeRequiresKmRetrieval(decision)) return "retrieval";
 
-    if (decision.intent === "summarize_content")
-        return "contentSummarizer";
+  if (decision.intent === "summarize_content") return "contentSummarizer";
 
-    // 兜底：其余 intent 若 LLM 仍给了 briefReply，直接早退
-    if (decision.briefReply)
-        return "respondEarly";
+  // 兜底：其余 intent 若 LLM 仍给了 briefReply，直接早退
+  if (decision.briefReply) return "respondEarly";
 
-    return "factChecker";
+  return "factChecker";
 };
 
 export const routeAfterRetrieval = (
-    state: PipelineGraphState
+  state: PipelineGraphState
 ): "factChecker" | "contentSummarizer" => {
-    if (state.decision?.intent === "summarize_content") {
-        return "contentSummarizer";
-    }
-    return "factChecker";
+  if (state.decision?.intent === "summarize_content") {
+    return "contentSummarizer";
+  }
+  return "factChecker";
 };
 
 export const routeAfterFactChecker = (
-    state: PipelineGraphState
+  state: PipelineGraphState
 ): "retrieval" | "contentOrganizer" => {
-    if (!state.checkerPassed && state.retryCount < 1) {
-        return "retrieval";
-    }
-    return "contentOrganizer";
+  if (!state.checkerPassed && state.retryCount < 1) {
+    return "retrieval";
+  }
+  return "contentOrganizer";
 };

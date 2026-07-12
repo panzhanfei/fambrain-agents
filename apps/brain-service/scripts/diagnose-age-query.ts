@@ -69,7 +69,7 @@ const main = async () => {
     )
   );
 
-  console.log("\n— 3. L2 检索 cache（identity 槽 key）—");
+  console.log("\n— 3. 检索 hits 缓存（identity 槽 key）—");
   const cacheKey = {
     corpusUserId,
     searchQuery: routed.searchQuery,

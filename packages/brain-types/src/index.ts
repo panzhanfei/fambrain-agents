@@ -110,7 +110,7 @@ export type AgentPipelineResult = {
     /** D5-2：同会话字面重复问，复用 history 答 */
     repeatQuestionHit?: boolean;
     retrievalCacheHit?: boolean;
-    /** L3：composite facet 终稿 cache 命中数 */
+    /** 槽答案缓存：composite facet 终稿 cache 命中数 */
     compositeFacetCacheHits?: number | null;
     timing?: PipelineTiming;
     /** 本轮 KM 命中的 corpus path，供反馈与 Phase D */

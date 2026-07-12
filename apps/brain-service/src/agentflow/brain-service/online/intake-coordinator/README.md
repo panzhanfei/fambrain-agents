@@ -61,12 +61,10 @@ intake-coordinator/
 │   ├── intake-chitchat-guard.ts
 │   └── intake-retrieval-plan-guard.ts
 │
-├── composite/             ← 多问 / 分槽 / L3-L4 增量
+├── composite/             ← 多问 / 分槽规划（routeMode、compositeSlots）
 │   ├── composite-routing.ts
 │   ├── composite-route-guard.ts
 │   ├── composite-slot-queries.ts
-│   ├── composite-facet-key.ts
-│   ├── composite-incremental.ts
 │   └── enumeration-target.ts
 ```
 
@@ -171,7 +169,7 @@ Intake 产出两层结构：**LLM 层** `IntakeRoutingDecision` → **编排层*
 | 字段 | 类型 | 含义 | 谁消费 |
 |------|------|------|--------|
 | `label` | string | 子问题摘要，如「姓名」「项目经历」 | Analyst 分段标题；composite 槽 label |
-| `searchQuery` | string | 该子问题专用检索词（含目录词如「个人简介 简历」） | KM 检索；L2 cache key 的一部分 |
+| `searchQuery` | string | 该子问题专用检索词（含目录词如「个人简介 简历」） | KM 检索；检索 hits 缓存 key 的一部分 |
 | `queryType` | identity \| enumeration \| tech \| default | 该子问题的检索 profile | KM `queryProfile` |
 | `topics` | string[] | 语料主题 hint，如 personal / project | KM 过滤 / 精排 |
 
@@ -369,7 +367,7 @@ LLM retrievalPlan: [
   ...
 ]
 
-guard_检索计划: canonicalize 各 plan 项（L2 cache 对齐）
+guard_检索计划: canonicalize 各 plan 项（检索 hits 缓存 对齐）
 
 guard_复合路由:
   routeMode: composite
@@ -460,7 +458,7 @@ defaultIntakeDecision(userQuestion):
 |------|------|
 | `intake-pipeline.ts` | parse → LLM指代决策（透传/clarify 早退）→ guard 链 |
 | `intake-chitchat-guard.ts` | chitchat 注入服务端固定 briefReply |
-| `intake-retrieval-plan-guard.ts` | 多问补 retrievalPlan；canonicalize 对齐 L2 cache |
+| `intake-retrieval-plan-guard.ts` | 多问补 retrievalPlan；canonicalize 对齐 检索 hits 缓存 |
 
 ### composite/
 
@@ -470,8 +468,8 @@ defaultIntakeDecision(userQuestion):
 | `composite-route-guard.ts` | plan → routeMode + compositeSlots |
 | `composite-slot-queries.ts` | 槽模板；planItem → slot；canonicalizePlanItem |
 | `enumeration-target.ts` | 列举问是「公司」还是「项目」 |
-| `composite-facet-key.ts` | L3 facet cache key |
-| `composite-incremental.ts` | L4 增量 composite：只检索未 cache 的槽 |
+
+> 槽答案缓存 / 增量计划在 `knowledge-manager/composite/`（`incremental-plan.ts`、`facet-key.ts`）。
 
 ### user-fact/
 

@@ -32,7 +32,7 @@
 | Zod | 注册/会话 + 入库 metadata；**在线 Agent JSON schema**（Intake / KM / FactChecker / Analyst / Organizer） |
 | Pino | 知识入库师结构化日志 |
 | p-limit | 入库 embed 并发控制；**DocParser** 批量解析并发（`DOC_PARSE_CONCURRENCY`） |
-| Redis + BullMQ | `@fambrain/infra`：检索 cache L2（D5-2）、pipeline 异步队列（可选 `PIPELINE_QUEUE_ENABLED`） |
+| Redis + BullMQ | `@fambrain/infra`：检索 hits 缓存（D5-2）、pipeline 异步队列（可选 `PIPELINE_QUEUE_ENABLED`） |
 | Mem0 | 跨会话语义记忆检索，注入 Intake / Analyst prompt；**P0-16** 结构化 `remember_user_fact` / `recall_user_fact` 经 **userFact 节点**显式读写 |
 | LangMem | 单会话摘要压缩（`data/memory/sessions/`），配合 DB 历史裁剪 Intake 上下文 |
 | MCP SDK | 实验：`experiment:mcp-vault` 只读列 vault |
@@ -141,9 +141,9 @@ pnpm run dev
 | `REDIS_DB` | 否 | 逻辑库号，默认 `0`（URL 无 `/N` 时生效） |
 | `REDIS_KEY_PREFIX` | 否 | Redis key 根前缀，默认 `fambrain`（检索 cache / 限流 / 队列名派生） |
 | `DEV_REDIS_AUTO_START` | 否 | `pnpm dev` 时 Redis 不可达且端口空闲则 `docker compose up redis`，默认 `1` |
-| `RETRIEVAL_CACHE_DISABLED` / `RETRIEVAL_CACHE_TTL_MS` | 否 | **L2** 检索结果 cache（D5-2）；`=1` 关闭；Redis 不可用时 memory fallback |
+| `RETRIEVAL_CACHE_DISABLED` / `RETRIEVAL_CACHE_TTL_MS` | 否 | **检索 hits 缓存**（D5-2）；`=1` 关闭；Redis 不可用时 memory fallback |
 | `REPEAT_QUESTION_CACHE_DISABLED` | 否 | **同问短路**（`prepare-turn-start/repeat-question-guard.ts`）；`=1` 关闭，同句再问走全链路 |
-| `COMPOSITE_ANSWER_CACHE_DISABLED` / `COMPOSITE_ANSWER_CACHE_TTL_MS` | 否 | **L3** composite facet 终稿 cache（P0-15）；`=1` 关闭 |
+| `COMPOSITE_ANSWER_CACHE_DISABLED` / `COMPOSITE_ANSWER_CACHE_TTL_MS` | 否 | **槽答案缓存**（composite facet 终稿）（P0-15）；`=1` 关闭 |
 | `PIPELINE_QUEUE_ENABLED` | 否 | `1` 时 `pnpm dev` 另起 BullMQ worker（web 入队接好后再开） |
 | `OLLAMA_STREAM_THINK` | 否 | 流式是否请求 thinking；不支持时服务端会自动降级重试 |
 | `FAMBRAIN_CORPUS_USER_ID` | 否 | 强制所有登录用户检索 `data/doc/users/<此 userId>/`；不设则按用户表 `corpusUserId` 或本人 id |
@@ -194,7 +194,7 @@ pnpm run dev
 | `getCompiledPipelineGraph` | `pipeline/graph/compile.ts` + `routes.ts` | **prepareTurnStart** → Intake → … → **persistTurnEnd** → END |
 | `userFactNode` / `routeUserFactFromIntake` | `user-fact/nodes/user-fact-node.ts`、`user-fact/user-fact.ts` | P0-16：跨会话 remember/recall；绕过 KM / FC / Analyst |
 | `parseIntakeDecision` / `defaultIntakeDecision` | `intake-coordinator/pipeline/parse-intake.ts` | 解析 Intake 路由 JSON |
-| `runRetrievalNode` | `knowledge-manager/nodes/retrieval-node.ts` + `pipeline/` | L2/L3 cache + composite 增量检索 |
+| `runRetrievalNode` | `knowledge-manager/nodes/retrieval-node.ts` + `pipeline/` | 检索 hits 缓存与槽答案缓存 + composite 增量检索 |
 | `addStructuredUserFact` / `searchUserFactMemories` | `packages/brain-memory/src/mem0/store.ts` | Mem0 结构化写入 + 按 factKey 语义检索 |
 | `completeIntakeCoordinator` | `agentflow/brain-service/online/intake-coordinator/` | 一次 `invoke` → 路由 JSON |
 | `retrieveKnowledge` | `agentflow/brain-service/online/knowledge-manager/` | 向量 + 关键词扫盘 + **规则精排**（无 LLM）；v3 业界对标见 [km-retrieval-design.md](./km-retrieval-design.md) |
@@ -213,8 +213,8 @@ pnpm run dev
 | `listVaultFiles` | `agentflow/knowledge/list-vault-files.ts` | vault 只读列举（MCP 共用） |
 | `recallSparseRetrieve` | `packages/corpus/src/recall-keyword-retrieve.ts` | BM25 sparse 检索（HY-01） |
 | `hybridRecall` / `fuseRrf` | `knowledge-manager/recall/hybrid-recall.ts`、`fusion-rrf.ts` | 并行 Hybrid + RRF（HY-02～03） |
-| `@fambrain/infra` | `packages/infra/` | Redis 连接、L2/L3 cache、BullMQ 队列、限流；相对 import **不带 `.ts` 后缀**（`packages/infra/tsconfig.json`） |
-| `verify:retrieval-cache` | `apps/brain-service/scripts/` | D5-2 L2 cache normalize + memory/Redis |
+| `@fambrain/infra` | `packages/infra/` | Redis 连接、检索 hits 缓存与槽答案缓存、BullMQ 队列、限流；相对 import **不带 `.ts` 后缀**（`packages/infra/tsconfig.json`） |
+| `verify:retrieval-cache` | `apps/brain-service/scripts/` | D5-2 检索 hits 缓存 normalize + memory/Redis |
 | `verify:repeat-question-smoke` | `apps/brain-service/scripts/` | D5-2 同问短路冒烟（无 Ollama） |
 | `verify:recall-compare` | `apps/brain-service/scripts/` | HY-07 三问 vector/sparse/RRF（需 Chroma） |
 | `verify:confidence-tier` | `apps/brain-service/scripts/` | 置信分档单测 + KM live tier |
@@ -222,11 +222,11 @@ pnpm run dev
 | `verify:intake-coreference` | `apps/brain-service/scripts/` | Intake 多轮指代 + repeat guard 单测 |
 | `verify:intake-chitchat` | `apps/brain-service/scripts/` | P0-13：chitchat briefReply 模板兜底 + live ×10 |
 | `verify:composite-route` | `apps/brain-service/scripts/` | P0-15/R6-3：composite 路由 guard + merge + 单问年龄 slot 单测 |
-| `verify:composite-incremental` | `apps/brain-service/scripts/` | P0-15：L3 facet 终稿 cache + L4 增量 composite 单测 |
+| `verify:composite-incremental` | `apps/brain-service/scripts/` | P0-15：槽答案缓存 + composite 增量 单测 |
 | `verify:user-fact` | `apps/brain-service/scripts/` | P0-16：Intake schema + Mem0 跨会话 QQ remember/recall |
 | `resolveEnumerationTarget` | `intake-coordinator/enumeration-target.ts` | plan label/topics → project \| experience 列举分流（P0-21） |
 | `maxAnalystHitsForProfile` | `information-analyst/analyst-recall-limits.ts` | Analyst hits 上限与 KM profile 对齐（P0-20） |
-| `clear-pipeline-cache.ts` | `apps/brain-service/scripts/` | 清空 L2/L3 Redis + 进程 memory；见 `.env.example` 三层 cache 开关 |
+| `clear-pipeline-cache.ts` | `apps/brain-service/scripts/` | 清空 检索 hits 缓存 / 槽答案缓存 Redis + 进程 memory；见 `.env.example` 三层 cache 开关 |
 | `diagnose-age-query.ts` | `apps/brain-service/scripts/` | 年龄单问：路由 + KM 检索 + 语料字段诊断（需 Chroma） |
 | `eval:run` | `apps/brain-service/scripts/eval/` | Eval MVP：G1～G5b + KM + E2E + **memProbe/cacheProbe/profileProbe**；`--mem-only` → **GMem**；`--profile-only` → **G-履历综合** |
 | `verify:learning-extract` | `apps/brain-service/scripts/` | 自主学习候选抽取（Phase A 前置） |

@@ -81,7 +81,7 @@ export const dedupeVectorByPath = (
     maxCandidates = MAX_CANDIDATES
 ): VectorChunkRow[] => mergeCandidatesByPath(chunks, maxPerPath, maxCandidates);
 
-/** Chroma L2 距离 → 0–1 语义相关度（越小越相似）。用于：computeRelevance（KM-05）。 */
+/** Chroma 欧氏距离 → 0–1 语义相关度（越小越相似）。用于：computeRelevance（KM-05）。 */
 export const vectorScoreToRelevance = (score: number | undefined): number => {
     if (typeof score !== "number") return 0;
     return Math.max(0, Math.min(1, 1 - score / 2));

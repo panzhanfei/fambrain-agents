@@ -1,6 +1,13 @@
 /**
- * Composite 路由：Intake retrievalPlan 为主信号，结构检测 + queryType 模板为兜底。
- * 不依赖用户问句关键词词表决定槽位。
+ * Composite 路由解析：从 Intake decision 推出「本次要跑哪些检索槽」。
+ *
+ * 优先级（高 → 低）：
+ * 1. retrievalPlan（LLM 给的正式计划）→ source=intake_retrieval_plan
+ * 2. subTasks≥2 或问句结构多问 → 兜底拆段
+ * 3. queryType 模板（identity/enumeration → 固定 canonical 槽）
+ * 4. 无槽 → source=none，上层当 single
+ *
+ * 不依赖用户问句关键词词表决定槽位（尽量信 Intake plan）。
  */
 import { inferQueryProfile } from "@/agentflow/brain-service/online/knowledge-manager";
 import type { CompositeRetrievalSlot } from "./composite-slot-queries";
@@ -27,7 +34,7 @@ export type ResolvedCompositeRoute = {
     source: CompositeRoutePlanSource;
 };
 
-/** 用户句是否像「多问并列」（结构信号，非语义词表） */
+/** 结构信号：多问号 / 顿号并列 / 以及·还有 等（非语义词表） */
 export const looksLikeMultiPartQuestion = (question: string): boolean => {
     const q = question.trim();
     if (!q) return false;
@@ -39,7 +46,7 @@ export const looksLikeMultiPartQuestion = (question: string): boolean => {
     return false;
 };
 
-/** 按问号/分句切分（兜底：Intake 未给 retrievalPlan 时） */
+/** 按问号/分句切开用户句（仅兜底：Intake 未给 retrievalPlan） */
 export const splitQuestionUnits = (question: string): string[] => {
     const q = question.trim();
     if (!q) return [];
@@ -88,6 +95,7 @@ const inferTopics = (
     return defaultTopicsForQueryType(queryType);
 };
 
+/** 把一段 label 扩成一条 retrievalPlan 项（searchQuery = label + 原查询上下文） */
 const buildSegmentPlanItem = (
     label: string,
     decision: Pick<
@@ -112,6 +120,10 @@ const buildSegmentPlanItem = (
     };
 };
 
+/**
+ * 兜底建 plan：优先 subTasks≥2；否则结构多问切分。
+ * 返回 [] 表示无法兜底拆槽。
+ */
 export const buildFallbackRetrievalPlan = (
     userQuestion: string,
     decision: Pick<
@@ -140,7 +152,7 @@ const normalizePlanItems = (
 
 export { normalizePlanItems };
 
-/** Intake queryType 为 default/null 时，从用户句推断有效 queryType */
+/** queryType 为 default/null 时，用问句推断 identity/enumeration/tech… */
 export const resolveEffectiveQueryType = (
     userQuestion: string,
     decision: Pick<
@@ -161,7 +173,8 @@ const topicHas = (topics: string[], re: RegExp): boolean =>
     topics.some((t) => re.test(t));
 
 /**
- * 单问 identity/enumeration：脚本/诊断用；主路由依赖 Intake retrievalPlan + queryType 模板。
+ * 单问 identity/enumeration：按问句语义生成一条 plan（脚本/诊断用）。
+ * 主路径仍优先 retrievalPlan；此处是模板级兜底。
  */
 export const buildSingleQuestionPlanItem = (
     userQuestion: string,
@@ -253,7 +266,10 @@ export const buildSingleQuestionPlanItem = (
     };
 };
 
-/** 编排主入口：解析本次应跑哪些检索槽（动态，按需子集） */
+/**
+ * 编排主入口：解析本次应跑哪些检索槽（动态子集，非固定 4 槽全开）。
+ * 被 applyCompositeRouteGuard 调用。
+ */
 export const resolveCompositeRoute = (
     decision: Pick<
         IntakeRoutingDecision,
@@ -270,6 +286,7 @@ export const resolveCompositeRoute = (
         return { slots: [], source: "none" };
     }
 
+    // ① 优先信 Intake 正式 plan
     const fromIntake = normalizePlanItems(decision.retrievalPlan ?? []);
     if (fromIntake.length >= 1) {
         return {
@@ -278,6 +295,7 @@ export const resolveCompositeRoute = (
         };
     }
 
+    // ② subTasks 或多问句式兜底
     const fromSubTasks = buildFallbackRetrievalPlan(userQuestion, decision);
     if (fromSubTasks.length >= 2) {
         return {
@@ -289,6 +307,7 @@ export const resolveCompositeRoute = (
         };
     }
 
+    // ③ queryType → canonical 模板（如 identity → IDENTITY_SLOT）
     const template = facetTemplateForQueryType(
         decision.queryType,
         decision.topics,
@@ -321,6 +340,7 @@ export const resolveCompositeRoute = (
     return { slots: [], source: "none" };
 };
 
+/** 是否会走 ≥2 槽 composite（诊断用） */
 export const isCompositeProfileQuestion = (
     decision: Pick<
         IntakeRoutingDecision,
@@ -334,7 +354,10 @@ export const isCompositeProfileQuestion = (
     userQuestion: string
 ): boolean => resolveCompositeRoute(decision, userQuestion).slots.length >= 2;
 
-/** tech 单问不应误进 slot/composite */
+/**
+ * tech 单问检测：避免「城管用什么技术」被拆进 slot/composite。
+ * 命中时 applyCompositeRouteGuard 强制 routeMode=single。
+ */
 export const isTechSingleQuestion = (
     userQuestion: string,
     decision: Pick<IntakeRoutingDecision, "queryType" | "searchQuery">

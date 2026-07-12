@@ -16,7 +16,7 @@ const printHits = (
     console.log(`\n=== ${label} (${hits.length})${extra ? ` ${extra}` : ""} ===`);
     for (const [i, h] of hits.entries()) {
         const parts: string[] = [];
-        if (typeof h.score === "number") parts.push(`L2=${h.score.toFixed(3)}`);
+        if (typeof h.score === "number") parts.push(`dist=${h.score.toFixed(3)}`);
         if (typeof h.fusionScore === "number")
             parts.push(`rrf=${h.fusionScore.toFixed(4)}`);
         const score = parts.length ? ` ${parts.join(" ")}` : "";

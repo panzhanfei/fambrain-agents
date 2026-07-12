@@ -28,12 +28,20 @@ export {
 export {
     mergeCompositeHits,
     mergeCompositeRetrieval,
+    resolveIncrementalCompositePlan,
+    cachedFacetToAnalystResult,
+    analystResultToCachedFacet,
+    buildFacetKey,
+    detectCompositeRefreshIntent,
+    attachFacetKey,
+    retrieveCompositeIncremental,
+    retrieveCompositeSlotsParallel,
+    retrieveSlotWithCache,
     type CompositeRetrievePlan,
     type CompositeSubRetrieval,
-} from "./pipeline/merge-composite-retrieval";
-export { retrieveCompositeIncremental } from "./pipeline/retrieve-composite-incremental";
-export { retrieveCompositeSlotsParallel } from "./pipeline/retrieve-slots-parallel";
-export { retrieveSlotWithCache } from "./pipeline/retrieve-with-cache";
+    type CompositeSlotPlan,
+    type IncrementalCompositePlan,
+} from "./composite";
 export { runRetrievalNode } from "./nodes/retrieval-node";
 export {
     listCorpusEntriesPage,

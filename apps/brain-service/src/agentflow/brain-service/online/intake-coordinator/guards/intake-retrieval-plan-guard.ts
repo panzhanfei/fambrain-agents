@@ -1,5 +1,5 @@
 /**
- * Intake 入口兜底：多问时补全 / 规范化 retrievalPlan，与 L2 检索 cache 对齐。
+ * Intake 入口兜底：多问时补全 / 规范化 retrievalPlan，与 检索 hits 缓存 对齐。
  * 串联在 chitchat guard / clarify 早退 之后、composite route guard 之前。
  */
 import {
@@ -17,7 +17,7 @@ export type IntakeRetrievalPlanGuardReason =
 
 /**
  * 1. 多问但 Intake 未给足 retrievalPlan → 结构/subTasks 兜底补 plan
- * 2. 各 plan 项 searchQuery 对齐 canonical 模板 → L2 cache 可复用
+ * 2. 各 plan 项 searchQuery 对齐 canonical 模板 → 检索 hits 缓存 可复用
  */
 export const applyIntakeRetrievalPlanGuard = (
     decision: IntakeRoutingDecision,

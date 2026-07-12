@@ -1,11 +1,11 @@
 import type { CachedFacetAnswer } from "@fambrain/infra";
-import type { IncrementalCompositePlan } from "@/agentflow/brain-service/online/intake-coordinator";
-import type { KnowledgeHit } from "@/agentflow/brain-service/online/knowledge-manager";
-import { retrieveCompositeSlotsParallel } from "./retrieve-slots-parallel";
+import type { IncrementalCompositePlan } from "./incremental-plan";
+import type { KnowledgeHit } from "../contract/types";
+import { retrieveCompositeSlotsParallel } from "./slots-parallel";
 import {
     mergeCompositeRetrieval,
     type CompositeSubRetrieval,
-} from "./merge-composite-retrieval";
+} from "./merge";
 
 const hitsFromCachedFacet = (cached: CachedFacetAnswer): KnowledgeHit[] =>
     cached.citations.map((c, i) => ({
@@ -15,7 +15,7 @@ const hitsFromCachedFacet = (cached: CachedFacetAnswer): KnowledgeHit[] =>
         relevance: Math.max(0.5, 1 - i * 0.05),
     }));
 
-/** composite 增量检索：L3 命中槽跳过 KM，仅对 active 槽并行 L2 */
+/** composite 增量检索：槽答案缓存命中跳过真检索，仅对 active 槽并行查 hits */
 export const retrieveCompositeIncremental = async (input: {
     corpusUserId: string;
     plan: IncrementalCompositePlan;

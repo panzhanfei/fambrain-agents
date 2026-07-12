@@ -92,15 +92,3 @@ export {
   resolveEnumerationTarget,
   type EnumerationTarget,
 } from "./composite/enumeration-target";
-export {
-  buildFacetKey,
-  detectCompositeRefreshIntent,
-  attachFacetKey,
-} from "./composite/composite-facet-key";
-export {
-  resolveIncrementalCompositePlan,
-  cachedFacetToAnalystResult,
-  analystResultToCachedFacet,
-  type CompositeSlotPlan,
-  type IncrementalCompositePlan,
-} from "./composite/composite-incremental";

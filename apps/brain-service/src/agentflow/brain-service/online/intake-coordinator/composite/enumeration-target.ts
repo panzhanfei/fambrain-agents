@@ -1,6 +1,12 @@
 /**
  * enumeration 二分类：项目列举 vs 公司/任职列举。
- * 信号来源：plan 项 label/searchQuery（优先，纠正 Intake 误标 topics）→ topics → 默认 experience。
+ *
+ * 信号优先级：
+ *   plan 的 label/searchQuery（优先，纠正 Intake 误标 topics）
+ *   → topics
+ *   → 默认 experience
+ *
+ * 被 facetKey、槽模板、列举分页共同使用。
  */
 import type { IntakeRetrievalPlanItem } from "../contract/prompt";
 
@@ -21,11 +27,15 @@ const planSignalText = (input: EnumerationTargetInput): string =>
         .filter(Boolean)
         .join(" ");
 
-/** plan label 优先于 topics，避免「具体项目名称」+ topics:experience 误路由 */
+/**
+ * 判定列举目标。
+ * 例：「具体项目名称」+ topics:experience → 仍应走 project（label 优先）。
+ */
 export const resolveEnumerationTarget = (
     input: EnumerationTargetInput
 ): EnumerationTarget => {
     const signal = planSignalText(input);
+    // 含「项目」且不像公司问法 → project
     if (/项目|project/i.test(signal) && !/公司|单位|雇主|上过班|哪几/.test(signal)) {
         return "project";
     }

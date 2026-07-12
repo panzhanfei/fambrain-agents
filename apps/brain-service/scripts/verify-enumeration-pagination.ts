@@ -1,5 +1,5 @@
 /**
- * 列举分页：continuation 检测、list API、L3 blocks cache。
+ * 列举分页：continuation 检测、list API、槽答案 blocks cache。
  *
  *   pnpm --filter @fambrain/brain-service exec tsx scripts/verify-enumeration-pagination.ts
  */
@@ -14,7 +14,7 @@ import {
 import {
     analystResultToCachedFacet,
     cachedFacetToAnalystResult,
-} from "../src/agentflow/brain-service/online/intake-coordinator/composite/composite-incremental";
+} from "../src/agentflow/brain-service/online/knowledge-manager";
 import { composeEnumerationAnswer } from "../src/agentflow/brain-service/online/information-analyst/compose-message";
 import { listCorpusEntriesPage } from "../src/agentflow/brain-service/online/knowledge-manager/list/list-corpus-entries";
 import { retrieveEnumerationPage } from "../src/agentflow/brain-service/online/knowledge-manager/list/retrieve-enumeration-page";
@@ -87,7 +87,7 @@ const cached = analystResultToCachedFacet(
     composed,
     "partial"
 );
-assert.ok(cached.blocks?.length, "L3 cache stores blocks");
+assert.ok(cached.blocks?.length, "槽答案缓存 stores blocks");
 const restored = cachedFacetToAnalystResult(cached);
 assert.equal(restored.blocks?.length, composed.blocks?.length);
 

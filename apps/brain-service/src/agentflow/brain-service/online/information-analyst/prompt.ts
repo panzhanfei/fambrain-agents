@@ -1,13 +1,13 @@
 import type {
   KnowledgeHit,
   KnowledgeRetrievalResult,
+  CompositeSlotPlan,
+  QueryProfile,
 } from "@/agentflow/brain-service/online/knowledge-manager";
 import type {
     CompositeSlotId,
-    CompositeSlotPlan,
     IntakeRouteMode,
 } from "@/agentflow/brain-service/online/intake-coordinator";
-import type { QueryProfile } from "@/agentflow/brain-service/online/knowledge-manager";
 import type { CompositeSessionKey } from "@fambrain/infra";
 /**
  * InformationAnalyst 系统指令（P0）。
@@ -62,12 +62,12 @@ export type InformationAnalystInput = {
     facetAnswerCacheHit?: boolean;
     enumerationMeta?: import("@/agentflow/brain-service/online/knowledge-manager").EnumerationMeta;
   }>;
-  /** L4 增量 plan（含 L3 facet cache 命中标记） */
+  /** composite 增量计划（含 槽答案缓存 命中标记） */
   compositeIncrementalPlan?: {
     slots: CompositeSlotPlan[];
     facetCacheHits: number;
   };
-  /** L3 会话 cache 写入键 */
+  /** 槽答案会话缓存 写入键 */
   sessionKey?: CompositeSessionKey;
   /** Intake queryType（QU-05/06 单一意图来源） */
   queryType?: QueryProfile | null;

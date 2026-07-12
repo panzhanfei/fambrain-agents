@@ -89,7 +89,7 @@ export type InfraConfig = {
         maxEntries: number;
         keyPrefix: string;
     };
-    /** L1：同会话字面重复问短路 */
+    /** 同会话字面重复问短路 */
     repeatQuestionCache: {
         enabled: boolean;
     };

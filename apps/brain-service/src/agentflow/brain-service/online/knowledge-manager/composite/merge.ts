@@ -1,17 +1,17 @@
 import type {
     CompositeSlotId,
     CompositeRetrievalSlot,
-} from "@/agentflow/brain-service/online/intake-coordinator";
+} from "@/agentflow/brain-service/online/intake-coordinator/composite/composite-slot-queries";
 import type {
     ConfidenceTier,
     EnumerationMeta,
     KnowledgeHit,
     KnowledgeRetrievalResult,
-} from "@/agentflow/brain-service/online/knowledge-manager";
+} from "../contract/types";
 
 export type CompositeSubRetrieval = {
     slot: CompositeSlotId;
-    /** L3 facet 稳定键 */
+    /** facet 稳定键 */
     facetKey?: string;
     label: string;
     hits: KnowledgeHit[];
@@ -20,7 +20,7 @@ export type CompositeSubRetrieval = {
     confidenceTier?: ConfidenceTier;
     enumerationMeta?: EnumerationMeta;
     cacheHit: boolean;
-    /** L3 子问终稿 cache 命中（跳过 KM + Analyst） */
+    /** 槽答案缓存命中（跳过真检索 + Analyst） */
     facetAnswerCacheHit?: boolean;
 };
 
