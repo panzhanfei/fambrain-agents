@@ -3,16 +3,16 @@
  */
 import type { CompositeSessionKey } from "@fambrain/infra";
 import { getEnumerationListSession } from "@fambrain/infra";
-import type {
-    EnumerationListIntent,
-    RoutedIntakeDecision,
-} from "./composite-route-guard";
-import { resolveEnumerationTarget } from "../composite/enumeration-target";
+import { resolveEnumerationTarget } from "@/agentflow/brain-service/online/intake-coordinator/composite";
 import {
     ENUMERATION_EXHAUSTIVE_PAGE_SIZE,
 } from "@/agentflow/brain-service/online/knowledge-manager/list/list-corpus-entries";
+import type {
+    EnumerationListIntent,
+    RoutedIntakeDecision,
+} from "./interface";
 
-export type { EnumerationListIntent };
+export type { EnumerationListIntent } from "./interface";
 
 const MORE_PROJECT_RE =
     /更多项目|查看更多项目|下一页项目|还有项目|继续列出项目|其余项目/;

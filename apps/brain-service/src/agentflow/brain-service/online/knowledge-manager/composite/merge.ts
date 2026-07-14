@@ -1,28 +1,14 @@
 import type {
-    CompositeSlotId,
-    CompositeRetrievalSlot,
-} from "@/agentflow/brain-service/online/intake-coordinator/composite/composite-slot-queries";
-import type {
-    ConfidenceTier,
-    EnumerationMeta,
     KnowledgeHit,
     KnowledgeRetrievalResult,
+    ConfidenceTier,
 } from "../contract/types";
+import type { CompositeSubRetrieval } from "./interface";
 
-export type CompositeSubRetrieval = {
-    slot: CompositeSlotId;
-    /** facet 稳定键 */
-    facetKey?: string;
-    label: string;
-    hits: KnowledgeHit[];
-    coverage: KnowledgeRetrievalResult["coverage"];
-    notes: string | null;
-    confidenceTier?: ConfidenceTier;
-    enumerationMeta?: EnumerationMeta;
-    cacheHit: boolean;
-    /** 槽答案缓存命中（跳过真检索 + Analyst） */
-    facetAnswerCacheHit?: boolean;
-};
+export type {
+    CompositeRetrievePlan,
+    CompositeSubRetrieval,
+} from "./interface";
 
 const mergeCoverage = (
     coverages: KnowledgeRetrievalResult["coverage"][]
@@ -83,8 +69,4 @@ export const mergeCompositeRetrieval = (
         notes: notesParts.length > 0 ? notesParts.join(" ") : null,
         confidenceTier,
     };
-};
-
-export type CompositeRetrievePlan = {
-    slots: CompositeRetrievalSlot[];
 };

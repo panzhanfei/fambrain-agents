@@ -1,4 +1,4 @@
-import type { CompositeRetrievalSlot } from "@/agentflow/brain-service/online/intake-coordinator/composite/composite-slot-queries";
+import type { CompositeRetrievalSlot } from "@/agentflow/brain-service/online/intake-coordinator";
 import { retrieveKnowledge } from "../recall/retrieve";
 import type { KnowledgeRetrievalResult } from "../contract/types";
 import {

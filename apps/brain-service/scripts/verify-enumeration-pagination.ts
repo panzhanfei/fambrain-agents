@@ -10,7 +10,7 @@ import {
     detectEnumerationContinuationKind,
     isExhaustiveListRequest,
     resolveEnumerationContinuation,
-} from "../src/agentflow/brain-service/online/intake-coordinator/guards/enumeration-list-intent";
+} from "../src/agentflow/brain-service/online/intake-coordinator";
 import {
     analystResultToCachedFacet,
     cachedFacetToAnalystResult,

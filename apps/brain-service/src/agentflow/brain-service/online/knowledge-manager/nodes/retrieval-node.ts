@@ -2,7 +2,7 @@ import {
   resolveIncrementalCompositePlan,
   retrieveCompositeIncremental,
 } from "../composite";
-import { resolveEnumerationTarget } from "@/agentflow/brain-service/online/intake-coordinator/composite/enumeration-target";
+import { resolveEnumerationTarget } from "@/agentflow/brain-service/online/intake-coordinator";
 import { retrieveEnumerationPage } from "../list/retrieve-enumeration-page";
 import type { PipelineGraphState } from "@/agentflow/pipeline/graph/state";
 import { upsertEnumerationListSession } from "@fambrain/infra";

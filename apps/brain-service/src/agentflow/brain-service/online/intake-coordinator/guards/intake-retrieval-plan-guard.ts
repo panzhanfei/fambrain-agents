@@ -6,14 +6,12 @@ import {
     buildFallbackRetrievalPlan,
     looksLikeMultiPartQuestion,
     normalizePlanItems,
-} from "../composite/composite-routing";
-import { canonicalizePlanItem } from "../composite/composite-slot-queries";
-import type { IntakeRoutingDecision } from "../contract/prompt";
+    canonicalizePlanItem,
+} from "@/agentflow/brain-service/online/intake-coordinator/composite";
+import type { IntakeRoutingDecision } from "@/agentflow/brain-service/online/intake-coordinator/contract";
+import type { IntakeRetrievalPlanGuardReason } from "./interface";
 
-export type IntakeRetrievalPlanGuardReason =
-    | "noop"
-    | "filled_fallback"
-    | "canonicalized";
+export type { IntakeRetrievalPlanGuardReason } from "./interface";
 
 /**
  * 1. 多问但 Intake 未给足 retrievalPlan → 结构/subTasks 兜底补 plan
@@ -22,7 +20,9 @@ export type IntakeRetrievalPlanGuardReason =
 export const applyIntakeRetrievalPlanGuard = (
     decision: IntakeRoutingDecision,
     userQuestion: string
-): IntakeRoutingDecision & { retrievalPlanGuardReason?: IntakeRetrievalPlanGuardReason } => {
+): IntakeRoutingDecision & {
+    retrievalPlanGuardReason?: IntakeRetrievalPlanGuardReason;
+} => {
     if (decision.intent !== "retrieve_and_answer") {
         return {
             ...decision,

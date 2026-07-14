@@ -1,5 +1,5 @@
 import type { IntakeRetrievalPlanItem } from "@/agentflow/brain-service/online/intake-coordinator/contract/prompt";
-import type { CompositeRetrievalSlot } from "@/agentflow/brain-service/online/intake-coordinator/composite/composite-slot-queries";
+import type { CompositeRetrievalSlot } from "@/agentflow/brain-service/online/intake-coordinator";
 import type { RoutedIntakeDecision } from "@/agentflow/brain-service/online/intake-coordinator";
 import type { QueryProfile } from "@/agentflow/brain-service/online/knowledge-manager";
 import {

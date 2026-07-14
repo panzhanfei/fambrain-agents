@@ -2,20 +2,22 @@
  * Intake 编排：LLM → parse → guard 链 → RoutedIntakeDecision。
  * 每步打结构化日志，供 Web 运行日志 / 控制台复盘。
  */
-import { logAgentOut } from "@fambrain/brain-shared/agent-log";
-import type { DbChatTurn } from "@fambrain/brain-types";
+import {
+  applyCompositeRouteGuard,
+  applyIntakeChitchatGuard,
+  applyIntakeRetrievalPlanGuard,
+  applyEnumerationListIntentGuard,
+  type RoutedIntakeDecision,
+} from "@/agentflow/brain-service/online/intake-coordinator/guards";
 import {
   defaultIntakeDecision,
   parseIntakeDecision,
 } from "./parse-intake";
-import { applyCompositeRouteGuard } from "../guards/composite-route-guard";
-import type { RoutedIntakeDecision } from "../guards/composite-route-guard";
-import { applyIntakeChitchatGuard } from "../guards/intake-chitchat-guard";
-import { applyIntakeRetrievalPlanGuard } from "../guards/intake-retrieval-plan-guard";
-import { applyEnumerationListIntentGuard } from "../guards/enumeration-list-intent";
 import { applyToolPlanGuard } from "@/agentflow/tool-orchestration/enrich-plan";
-import type { IntakeRoutingDecision } from "../contract/prompt";
+import type { IntakeRoutingDecision } from "@/agentflow/brain-service/online/intake-coordinator/contract";
 import { isUserFactIntent } from "@/agentflow/brain-service/online/user-fact";
+import { logAgentOut } from "@fambrain/brain-shared/agent-log";
+import type { DbChatTurn } from "@fambrain/brain-types";
 
 const summarizeDecision = (
   decision: IntakeRoutingDecision | RoutedIntakeDecision

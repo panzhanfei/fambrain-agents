@@ -1,0 +1,46 @@
+---
+description: 模块目录约定 — index.ts 聚合导出、interface.ts 放类型、导入路径
+alwaysApply: true
+---
+
+# 模块目录约定（index / interface / 导入路径）
+
+适用于 `apps/brain-service`、`packages/*` 等 TypeScript 模块目录（有独立职责的文件夹）。
+
+## 每个职责文件夹应有
+
+| 文件 | 职责 |
+|------|------|
+| `index.ts` | **聚合导出**本目录对外 API（函数、常量、类型） |
+| `interface.ts` | **类型约束**（`type` / `interface`）；不含业务实现 |
+
+实现文件（`*-guard.ts`、`retrieve.ts` 等）只写逻辑，类型从 `./interface` 引入。
+
+## 导入规则
+
+```ts
+// ✅ 同级（同一文件夹内）
+import type { RoutedIntakeDecision } from "./interface";
+import { applyCompositeRouteGuard } from "./composite-route-guard";
+
+// ✅ 跨文件夹：走目标目录的 index，用 @ 别名
+import {
+  applyCompositeRouteGuard,
+  type RoutedIntakeDecision,
+} from "@/agentflow/brain-service/online/intake-coordinator/guards";
+
+// ✅ 仅类型、且要避开 barrel 循环依赖时：可直接 import type 自 interface
+import type { CompositeRetrievalSlot } from "@/agentflow/brain-service/online/intake-coordinator/composite/interface";
+
+// ❌ 禁止：跨目录深挖具体实现文件
+import { applyCompositeRouteGuard } from "@/agentflow/.../guards/composite-route-guard";
+```
+
+父模块 `index.ts` 再聚合子目录；包外优先用模块根入口（如 `@/.../intake-coordinator`）。
+
+## 新建 / 改动检查
+
+1. 新类型 → 放进该目录 `interface.ts`，并由 `index.ts` re-export
+2. 新公开函数 → 实现文件 + `index.ts` 导出
+3. 同级 `./`，跨目录 `@.../<folder>`（不要 `.../具体文件名`）
+4. `interface.ts` 只依赖其它目录的类型（优先 `.../interface`），避免与实现 barrel 循环

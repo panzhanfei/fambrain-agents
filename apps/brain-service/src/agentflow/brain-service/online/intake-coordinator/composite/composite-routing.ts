@@ -10,7 +10,15 @@
  * 不依赖用户问句关键词词表决定槽位（尽量信 Intake plan）。
  */
 import { inferQueryProfile } from "@/agentflow/brain-service/online/knowledge-manager";
-import type { CompositeRetrievalSlot } from "./composite-slot-queries";
+import type {
+    IntakeRetrievalPlanItem,
+    IntakeRoutingDecision,
+} from "@/agentflow/brain-service/online/intake-coordinator/contract";
+import type {
+    CompositeRetrievalSlot,
+    CompositeRoutePlanSource,
+    ResolvedCompositeRoute,
+} from "./interface";
 import {
     facetTemplateForQueryType,
     IDENTITY_SLOT,
@@ -19,20 +27,11 @@ import {
     EMPLOYERS_SLOT,
 } from "./composite-slot-queries";
 import { resolveEnumerationTarget } from "./enumeration-target";
-import type { IntakeRetrievalPlanItem } from "../contract/prompt";
-import type { IntakeRoutingDecision } from "../contract/prompt";
 
-export type CompositeRoutePlanSource =
-    | "intake_retrieval_plan"
-    | "intake_subtasks"
-    | "structural_multipart"
-    | "query_type_template"
-    | "none";
-
-export type ResolvedCompositeRoute = {
-    slots: CompositeRetrievalSlot[];
-    source: CompositeRoutePlanSource;
-};
+export type {
+    CompositeRoutePlanSource,
+    ResolvedCompositeRoute,
+} from "./interface";
 
 /** 结构信号：多问号 / 顿号并列 / 以及·还有 等（非语义词表） */
 export const looksLikeMultiPartQuestion = (question: string): boolean => {

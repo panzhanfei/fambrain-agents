@@ -9,10 +9,12 @@
  * 槽位模板仍来自 Intake（canonicalizePlanItem）；本文件只负责算 key。
  */
 import { normalizeSearchQuery } from "@fambrain/infra";
-import { canonicalizePlanItem } from "@/agentflow/brain-service/online/intake-coordinator/composite/composite-slot-queries";
-import { resolveEnumerationTarget } from "@/agentflow/brain-service/online/intake-coordinator/composite/enumeration-target";
-import type { CompositeRetrievalSlot } from "@/agentflow/brain-service/online/intake-coordinator/composite/composite-slot-queries";
-import type { IntakeRetrievalPlanItem } from "@/agentflow/brain-service/online/intake-coordinator/contract/prompt";
+import type { CompositeRetrievalSlot } from "@/agentflow/brain-service/online/intake-coordinator";
+import {
+    canonicalizePlanItem,
+    resolveEnumerationTarget,
+} from "@/agentflow/brain-service/online/intake-coordinator";
+import type { IntakeRetrievalPlanItem } from "@/agentflow/brain-service/online/intake-coordinator/contract";
 import { inferQueryProfile } from "../profile/query-profile";
 
 type FacetSource =

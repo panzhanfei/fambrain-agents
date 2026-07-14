@@ -1,34 +1,25 @@
-/** IntakeCoordinator 对外 API；目录按 contract / llm / pipeline / guards / composite 划分。 */
+/** IntakeCoordinator 对外 API；子目录经各自 index 聚合。 */
 
 export {
   prompt,
   type IntakeRetrievalPlanItem,
   type IntakeRoutingDecision,
-} from "./contract/prompt";
-export {
-  intakeRetrievalPlanItemSchema,
-  intakeRoutingDecisionSchema,
-  parseIntakeRoutingDecision,
-} from "./contract/schema";
+} from "./contract";
 
-export { completeIntakeCoordinator } from "./llm/ollama-chat";
+export { completeIntakeCoordinator } from "./llm";
 
 export {
   intakeRequiresKmRetrieval,
-} from "./pipeline/intake-km-routing";
-export {
   runIntakePipeline,
   buildEarlyExitRoutedDecision,
   isClarifyEarlyExit,
   isRespondEarlyIntent,
-  type RunIntakePipelineResult,
-} from "./pipeline/intake-pipeline";
-
-export {
   parseIntakeDecision,
   defaultIntakeDecision,
-} from "./pipeline/parse-intake";
-export { runIntakeNode } from "./nodes/intake-node";
+  type RunIntakePipelineResult,
+} from "./pipeline";
+
+export { runIntakeNode } from "./nodes";
 
 /** @deprecated 已迁至 respond-early；保留 re-export */
 export { runRespondEarlyNode } from "../respond-early";
@@ -37,30 +28,26 @@ export { userFactNode } from "../user-fact";
 
 /** @deprecated 实现已迁至 repeat-question-guard；保留 re-export 兼容旧 import */
 export { findRepeatAnswerInHistory } from "../repeat-question-guard";
+
 export {
-    applyIntakeChitchatGuard,
-    DEFAULT_CHITCHAT_BRIEF_REPLY,
-} from "./guards/intake-chitchat-guard";
-export {
+  applyIntakeChitchatGuard,
+  DEFAULT_CHITCHAT_BRIEF_REPLY,
   applyIntakeRetrievalPlanGuard,
-  type IntakeRetrievalPlanGuardReason,
-} from "./guards/intake-retrieval-plan-guard";
-export {
   applyEnumerationListIntentGuard,
   resolveEnumerationContinuation,
   buildEnumerationListDecision,
   detectEnumerationContinuationKind,
   isExhaustiveListRequest,
-} from "./guards/enumeration-list-intent";
-export {
   applyCompositeRouteGuard,
   decisionToRetrievalSlot,
   isCompositeProfileQuestion,
   type CompositeRouteReason,
   type EnumerationListIntent,
+  type IntakeRetrievalPlanGuardReason,
   type IntakeRouteMode,
   type RoutedIntakeDecision,
-} from "./guards/composite-route-guard";
+} from "./guards";
+
 export {
   buildFallbackRetrievalPlan,
   buildSingleQuestionPlanItem,
@@ -69,10 +56,6 @@ export {
   resolveCompositeRoute,
   resolveEffectiveQueryType,
   splitQuestionUnits,
-  type CompositeRoutePlanSource,
-  type ResolvedCompositeRoute,
-} from "./composite/composite-routing";
-export {
   COMPOSITE_FACET_IDS,
   COMPOSITE_PROFILE_SLOTS,
   EMPLOYERS_SLOT,
@@ -82,13 +65,13 @@ export {
   facetTemplateForQueryType,
   getCompositeSlot,
   planItemToSlot,
-  type CompositeFacetId,
-  type CompositeRetrievalSlot,
-  type CompositeSlotId,
-} from "./composite/composite-slot-queries";
-export {
   isExperienceEnumeration,
   isProjectEnumeration,
   resolveEnumerationTarget,
+  type CompositeFacetId,
+  type CompositeRetrievalSlot,
+  type CompositeSlotId,
+  type CompositeRoutePlanSource,
+  type ResolvedCompositeRoute,
   type EnumerationTarget,
-} from "./composite/enumeration-target";
+} from "./composite";

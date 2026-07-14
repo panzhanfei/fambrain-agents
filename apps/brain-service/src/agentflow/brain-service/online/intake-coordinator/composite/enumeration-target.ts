@@ -8,16 +8,12 @@
  *
  * 被 facetKey、槽模板、列举分页共同使用。
  */
-import type { IntakeRetrievalPlanItem } from "../contract/prompt";
+import type {
+    EnumerationTarget,
+    EnumerationTargetInput,
+} from "./interface";
 
-export type EnumerationTarget = "project" | "experience";
-
-export type EnumerationTargetInput = Pick<
-    IntakeRetrievalPlanItem,
-    "label" | "searchQuery" | "topics"
-> & {
-    subTasks?: string[];
-};
+export type { EnumerationTarget, EnumerationTargetInput } from "./interface";
 
 const topicHas = (topics: string[], re: RegExp): boolean =>
     topics.some((t) => re.test(t));

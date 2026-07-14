@@ -10,7 +10,7 @@ import { logAgentIn, logAgentOut } from "@fambrain/brain-shared/agent-log";
 import { recordLangChainOllamaUsage } from "@fambrain/brain-shared/pipeline-run-context";
 import type { DbChatTurn } from "@fambrain/brain-types";
 import { textFromResponse } from "@/agentflow/utils";
-import { prompt } from "../contract/prompt";
+import { prompt } from "@/agentflow/brain-service/online/intake-coordinator/contract";
 const { ollama } = getBrainServiceConfig();
 const llm = new ChatOllama({
   baseUrl: ollama.baseUrl,

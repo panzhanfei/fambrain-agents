@@ -16,30 +16,17 @@ import {
     type CompositeSessionKey,
 } from "@fambrain/infra";
 import type { InformationAnalystResult } from "@/agentflow/brain-service/online/information-analyst";
-import type { CompositeRetrievalSlot } from "@/agentflow/brain-service/online/intake-coordinator/composite/composite-slot-queries";
+import type { CompositeRetrievalSlot } from "@/agentflow/brain-service/online/intake-coordinator";
 import {
     attachFacetKey,
     detectCompositeRefreshIntent,
 } from "./facet-key";
+import type {
+    CompositeSlotPlan,
+    IncrementalCompositePlan,
+} from "./interface";
 
-/** 单槽计划：原槽位 + facetKey + 是否复用缓存答案 */
-export type CompositeSlotPlan = CompositeRetrievalSlot & {
-    facetKey: string;
-    useCachedAnswer: boolean;
-    cachedAnswer: CachedFacetAnswer | null;
-};
-
-/**
- * 增量检索计划。
- * - slots：全部槽（含命中/未命中标记）
- * - activeRetrievalSlots：需要真正调 retrieveKnowledge 的子集
- */
-export type IncrementalCompositePlan = {
-    slots: CompositeSlotPlan[];
-    activeRetrievalSlots: CompositeRetrievalSlot[];
-    facetCacheHits: number;
-    sessionCleared: boolean;
-};
+export type { CompositeSlotPlan, IncrementalCompositePlan } from "./interface";
 
 /** 缓存终稿 → Analyst 结果形状（供增量跳过 Analyst 时复用） */
 export const cachedFacetToAnalystResult = (

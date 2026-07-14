@@ -1,4 +1,4 @@
-import type { IntakeRoutingDecision } from "../contract/prompt";
+import type { IntakeRoutingDecision } from "@/agentflow/brain-service/online/intake-coordinator/contract";
 
 /** 是否应进入 KnowledgeManager（LangGraph retrieval 节点） */
 export const intakeRequiresKmRetrieval = (

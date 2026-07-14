@@ -5,7 +5,7 @@
  */
 import path from "node:path";
 import { listCorpusScanRoots, listMarkdownFiles, toRepoPath } from "@fambrain/corpus";
-import { PROJECTS_SLOT } from "../src/agentflow/brain-service/online/intake-coordinator/composite/composite-slot-queries";
+import { PROJECTS_SLOT } from "../src/agentflow/brain-service/online/intake-coordinator";
 import { organizeKnowledge } from "../src/agentflow/brain-service/online/content-organizer/organize-knowledge";
 import { maxAnalystHitsForProfile } from "../src/agentflow/brain-service/online/information-analyst/complete-analyze";
 import { buildSubQuestionFallbackAnswer } from "../src/agentflow/brain-service/online/information-analyst/analyze-helpers";

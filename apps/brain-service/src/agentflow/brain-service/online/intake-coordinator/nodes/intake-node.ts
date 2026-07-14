@@ -1,5 +1,5 @@
 import { completeIntakeCoordinator } from "../llm/ollama-chat";
-import { resolveEnumerationContinuation } from "../guards/enumeration-list-intent";
+import { resolveEnumerationContinuation } from "@/agentflow/brain-service/online/intake-coordinator/guards";
 import { runIntakePipeline } from "../pipeline/intake-pipeline";
 import type { PipelineGraphState } from "@/agentflow/pipeline/graph/state";
 

@@ -1,7 +1,7 @@
 /**
  * P0-13：chitchat 固定话术 — LLM 只产 intent，briefReply 由服务端注入，避免幻觉称呼。
  */
-import type { IntakeRoutingDecision } from "../contract/prompt";
+import type { IntakeRoutingDecision } from "@/agentflow/brain-service/online/intake-coordinator/contract";
 
 export const DEFAULT_CHITCHAT_BRIEF_REPLY =
     "你好，我是 FamBrain 助手。可以问我关于工作经历、项目或技术栈的问题。";

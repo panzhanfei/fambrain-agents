@@ -1,9 +1,9 @@
-import type { IntakeRoutingDecision } from "../contract/prompt";
-import { parseIntakeRoutingDecision } from "../contract/schema";
+import type { IntakeRoutingDecision } from "@/agentflow/brain-service/online/intake-coordinator/contract";
+import { parseIntakeRoutingDecision } from "@/agentflow/brain-service/online/intake-coordinator/contract";
 import {
     buildFallbackRetrievalPlan,
-} from "../composite/composite-routing";
-import { canonicalizePlanItem } from "../composite/composite-slot-queries";
+    canonicalizePlanItem,
+} from "@/agentflow/brain-service/online/intake-coordinator/composite";
 import { inferQueryProfile } from "@/agentflow/brain-service/online/knowledge-manager";
 import { parseJsonObject } from "@/agentflow/utils";
 

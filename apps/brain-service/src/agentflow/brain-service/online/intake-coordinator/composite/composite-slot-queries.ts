@@ -7,34 +7,22 @@
  * canonicalizePlanItem：把 Intake 口语 searchQuery 对齐到模板 query，
  * 避免同义问句打出不同 cache key。
  */
-import type { IntakeRetrievalPlanItem } from "../contract/prompt";
-import type { IntakeRoutingDecision } from "../contract/prompt";
-import {
-    isProjectEnumeration,
-    resolveEnumerationTarget,
-} from "./enumeration-target";
+import type {
+    IntakeRetrievalPlanItem,
+    IntakeRoutingDecision,
+} from "@/agentflow/brain-service/online/intake-coordinator/contract";
+import { isProjectEnumeration } from "./enumeration-target";
+import type {
+    CompositeFacetId,
+    CompositeRetrievalSlot,
+} from "./interface";
 
 export const COMPOSITE_FACET_IDS = [
     "identity",
     "projects",
     "employers",
     "recent",
-] as const;
-
-export type CompositeFacetId = (typeof COMPOSITE_FACET_IDS)[number];
-
-/** 槽 id：已知 facet（identity/projects…）或 plan-N 动态项 */
-export type CompositeSlotId = CompositeFacetId | `plan-${number}` | string;
-
-/** 一个检索槽：并行 KM 时每个 Promise 对应一个 */
-export type CompositeRetrievalSlot = {
-    id: CompositeSlotId;
-    label: string;
-    searchQuery: string;
-    queryType: NonNullable<IntakeRoutingDecision["queryType"]>;
-    topics: string[];
-    subTasks: string[];
-};
+] as const satisfies readonly CompositeFacetId[];
 
 /** canonical：个人档案 */
 export const IDENTITY_SLOT: CompositeRetrievalSlot = {
@@ -91,9 +79,6 @@ export const getCompositeSlot = (
     if (!slot) throw new Error(`unknown composite facet: ${id}`);
     return slot;
 };
-
-const topicHas = (topics: string[], re: RegExp): boolean =>
-    topics.some((t) => re.test(t));
 
 /**
  * queryType + topics → 取 canonical 模板。
