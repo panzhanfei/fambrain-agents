@@ -35,7 +35,7 @@ const baseDecision = (): RoutedIntakeDecision => ({
             topics: ["personal"],
         },
     ],
-    routeMode: "single",
+    routeMode: "skip",
     compositeSlots: [],
     routeReason: "single_default",
     routePlanSource: "retrieval_plan",

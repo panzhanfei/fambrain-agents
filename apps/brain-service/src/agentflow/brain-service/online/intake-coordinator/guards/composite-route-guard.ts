@@ -4,16 +4,22 @@
  * 输入：LLM + 检索计划 guard 之后的 IntakeRoutingDecision
  * 输出：RoutedIntakeDecision（多了 routeMode / compositeSlots / routeReason）
  *
- * 职责：决定「单问还是多分槽」，不负责真检索。
- * 检索在 retrieval-node：composite/slot → 增量计划 → 并行 KM。
+ * routeMode：
+ *   skip  — 不检索（chitchat / clarify / userFact 等）
+ *   slots — 1～N 槽 vector 检索（槽数看 compositeSlots.length）
+ *   list  — 列举分页 list API（由 enumeration-list-intent guard 升级）
+ *   dag   — 工具编排（由 tool-plan guard 升级）
  */
 import {
+    buildSingleQuestionPlanItem,
     isCompositeProfileQuestion,
-    isTechSingleQuestion,
     resolveCompositeRoute,
     type CompositeRoutePlanSource,
-} from "./composite-routing";
-import type { CompositeRetrievalSlot } from "./composite-slot-queries";
+} from "../composite/composite-routing";
+import {
+    planItemToSlot,
+    type CompositeRetrievalSlot,
+} from "../composite/composite-slot-queries";
 import type { IntakeRoutingDecision } from "../contract/prompt";
 import type { UserFactRoute } from "@/agentflow/brain-service/online/user-fact";
 import type {
@@ -21,8 +27,7 @@ import type {
     ExecutionPlanNode,
 } from "@/agentflow/tool-orchestration/types";
 
-/** 图路由模式：single 普通单问；composite ≥2 槽；slot 单槽结构化；dag 混合执行 */
-export type IntakeRouteMode = "single" | "composite" | "slot" | "dag";
+export type IntakeRouteMode = "skip" | "slots" | "list" | "dag";
 
 /** 为何走到当前 routeMode（写进日志 routeReason） */
 export type CompositeRouteReason =
@@ -31,7 +36,7 @@ export type CompositeRouteReason =
     | "intake_subtasks_fallback"
     | "structural_multipart_fallback"
     | "query_type_template"
-    | "single_default";
+    | "slots_default";
 
 export type EnumerationListIntent = "preview" | "continue" | "exhaustive";
 
@@ -41,7 +46,7 @@ export type EnumerationListIntent = "preview" | "continue" | "exhaustive";
  */
 export type RoutedIntakeDecision = IntakeRoutingDecision & {
     routeMode: IntakeRouteMode;
-    /** 完整槽对象数组；「最终路由」日志只打 count/labels 摘要 */
+    /** 完整槽对象数组；slots 路由时 length ≥ 1 */
     compositeSlots: CompositeRetrievalSlot[];
     routeReason?: CompositeRouteReason;
     routePlanSource?: CompositeRoutePlanSource;
@@ -72,15 +77,38 @@ const sourceToReason = (
         case "query_type_template":
             return "query_type_template";
         default:
-            return "single_default";
+            return "slots_default";
     }
 };
 
-/** ≥1 槽时：强制 retrieve_and_answer，顶层 searchQuery 取首槽（兼容单问字段） */
-const applySlotDecision = (
+/** 单问 fallback：顶层 decision → 1 个检索槽 */
+export const decisionToRetrievalSlot = (
+    decision: IntakeRoutingDecision,
+    userQuestion: string
+): CompositeRetrievalSlot => {
+    const fromPlan = buildSingleQuestionPlanItem(userQuestion, decision);
+    if (fromPlan) {
+        return planItemToSlot(fromPlan, 0);
+    }
+    const queryType = decision.queryType ?? "default";
+    return {
+        id: "plan-0",
+        label:
+            decision.subTasks[0]?.trim() ||
+            userQuestion.trim().slice(0, 40) ||
+            "查询",
+        searchQuery: (decision.searchQuery || userQuestion).trim(),
+        queryType,
+        topics: [...decision.topics],
+        subTasks:
+            decision.subTasks.length > 0 ? [...decision.subTasks] : [],
+    };
+};
+
+/** ≥1 槽：强制 retrieve_and_answer，顶层 searchQuery 取首槽（兼容单问字段） */
+const applySlotsDecision = (
     decision: IntakeRoutingDecision,
     slots: CompositeRetrievalSlot[],
-    mode: IntakeRouteMode,
     routeReason: CompositeRouteReason,
     routePlanSource: CompositeRoutePlanSource
 ): RoutedIntakeDecision => {
@@ -88,7 +116,7 @@ const applySlotDecision = (
     return {
         ...decision,
         intent: "retrieve_and_answer",
-        routeMode: mode,
+        routeMode: "slots",
         compositeSlots: slots,
         routeReason,
         routePlanSource,
@@ -105,60 +133,35 @@ export { isCompositeProfileQuestion };
 
 /**
  * Composite 路由主逻辑：
- * 1. 非 retrieve_and_answer → single（不检索）
- * 2. resolveCompositeRoute ≥2 槽 → composite
- * 3. 1 槽：tech 单问例外 → single；否则 → slot
- * 4. 0 槽 → single（沿用原 searchQuery）
+ * 1. 非 retrieve_and_answer → skip
+ * 2. resolveCompositeRoute ≥1 槽 → slots
+ * 3. 0 槽 → decisionToRetrievalSlot 包装为 1 槽 slots
  */
 export const applyCompositeRouteGuard = (
     decision: IntakeRoutingDecision,
     userQuestion: string
 ): RoutedIntakeDecision => {
-    if (
-        decision.intent !== "retrieve_and_answer"
-    ) {
+    if (decision.intent !== "retrieve_and_answer") {
         return {
             ...decision,
-            routeMode: "single",
+            routeMode: "skip",
             compositeSlots: [],
             routeReason: "skip_non_retrieve",
             routePlanSource: "none",
         };
     }
 
-    // 真正拆槽：retrievalPlan / subTasks / 句式 / queryType 模板
     const { slots, source } = resolveCompositeRoute(decision, userQuestion);
     const routeReason = sourceToReason(source);
 
-    if (slots.length >= 2) {
-        return applySlotDecision(
-            decision,
-            slots,
-            "composite",
-            routeReason,
-            source
-        );
+    if (slots.length >= 1) {
+        return applySlotsDecision(decision, slots, routeReason, source);
     }
 
-    if (slots.length === 1) {
-        // 「城管用了什么技术」类 tech 单问：不要误进 slot，走普通单问检索
-        if (isTechSingleQuestion(userQuestion, decision)) {
-            return {
-                ...decision,
-                routeMode: "single",
-                compositeSlots: [],
-                routeReason: "single_default",
-                routePlanSource: "none",
-            };
-        }
-        return applySlotDecision(decision, slots, "slot", routeReason, source);
-    }
-
-    return {
-        ...decision,
-        routeMode: "single",
-        compositeSlots: [],
-        routeReason: "single_default",
-        routePlanSource: "none",
-    };
+    return applySlotsDecision(
+        decision,
+        [decisionToRetrievalSlot(decision, userQuestion)],
+        "slots_default",
+        "none"
+    );
 };

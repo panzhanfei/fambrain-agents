@@ -6,7 +6,7 @@ import { getEnumerationListSession } from "@fambrain/infra";
 import type {
     EnumerationListIntent,
     RoutedIntakeDecision,
-} from "../composite/composite-route-guard";
+} from "./composite-route-guard";
 import { resolveEnumerationTarget } from "../composite/enumeration-target";
 import {
     ENUMERATION_EXHAUSTIVE_PAGE_SIZE,
@@ -74,9 +74,9 @@ export const buildEnumerationListDecision = (input: {
         userFactKey: null,
         userFactLabel: null,
         userFactValue: null,
-        routeMode: "single",
+        routeMode: "list",
         compositeSlots: [],
-        routeReason: "single_default",
+        routeReason: "slots_default",
         routePlanSource: "none",
         listIntent: input.listIntent,
         enumerationPage: input.page,
@@ -124,15 +124,19 @@ export const resolveEnumerationContinuation = async (input: {
     });
 };
 
-/** 单问 enumeration + 穷举关键词 → 分页 list API（跳过 hybrid Top-K） */
+/** slots + enumeration + 穷举关键词 → 升级为 list 分页（跳过 hybrid Top-K） */
 export const applyEnumerationListIntentGuard = (
     decision: RoutedIntakeDecision,
     userQuestion: string
 ): RoutedIntakeDecision => {
-    if (decision.routeMode !== "single") return decision;
+    if (decision.routeMode === "list") return decision;
+    if (decision.routeMode !== "slots") return decision;
     if (decision.queryType !== "enumeration") return decision;
-    if (decision.listIntent === "continue" || decision.listIntent === "exhaustive") {
-        return decision;
+    if (
+        decision.listIntent === "continue" ||
+        decision.listIntent === "exhaustive"
+    ) {
+        return { ...decision, routeMode: "list" };
     }
     if (!isExhaustiveListRequest(userQuestion)) return decision;
 
@@ -147,6 +151,7 @@ export const applyEnumerationListIntentGuard = (
 
     return {
         ...decision,
+        routeMode: "list",
         listIntent: "exhaustive",
         enumerationPage: 1,
         enumerationPageSize: ENUMERATION_EXHAUSTIVE_PAGE_SIZE,

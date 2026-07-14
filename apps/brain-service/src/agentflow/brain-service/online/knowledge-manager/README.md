@@ -100,15 +100,10 @@ routeAfterIntake()                    pipeline/graph/routes.ts
     ▼
 nodes/retrieval-node.ts               runRetrievalNode()
     │
-    ├─ routeMode=single
-    │     ├─ listIntent=exhaustive|continue
-    │     │     └─ retrieveEnumerationPage()   list/retrieve-enumeration-page.ts（语料 path 分页，不经 hybrid）
-    │     ├─ getRetrievalFromCache()     检索 hits 缓存命中 → 直接返回 hits
-    │     └─ retrieveKnowledge()         recall/retrieve.ts
-    │           hybridRecall → rank → confidenceTier
-    │     └─ setRetrievalCache()
+    ├─ routeMode=list
+    │     └─ retrieveEnumerationPage()   list/retrieve-enumeration-page.ts（语料 path 分页，不经 hybrid）
     │
-    └─ routeMode=composite | slot
+    └─ routeMode=slots
           ├─ resolveIncrementalCompositePlan()   composite/incremental-plan.ts
           └─ retrieveCompositeIncremental()      composite/retrieve.ts
                 槽答案缓存命中 → citations 还原 hits（跳过真检索）
@@ -121,7 +116,11 @@ state.hits / coverage / notes / confidenceTier
 factChecker → contentOrganizer → analyst
 ```
 
-### 3.2 单问检索内部（`retrieveKnowledge`）
+### 3.2 单槽检索（slots × 1）
+
+与多槽共用 `retrieveCompositeIncremental`；`compositeSlots.length === 1` 时 merge 结果等价于原单问 hits。
+
+### 3.3 单问检索内部（`retrieveKnowledge`）
 
 ```text
 resolveQueryProfile(queryType, searchQuery, subTasks)
@@ -142,7 +141,7 @@ deriveCoverageFromTier()
 KnowledgeRetrievalResult { hits, coverage, notes, confidenceTier }
 ```
 
-### 3.3 Web 运行日志里 KM 的标签
+### 3.4 Web 运行日志里 KM 的标签
 
 | label | 对应步骤 |
 |-------|----------|
@@ -158,7 +157,7 @@ KnowledgeRetrievalResult { hits, coverage, notes, confidenceTier }
 |------|------|-----------|
 | `searchQuery` | Intake | 主检索文本；检索 hits 缓存 key 之一 |
 | `queryType` | Intake | 映射 queryProfile；检索 hits 缓存 key 之一 |
-| `routeMode` / `compositeSlots` | Intake composite guard | 决定 single vs 增量 composite |
+| `routeMode` / `compositeSlots` | Intake composite guard | `slots`（1～N 槽）或 `list`（列举分页） |
 | `topics` | Intake | **仅**拼入向量 semantic query（KM-01） |
 | `subTasks` | Intake | sparse token + rank 辅助 |
 

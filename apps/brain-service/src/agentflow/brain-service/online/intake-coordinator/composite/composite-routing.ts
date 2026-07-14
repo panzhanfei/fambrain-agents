@@ -355,8 +355,7 @@ export const isCompositeProfileQuestion = (
 ): boolean => resolveCompositeRoute(decision, userQuestion).slots.length >= 2;
 
 /**
- * tech 单问检测：避免「城管用什么技术」被拆进 slot/composite。
- * 命中时 applyCompositeRouteGuard 强制 routeMode=single。
+ * tech 单问检测（诊断/脚本用；路由统一为 slots + 1 槽，不再打回 skip）。
  */
 export const isTechSingleQuestion = (
     userQuestion: string,

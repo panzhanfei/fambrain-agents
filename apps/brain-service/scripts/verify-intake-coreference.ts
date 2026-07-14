@@ -140,8 +140,8 @@ assertSync("pipeline：多问 retrieve → composite", () => {
     if (earlyExit) {
         throw new Error("retrieve 不应早退");
     }
-    if (decision.routeMode !== "composite") {
-        throw new Error(`期望 composite，实际 ${decision.routeMode}`);
+    if (decision.routeMode !== "slots" || (decision.compositeSlots?.length ?? 0) < 2) {
+        throw new Error(`期望 slots≥2，实际 ${decision.routeMode}/${decision.compositeSlots?.length ?? 0}`);
     }
 });
 

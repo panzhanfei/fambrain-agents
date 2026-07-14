@@ -52,15 +52,15 @@ export {
   detectEnumerationContinuationKind,
   isExhaustiveListRequest,
 } from "./guards/enumeration-list-intent";
-
 export {
   applyCompositeRouteGuard,
+  decisionToRetrievalSlot,
   isCompositeProfileQuestion,
   type CompositeRouteReason,
   type EnumerationListIntent,
   type IntakeRouteMode,
   type RoutedIntakeDecision,
-} from "./composite/composite-route-guard";
+} from "./guards/composite-route-guard";
 export {
   buildFallbackRetrievalPlan,
   buildSingleQuestionPlanItem,

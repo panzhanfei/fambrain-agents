@@ -44,7 +44,7 @@ const guarded = applyEnumerationListIntentGuard(
     {
         ...exhaustiveDecision,
         listIntent: null,
-        routeMode: "single",
+        routeMode: "slots",
         compositeSlots: [],
         searchQuery: "项目",
         queryType: "enumeration",
@@ -52,6 +52,7 @@ const guarded = applyEnumerationListIntentGuard(
     "请把全部36个项目都列出来"
 );
 assert.equal(guarded.listIntent, "exhaustive");
+assert.equal(guarded.routeMode, "list");
 
 const composed = composeEnumerationAnswer({
     hits: Array.from({ length: 20 }, (_, i) => ({

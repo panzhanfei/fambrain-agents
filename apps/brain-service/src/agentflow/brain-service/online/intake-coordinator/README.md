@@ -59,11 +59,12 @@ intake-coordinator/
 │
 ├── guards/                ← LLM 之后的规则兜底
 │   ├── intake-chitchat-guard.ts
-│   └── intake-retrieval-plan-guard.ts
-│
-├── composite/             ← 多问 / 分槽规划（routeMode、compositeSlots）
-│   ├── composite-routing.ts
+│   ├── intake-retrieval-plan-guard.ts
 │   ├── composite-route-guard.ts
+│   └── enumeration-list-intent.ts
+│
+├── composite/             ← 多问 / 分槽规划（routing、槽模板）
+│   ├── composite-routing.ts
 │   ├── composite-slot-queries.ts
 │   └── enumeration-target.ts
 ```
@@ -136,7 +137,7 @@ LLM 原始 JSON
     │
     ▼ applyIntakeRetrievalPlanGuard()    guards/intake-retrieval-plan-guard.ts
     │
-    ▼ applyCompositeRouteGuard()         composite/composite-route-guard.ts
+    ▼ applyCompositeRouteGuard()         guards/composite-route-guard.ts
     │
     ▼ RoutedIntakeDecision → state.decision
 ```
@@ -217,13 +218,13 @@ Intake 产出两层结构：**LLM 层** `IntakeRoutingDecision` → **编排层*
 
 ### 4.3 `RoutedIntakeDecision`（guard 后的编排工单）
 
-定义：`composite/composite-route-guard.ts`  
+定义：`guards/composite-route-guard.ts`  
 = `IntakeRoutingDecision` + 下列扩展字段
 
 | 字段 | 类型 | 含义 |
 |------|------|------|
-| **routeMode** | single \| composite \| slot | 下游检索模式 |
-| **compositeSlots** | CompositeRetrievalSlot[] | 分槽列表（≥2 → composite） |
+| **routeMode** | skip \| slots \| list \| dag | 下游图路由模式 |
+| **compositeSlots** | CompositeRetrievalSlot[] | 分槽列表（slots 时 length ≥ 1） |
 | **routeReason** | CompositeRouteReason | 为何这样路由（可观测） |
 | **routePlanSource** | CompositeRoutePlanSource | plan 来源（LLM plan / 结构兜底…） |
 | **userFact** | UserFactRoute \| null | remember/recall 路由对象 |
@@ -232,9 +233,10 @@ Intake 产出两层结构：**LLM 层** `IntakeRoutingDecision` → **编排层*
 
 | routeMode | 条件 | 下游行为 |
 |-----------|------|----------|
-| `single` | 单问 / 非检索短路 | KM 一次检索，用顶层 searchQuery |
-| `slot` | 恰好 1 个槽（tech 单问除外） | KM 按单槽检索 |
-| `composite` | ≥2 个槽 | KM 多槽并行 + Analyst 分段写 |
+| `skip` | chitchat / clarify / userFact 等不检索 | respondEarly / userFact |
+| `slots` | 1～N 个检索槽 | KM 分槽并行 + merge（槽数看 `compositeSlots.length`） |
+| `list` | 列举 continue / exhaustive | KM list API 分页 |
+| `dag` | 混合工具编排 | dagExecutor |
 
 #### routeReason 枚举
 
@@ -245,7 +247,7 @@ Intake 产出两层结构：**LLM 层** `IntakeRoutingDecision` → **编排层*
 | `intake_subtasks_fallback` | subTasks ≥2 兜底 |
 | `structural_multipart_fallback` | 多问结构检测兜底 |
 | `query_type_template` | queryType 模板槽 |
-| `single_default` | 普通单问 |
+| `slots_default` | 单问 fallback 包装为 1 槽 |
 
 ### 4.4 `CompositeRetrievalSlot`（检索槽）
 
@@ -304,10 +306,10 @@ LLM 输出 IntakeRoutingDecision:
 guard 链: 通常 noop（无指代/非闲聊/非 userFact）
 
 RoutedIntakeDecision:
-  routeMode: single
-  compositeSlots: []
+  routeMode: slots
+  compositeSlots: [ { id: plan-0, searchQuery: "...", queryType: tech } ]
 
-→ routeAfterIntake → retrieval → KM(searchQuery, queryType=tech)
+→ routeAfterIntake → retrieval → KM 1 槽（retrieveCompositeIncremental）
 ```
 
 ### 5.2 闲聊：「你好」
@@ -370,10 +372,10 @@ LLM retrievalPlan: [
 guard_检索计划: canonicalize 各 plan 项（检索 hits 缓存 对齐）
 
 guard_复合路由:
-  routeMode: composite
-  compositeSlots: [槽1, 槽2, 槽3, ...]
+  routeMode: slots
+  compositeSlots: [槽1, 槽2, 槽3, ...]   # length ≥ 2 → Analyst 分段
 
-→ retrieval 多槽并行 → analyst 分段写
+→ retrieval 多槽并行 → analyst 分段写（length ≥ 2）
 ```
 
 ### 5.6 用户记忆
@@ -459,13 +461,14 @@ defaultIntakeDecision(userQuestion):
 | `intake-pipeline.ts` | parse → LLM指代决策（透传/clarify 早退）→ guard 链 |
 | `intake-chitchat-guard.ts` | chitchat 注入服务端固定 briefReply |
 | `intake-retrieval-plan-guard.ts` | 多问补 retrievalPlan；canonicalize 对齐 检索 hits 缓存 |
+| `composite-route-guard.ts` | plan → routeMode + compositeSlots |
+| `enumeration-list-intent.ts` | 列举分页 intent（preview / continue / exhaustive） |
 
 ### composite/
 
 | 文件 | 职责 |
 |------|------|
 | `composite-routing.ts` | 多问结构检测；fallback plan；`resolveCompositeRoute()` |
-| `composite-route-guard.ts` | plan → routeMode + compositeSlots |
 | `composite-slot-queries.ts` | 槽模板；planItem → slot；canonicalizePlanItem |
 | `enumeration-target.ts` | 列举问是「公司」还是「项目」 |
 

@@ -36,9 +36,7 @@ const useCompositeParallelAnalyze = (
     compositeSubResults: NonNullable<
         InformationAnalystInput["compositeSubResults"]
     >;
-} =>
-    input.routeMode === "composite" &&
-    (input.compositeSubResults?.length ?? 0) >= 2;
+} => (input.compositeSubResults?.length ?? 0) >= 2;
 
 const resolveSingleSlotCachedAnswer = (
     input: InformationAnalystInput
@@ -240,7 +238,7 @@ export async function* streamAnalyzeInformation(
         hasMemoryBlock: Boolean(input.memoryBlock),
         subTasks: input.subTasks,
         queryType: input.queryType ?? profile,
-        routeMode: input.routeMode ?? "single",
+        routeMode: input.routeMode ?? "skip",
         compositeSlotCount: input.compositeSubResults?.length ?? 0,
         hitPaths: input.hits.map((h) => h.path),
         analyzeMode: useCompositeParallelAnalyze(input)

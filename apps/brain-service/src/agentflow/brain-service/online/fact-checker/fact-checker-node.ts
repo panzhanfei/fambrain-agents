@@ -14,11 +14,8 @@ export const runFactCheckerNode = async (
     if (!decision) {
         return { checkerPassed: true };
     }
-    const compositeCount = state.compositeSubResults?.length ?? 0;
-    if (
-        decision.routeMode === "composite" &&
-        compositeCount >= 2
-    ) {
+    const slotCount = state.compositeSubResults?.length ?? 0;
+    if (slotCount >= 2) {
         return {
             checkerPassed: true,
             notes: state.notes,
@@ -48,11 +45,21 @@ export const runFactCheckerNode = async (
             !result.passed &&
             result.refinedSearchQuery &&
             state.retryCount < 1 &&
-            (decision.routeMode ?? "single") === "single"
+            slotCount <= 1
         ) {
+            const primarySlot = decision.compositeSlots[0];
             patch.decision = {
                 ...decision,
                 searchQuery: result.refinedSearchQuery,
+                compositeSlots:
+                    primarySlot != null
+                        ? [
+                              {
+                                  ...primarySlot,
+                                  searchQuery: result.refinedSearchQuery,
+                              },
+                          ]
+                        : decision.compositeSlots,
             };
         }
         return patch;

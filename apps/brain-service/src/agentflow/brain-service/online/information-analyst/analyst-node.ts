@@ -22,7 +22,7 @@ export const runAnalystNode = async (
             coverage: state.coverage,
             notes: state.notes,
             memoryBlock: state.memoryBlock,
-            routeMode: decision.routeMode ?? "single",
+            routeMode: decision.routeMode ?? "skip",
             queryType: decision.queryType,
             searchQuery: decision.searchQuery,
             topics: decision.topics,

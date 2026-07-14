@@ -8,8 +8,8 @@ import {
   defaultIntakeDecision,
   parseIntakeDecision,
 } from "./parse-intake";
-import { applyCompositeRouteGuard } from "../composite/composite-route-guard";
-import type { RoutedIntakeDecision } from "../composite/composite-route-guard";
+import { applyCompositeRouteGuard } from "../guards/composite-route-guard";
+import type { RoutedIntakeDecision } from "../guards/composite-route-guard";
 import { applyIntakeChitchatGuard } from "../guards/intake-chitchat-guard";
 import { applyIntakeRetrievalPlanGuard } from "../guards/intake-retrieval-plan-guard";
 import { applyEnumerationListIntentGuard } from "../guards/enumeration-list-intent";
@@ -58,7 +58,7 @@ export const buildEarlyExitRoutedDecision = (
   decision: IntakeRoutingDecision
 ): RoutedIntakeDecision => ({
   ...decision,
-  routeMode: "single",
+  routeMode: "skip",
   compositeSlots: [],
   routeReason: "skip_non_retrieve",
   routePlanSource: "none",
@@ -201,7 +201,7 @@ export const runIntakePipeline = (
     retrievalPlanLabels: afterPlan.retrievalPlan.map((p) => p.label),
   });
 
-  /** ⑥ 复合路由：plan → compositeSlots；定 routeMode（single / slot / composite） */
+  /** ⑥ 复合路由：plan → compositeSlots；定 routeMode（skip / slots / list / dag） */
   const routed = applyCompositeRouteGuard(afterPlan, input.userQuestion);
   logAgentOut("IntakeCoordinator", "guard_复合路由", {
     routeMode: routed.routeMode,

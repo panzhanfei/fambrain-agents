@@ -1,7 +1,7 @@
 /**
  * Composite 增量计划（会话「槽答案」缓存）— KM 执行侧。
  *
- * 调用方：retrieval-node 在 routeMode=composite/slot 时。
+ * 调用方：retrieval-node 在 routeMode=slots 时。
  * 作用：对每个槽查会话里是否已有可复用的 Analyst 终稿；
  *       命中 → 本槽跳过真检索；未命中 → 进入 activeRetrievalSlots。
  *

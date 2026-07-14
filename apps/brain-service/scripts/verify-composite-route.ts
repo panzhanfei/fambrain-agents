@@ -48,7 +48,7 @@ const assertSync = (name: string, fn: () => void) => {
 
 console.log("verify-composite-route\n— Intake retrievalPlan —");
 
-assertSync("retrievalPlan ≥2 → composite 动态槽", () => {
+assertSync("retrievalPlan ≥2 → slots×2", () => {
   const decision: IntakeRoutingDecision = {
     ...retrieveStub,
     retrievalPlan: [
@@ -68,15 +68,15 @@ assertSync("retrievalPlan ≥2 → composite 动态槽", () => {
     subTasks: ["姓名", "项目经历"],
   };
   const out = applyCompositeRouteGuard(decision, "综合问");
-  if (out.routeMode !== "composite" || out.compositeSlots.length !== 2) {
-    throw new Error(`期望 composite×2，实际 ${out.routeMode}/${out.compositeSlots.length}`);
+  if (out.routeMode !== "slots" || out.compositeSlots.length !== 2) {
+    throw new Error(`期望 slots×2，实际 ${out.routeMode}/${out.compositeSlots.length}`);
   }
   if (out.routeReason !== "intake_retrieval_plan") {
     throw new Error(`routeReason=${out.routeReason}`);
   }
 });
 
-assertSync("P0-15 五连问（无 plan）→ 结构兜底 composite", () => {
+assertSync("P0-15 五连问（无 plan）→ 结构兜底 slots", () => {
   const q =
     "我叫什么？ 今年多大？ 做过那些项目？ 从事什么行业？什么学历？";
   if (!looksLikeMultiPartQuestion(q)) {
@@ -87,9 +87,9 @@ assertSync("P0-15 五连问（无 plan）→ 结构兜底 composite", () => {
     throw new Error(`分句不足: ${units.length} ${units.join("|")}`);
   }
   const out = applyCompositeRouteGuard(retrieveStub, q);
-  if (out.routeMode !== "composite" || out.compositeSlots.length < 5) {
+  if (out.routeMode !== "slots" || out.compositeSlots.length < 5) {
     throw new Error(
-      `期望 composite≥5槽，实际 ${out.routeMode}/${out.compositeSlots.length}`
+      `期望 slots≥5槽，实际 ${out.routeMode}/${out.compositeSlots.length}`
     );
   }
   if (out.routeReason !== "structural_multipart_fallback") {
@@ -124,20 +124,21 @@ assertSync("plan label「具体项目名称」→ canonical 为 projects 槽", (
   }
 });
 
-assertSync("单问列举 → slot employers + canonical", () => {
+assertSync("单问列举 → slots×1 employers + canonical", () => {
   const out = applyCompositeRouteGuard(
     { ...retrieveStub, queryType: "enumeration", topics: ["experience"] },
     "我在哪几家公司上过班？"
   );
   if (
-    out.routeMode !== "slot" ||
+    out.routeMode !== "slots" ||
+    out.compositeSlots.length !== 1 ||
     out.searchQuery !== EMPLOYERS_SLOT.searchQuery
   ) {
-    throw new Error(`slot/canonical 不符: ${out.routeMode} ${out.searchQuery}`);
+    throw new Error(`slots/canonical 不符: ${out.routeMode} ${out.searchQuery}`);
   }
 });
 
-assertSync("paraphrase 供职单位 → slot employers", () => {
+assertSync("paraphrase 供职单位 → slots employers", () => {
   const out = applyCompositeRouteGuard(
     {
       ...retrieveStub,
@@ -147,20 +148,26 @@ assertSync("paraphrase 供职单位 → slot employers", () => {
     },
     "供职过哪些单位？"
   );
-  if (out.routeMode !== "slot" || out.compositeSlots[0]?.id !== "employers") {
-    throw new Error(`期望 slot employers，实际 ${out.routeMode}`);
+  if (
+    out.routeMode !== "slots" ||
+    out.compositeSlots.length !== 1 ||
+    out.compositeSlots[0]?.id !== "employers"
+  ) {
+    throw new Error(`期望 slots employers，实际 ${out.routeMode}`);
   }
 });
 
-assertSync("城管技术 → single", () => {
+assertSync("城管技术 → slots×1", () => {
   const out = applyCompositeRouteGuard(
     { ...retrieveStub, queryType: "tech", searchQuery: "城管平台 技术栈" },
     "城管平台用了什么技术"
   );
-  if (out.routeMode !== "single") throw new Error(`实际 ${out.routeMode}`);
+  if (out.routeMode !== "slots" || out.compositeSlots.length !== 1) {
+    throw new Error(`实际 ${out.routeMode}/${out.compositeSlots.length}`);
+  }
 });
 
-assertSync("闲聊 → single", () => {
+assertSync("闲聊 → skip", () => {
   const out = applyCompositeRouteGuard(
     {
       ...retrieveStub,
@@ -169,17 +176,17 @@ assertSync("闲聊 → single", () => {
     },
     "你好"
   );
-  if (out.routeMode !== "single") throw new Error("chitchat 不应 composite");
+  if (out.routeMode !== "skip") throw new Error("chitchat 应为 skip");
 });
 
-assertSync("单问年龄（Intake identity）→ slot + identity 模板", () => {
+assertSync("单问年龄（Intake identity）→ slots×1 + identity 模板", () => {
   const q = "我今年多大";
   const out = applyCompositeRouteGuard(
     { ...retrieveStub, queryType: "identity", searchQuery: "个人简介 简历 年龄 出生年份", subTasks: [] },
     q
   );
-  if (out.routeMode !== "slot") {
-    throw new Error(`期望 slot，实际 ${out.routeMode}`);
+  if (out.routeMode !== "slots" || out.compositeSlots.length !== 1) {
+    throw new Error(`期望 slots×1，实际 ${out.routeMode}/${out.compositeSlots.length}`);
   }
   if (!out.searchQuery.includes("个人简介") || !out.searchQuery.includes("年龄")) {
     throw new Error(`searchQuery 未 canonicalize: ${out.searchQuery}`);
@@ -189,20 +196,24 @@ assertSync("单问年龄（Intake identity）→ slot + identity 模板", () => 
   }
 });
 
-assertSync("年龄多大（Intake identity）→ slot", () => {
+assertSync("年龄多大（Intake identity）→ slots×1", () => {
   const q = "年龄多大";
   const out = applyCompositeRouteGuard(
     { ...retrieveStub, queryType: "identity", searchQuery: "个人简介 简历 年龄", topics: ["personal", "resume"] },
     q
   );
-  if (out.routeMode !== "slot" || out.compositeSlots[0]?.queryType !== "identity") {
-    throw new Error(`slot identity 不符: ${out.routeMode}`);
+  if (
+    out.routeMode !== "slots" ||
+    out.compositeSlots.length !== 1 ||
+    out.compositeSlots[0]?.queryType !== "identity"
+  ) {
+    throw new Error(`slots identity 不符: ${out.routeMode}`);
   }
 });
 
 console.log("\n— 结构 / subTasks 兜底 —");
 
-assertSync("Intake subTasks ≥2 → composite", () => {
+assertSync("Intake subTasks ≥2 → slots", () => {
   const decision: IntakeRoutingDecision = {
     ...retrieveStub,
     queryType: "default",
@@ -213,12 +224,12 @@ assertSync("Intake subTasks ≥2 → composite", () => {
   const plan = buildFallbackRetrievalPlan("整体介绍一下", decision);
   if (plan.length < 4) throw new Error(`plan 不足: ${plan.length}`);
   const out = applyCompositeRouteGuard(decision, "整体介绍一下");
-  if (out.routeMode !== "composite") {
-    throw new Error(`期望 composite，实际 ${out.routeMode}`);
+  if (out.routeMode !== "slots" || out.compositeSlots.length < 2) {
+    throw new Error(`期望 slots≥2，实际 ${out.routeMode}/${out.compositeSlots.length}`);
   }
 });
 
-assertSync("用户句空 + Intake enumeration → slot", () => {
+assertSync("用户句空 + Intake enumeration → slots×1", () => {
   const decision: IntakeRoutingDecision = {
     ...retrieveStub,
     queryType: "enumeration",
@@ -263,8 +274,8 @@ assertSync("多问但 plan 空 → guard 补 fallback", () => {
     throw new Error(`reason=${guarded.retrievalPlanGuardReason}`);
   }
   const out = applyCompositeRouteGuard(guarded, q);
-  if (out.routeMode !== "composite") {
-    throw new Error(`期望 composite，实际 ${out.routeMode}`);
+  if (out.routeMode !== "slots" || out.compositeSlots.length < 5) {
+    throw new Error(`期望 slots≥5，实际 ${out.routeMode}/${out.compositeSlots.length}`);
   }
 });
 
