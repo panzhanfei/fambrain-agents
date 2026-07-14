@@ -102,6 +102,7 @@ flowchart TD
 | identity | 我叫什么、姓名 | 12 | 4 | hybrid（向量 + sparse） | personal 简历 Top1 |
 | enumeration（**experience**） | 哪几家公司 | 24 | 8 | **experience/** 全量 + fill | 每经历文件 ≥1 hit |
 | enumeration（**project**） | 哪些项目、项目名称 | 24 | 8 | **projects/** 全量 + fill | 每项目 md ≥1 hit |
+| **external_link** | GitHub / 仓库 / 对外 URL | 16 | 6 | hybrid | **personal 简历 + 含 URL 行** boost；`pickExcerpt` 优先 URL |
 | tech | 技术栈、框架 | 16 | 6 | hybrid | — |
 | default | 其余 | 12 | 5 | hybrid | — |
 
@@ -132,12 +133,14 @@ Intake `queryType` 与上表 **同名枚举**。
 | `pnpm --filter @fambrain/brain-service run verify:km-retrieve:live` | 真实语料 KM 五问 |
 | `pnpm --filter @fambrain/brain-service run verify:confidence-tier` | 置信分档单测 + KM live |
 | `pnpm --filter @fambrain/brain-service run verify:intake-coreference` | Intake 多轮指代 |
+| `pnpm --filter @fambrain/brain-service run verify:intake-link-lookup` | P0-25：external_link guard + stale multipart 单测 |
 | `pnpm --filter @fambrain/brain-service run eval:run` | Eval MVP |
 
 **全链路 spot check：**
 
 - 「我的名字是什么？」→ Top1 `personal/个人简历-潘展飞.md`，excerpt 含姓名表格行
 - 「我在哪几家公司上过班？」→ hits 均为 `experience/*.md`，notes 含列举覆盖段数
+- 「开源项目的 GitHub 链接有哪些？」→ `queryType=external_link`；hits 含 `github.com/panzhanfei/sentinel-monorepo` 与 `release-bot`（**非** aky offline 路径）
 
 ---
 
@@ -148,3 +151,5 @@ Intake `queryType` 与上表 **同名枚举**。
 | 2026-06 | v3 定稿：业界五层对标；Hybrid + RRF 接入主链 |
 | 2026-06 | Intake `queryType`、confidenceTier、列举 project/experience 分流 |
 | 2026-07 | 文档精简：移除排期表，保留设计与验收 |
+| 2026-07 | **`external_link` queryProfile**（P0-25）；Intake link lookup + continuation guard |
+| 2026-07 | **单问/多问 routeMode 合并为 `slots`（1～N 槽）**；`query-signals` 结构对齐 stale multipart |

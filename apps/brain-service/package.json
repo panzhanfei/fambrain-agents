@@ -19,6 +19,7 @@
     "eval:run": "tsx --env-file=../../.env scripts/eval/run-eval.ts",
     "verify:confidence-tier": "tsx --env-file=../../.env scripts/verify-confidence-tier.ts",
     "verify:intake-coreference": "tsx --env-file=../../.env scripts/verify-intake-coreference.ts",
+    "verify:intake-link-lookup": "tsx --env-file=../../.env scripts/verify-intake-link-lookup.ts",
     "verify:intake-chitchat": "tsx --env-file=../../.env scripts/verify-intake-chitchat.ts",
     "verify:composite-route": "tsx scripts/verify-composite-route.ts",
     "verify:enumeration-compose": "tsx scripts/verify-enumeration-compose.ts",

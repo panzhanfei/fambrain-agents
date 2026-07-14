@@ -61,6 +61,7 @@ const defaultTopicsForQueryType = (
     queryType: NonNullable<IntakeRoutingDecision["queryType"]>
 ): string[] => {
     if (queryType === "identity") return ["personal", "resume"];
+    if (queryType === "external_link") return ["personal", "resume", "project"];
     if (queryType === "enumeration") return ["project", "experience"];
     if (queryType === "tech") return ["project", "tech-stack"];
     return [];

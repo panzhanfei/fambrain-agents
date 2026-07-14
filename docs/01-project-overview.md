@@ -221,10 +221,12 @@ pnpm run dev
 | `verify:analyst-empty-hits` | `apps/brain-service/scripts/` | P0-12 / D5-5：空 hits skip LLM + insufficientEvidence |
 | `verify:intake-coreference` | `apps/brain-service/scripts/` | Intake 多轮指代 + repeat guard 单测 |
 | `verify:intake-chitchat` | `apps/brain-service/scripts/` | P0-13：chitchat briefReply 模板兜底 + live ×10 |
+| `verify:intake-link-lookup` | `apps/brain-service/scripts/` | P0-25：GitHub/对外链接 `external_link` guard + stale multipart 单测 |
 | `verify:composite-route` | `apps/brain-service/scripts/` | P0-15/R6-3：composite 路由 guard + merge + 单问年龄 slot 单测 |
 | `verify:composite-incremental` | `apps/brain-service/scripts/` | P0-15：槽答案缓存 + composite 增量 单测 |
 | `verify:user-fact` | `apps/brain-service/scripts/` | P0-16：Intake schema + Mem0 跨会话 QQ remember/recall |
-| `resolveEnumerationTarget` | `intake-coordinator/enumeration-target.ts` | plan label/topics → project \| experience 列举分流（P0-21） |
+| `resolveEnumerationTarget` | `intake-coordinator/composite/enumeration-target.ts` | plan label/topics → project \| experience 列举分流（P0-21） |
+| `query-signals.ts` | `intake-coordinator/query-signals.ts` | 问句结构工具：编号/并列/stale multipart 对齐（P0-25） |
 | `maxAnalystHitsForProfile` | `information-analyst/analyst-recall-limits.ts` | Analyst hits 上限与 KM profile 对齐（P0-20） |
 | `clear-pipeline-cache.ts` | `apps/brain-service/scripts/` | 清空 检索 hits 缓存 / 槽答案缓存 Redis + 进程 memory；见 `.env.example` 三层 cache 开关 |
 | `diagnose-age-query.ts` | `apps/brain-service/scripts/` | 年龄单问：路由 + KM 检索 + 语料字段诊断（需 Chroma） |

@@ -25,7 +25,10 @@ export const resolveAnalystQueryProfile = (input: {
 
 /** 单问非 tech 走纯文本流式，避免 JSON + think 解析失败退回 excerpt 体。 */
 export const prefersPlainTextAnalystStream = (profile: QueryProfile): boolean =>
-    profile === "enumeration" || profile === "identity" || profile === "default";
+    profile === "enumeration" ||
+    profile === "identity" ||
+    profile === "external_link" ||
+    profile === "default";
 
 /** @deprecated 测试兼容；新代码用 maxAnalystHitsForProfile */
 export const MAX_SUB_QUESTION_HITS = PROFILE_MAX_HITS.default;

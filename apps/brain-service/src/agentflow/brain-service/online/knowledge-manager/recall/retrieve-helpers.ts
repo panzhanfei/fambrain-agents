@@ -287,12 +287,34 @@ export const pickTableExcerpt = (
     return picked.length > 0 ? picked.join("\n") : null;
 };
 
+/** 优先截取含 URL / 对外链接 的段落（external_link profile） */
+const pickLinkExcerpt = (body: string, maxLen: number): string | null => {
+    const lines = body.split("\n").map((l) => l.trim()).filter(Boolean);
+    const linkLines = lines.filter((l) =>
+        /https?:\/\/|github\.com|gitlab\.com|gitee\.com|对外链接|线上预览/i.test(
+            l
+        )
+    );
+    if (linkLines.length === 0) return null;
+    let picked = "";
+    for (const line of linkLines) {
+        const add = (picked ? 1 : 0) + line.length;
+        if (picked.length + add > maxLen) break;
+        picked += (picked ? "\n" : "") + line;
+    }
+    return picked || linkLines[0]!.slice(0, maxLen);
+};
+
 /** KM-10：表格行优先，否则线性截断 */
 export const pickExcerpt = (
     body: string,
     tokens: string[],
     queryProfile?: QueryProfile
 ): string => {
+    if (queryProfile === "external_link") {
+        const link = pickLinkExcerpt(body, EXCERPT_MAX);
+        if (link) return link;
+    }
     const preferIdentity = queryProfile === "identity";
     const table = pickTableExcerpt(body, tokens, EXCERPT_MAX, preferIdentity);
     if (table) return table;
@@ -497,6 +519,54 @@ export const applyIdentityGuard = (
     const rest = hits.filter((h) => h.path !== personal.path);
     return {
         hits: [topHit, ...rest].slice(0, maxHits),
+        guardApplied: true,
+    };
+};
+
+const bodyHasPublicUrl = (body: string): boolean =>
+    /https?:\/\/[^\s)>]+/i.test(body);
+
+/** KM-11b：external_link 优先 personal 简历 + 含 URL 的 project 文档 */
+export const applyExternalLinkGuard = (
+    hits: KnowledgeHit[],
+    candidates: VectorChunkRow[],
+    ranked: RankedCandidate[],
+    queryProfile: QueryProfile,
+    maxHits: number,
+    tokens: string[]
+): { hits: KnowledgeHit[]; guardApplied: boolean } => {
+    if (queryProfile !== "external_link") {
+        return { hits, guardApplied: false };
+    }
+
+    const personal = findPersonalResumeCandidate(candidates);
+    const withUrl = candidates.filter((c) => bodyHasPublicUrl(c.body));
+    const priorityPaths = new Set<string>();
+    if (personal) priorityPaths.add(personal.path);
+    for (const c of withUrl) priorityPaths.add(c.path);
+
+    if (priorityPaths.size === 0) {
+        return { hits, guardApplied: false };
+    }
+
+    const boosted: KnowledgeHit[] = [];
+    for (const path of priorityPaths) {
+        const cand = candidates.find((c) => c.path === path);
+        if (!cand) continue;
+        const rankedRow = ranked.find((r) => r.path === path);
+        boosted.push({
+            path: cand.path,
+            title: cand.title,
+            excerpt:
+                rankedRow?.excerpt ??
+                pickExcerpt(cand.body, tokens, "external_link"),
+            relevance: Math.max(rankedRow?.relevance ?? 0, hits[0]?.relevance ?? 0, 0.4),
+        });
+    }
+
+    const rest = hits.filter((h) => !priorityPaths.has(h.path));
+    return {
+        hits: [...boosted, ...rest].slice(0, maxHits),
         guardApplied: true,
     };
 };

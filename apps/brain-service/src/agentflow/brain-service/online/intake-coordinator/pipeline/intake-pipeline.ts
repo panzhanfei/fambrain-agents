@@ -7,6 +7,8 @@ import {
   applyIntakeChitchatGuard,
   applyIntakeRetrievalPlanGuard,
   applyEnumerationListIntentGuard,
+  applyIntakeContinuationGuard,
+  applyIntakeLinkLookupGuard,
   type RoutedIntakeDecision,
 } from "@/agentflow/brain-service/online/intake-coordinator/guards";
 import {
@@ -135,6 +137,20 @@ export const runIntakePipeline = (
     ...summarizeDecision(decision),
   });
 
+  /** ②a 续问/指代：省略主语或误 clarify → retrieve（在 clarify 早退之前） */
+  const afterContinuation = applyIntakeContinuationGuard(
+    decision,
+    input.userQuestion,
+    input.intakeHistory
+  );
+  if (afterContinuation.continuationGuardReason !== "noop") {
+    logAgentOut("IntakeCoordinator", "guard_续问指代", {
+      reason: afterContinuation.continuationGuardReason,
+      ...summarizeDecision(afterContinuation),
+    });
+  }
+  decision = afterContinuation;
+
   /** ② 指代/澄清：仅 clarify intent */
   if (decision.intent === "clarify") {
     const clarifyEarlyExit = isClarifyEarlyExit(decision);
@@ -190,6 +206,19 @@ export const runIntakePipeline = (
     });
     return { decision: routed, parseUsedFallback, earlyExit: true };
   }
+
+  /** ⑤a 对外链接：纠正 GitHub/URL 问法误标 enumeration */
+  const afterLinkLookup = applyIntakeLinkLookupGuard(
+    decision,
+    input.userQuestion
+  );
+  if (afterLinkLookup.linkLookupGuardReason !== "noop") {
+    logAgentOut("IntakeCoordinator", "guard_对外链接", {
+      reason: afterLinkLookup.linkLookupGuardReason,
+      ...summarizeDecision(afterLinkLookup),
+    });
+  }
+  decision = afterLinkLookup;
 
   /** ⑤ 检索计划：多问并列时补全/规范化 retrievalPlan（与 检索 hits 缓存 key 对齐） */
   const afterPlan = applyIntakeRetrievalPlanGuard(

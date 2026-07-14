@@ -79,7 +79,7 @@ knowledge-manager/
 
 ### 推荐阅读顺序
 
-1. `nodes/retrieval-node.ts` — 单问 vs composite 分支、检索 hits 缓存
+1. `nodes/retrieval-node.ts` — **slots×1 vs slots×N** 分支、检索 hits 缓存
 2. `recall/retrieve.ts` — Hybrid → rank → coverage 主路径
 3. `composite/` — 槽答案增量与多槽并行
 4. `profile/query-profile.ts` + `profile/km-config.ts` — 分档参数
@@ -157,7 +157,7 @@ KnowledgeRetrievalResult { hits, coverage, notes, confidenceTier }
 |------|------|-----------|
 | `searchQuery` | Intake | 主检索文本；检索 hits 缓存 key 之一 |
 | `queryType` | Intake | 映射 queryProfile；检索 hits 缓存 key 之一 |
-| `routeMode` / `compositeSlots` | Intake composite guard | `slots`（1～N 槽）或 `list`（列举分页） |
+| `routeMode` / `compositeSlots` | Intake composite guard | **`slots`（1～N 槽，单问=1 槽）** 或 `list`（列举分页） |
 | `topics` | Intake | **仅**拼入向量 semantic query（KM-01） |
 | `subTasks` | Intake | sparse token + rank 辅助 |
 

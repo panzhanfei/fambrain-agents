@@ -41,6 +41,7 @@ import {
 import {
     applyEnumerationFill,
     applyIdentityGuard,
+    applyExternalLinkGuard,
     buildEnumerationCoverage,
     findPersonalResumeCandidate,
     isExperienceEntryPath,
@@ -479,6 +480,16 @@ const finalizeHits = (
             };
         }
     }
+
+    const linkGuarded = applyExternalLinkGuard(
+        result.hits,
+        candidates,
+        ranked,
+        queryProfile,
+        maxHits,
+        tokens
+    );
+    result = { ...result, hits: linkGuarded.hits };
 
     const fillTarget = enumerationTarget ?? "experience";
     const filled = applyEnumerationFill(

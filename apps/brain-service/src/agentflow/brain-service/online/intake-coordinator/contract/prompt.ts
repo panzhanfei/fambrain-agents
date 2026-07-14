@@ -10,7 +10,7 @@ export type IntakeRetrievalPlanItem = {
     label: string;
     /** 该子问题专用检索词（须含实体/字段词，勿复制用户口语整句） */
     searchQuery: string;
-    queryType: "identity" | "enumeration" | "tech" | "default";
+    queryType: "identity" | "enumeration" | "tech" | "external_link" | "default";
     topics: string[];
 };
 
@@ -57,7 +57,7 @@ export type IntakeRoutingDecision = {
      * 检索问法类型（retrieve_and_answer / summarize 需查库时建议填写）；
      * 与 KnowledgeManager queryProfile 对齐。
      */
-    queryType: "identity" | "enumeration" | "tech" | "default" | null;
+    queryType: "identity" | "enumeration" | "tech" | "external_link" | "default" | null;
     /**
      * intent 为 clarify 时：向用户提出的单个澄清问题；
      * 其他 intent 为 null。
@@ -103,7 +103,7 @@ export const prompt = `你是 FamBrain 系统中的「入口接线员」（Intak
 ## retrievalPlan（多问 / 综合档案 · 必读）
 - 用户一条消息含 **≥2 个独立子问题**（如「叫什么？多大？做过什么项目？」）→ retrievalPlan **至少 2 项**，每项对应一次检索。
 - 每项 **searchQuery** 须针对该子问题写关键词（含目录词如「个人简介」「简历」「项目经历」），**不要**把整句用户口语原样复制 5 遍。
-- **queryType 按子问题选**：姓名/年龄/学历/行业 → identity；列举全部项目/公司 → enumeration；技术栈 → tech。
+- **queryType 按子问题选**：姓名/年龄/学历/行业 → identity；列举全部项目/公司 → enumeration；技术栈 → tech；**GitHub/仓库/对外链接/URL** → external_link（**禁止**用 enumeration）。
 - 单问、单点事实：retrievalPlan 为 **[]**（空数组），仅用顶层 searchQuery + queryType。
 
 ## 意图（intent）选用规则
@@ -184,11 +184,11 @@ resume, experience, project, tech-stack, architecture, team-lead, interview, ope
   "topics": string[],
   "language": "zh | en | mixed",
   "confidence": number,
-  "queryType": "identity | enumeration | tech | default | null",
+  "queryType": "identity | enumeration | tech | external_link | default | null",
   "clarifyingQuestion": string | null,
   "briefReply": string | null,
   "retrievalPlan": [
-    { "label": string, "searchQuery": string, "queryType": "identity | enumeration | tech | default", "topics": string[] }
+    { "label": string, "searchQuery": string, "queryType": "identity | enumeration | tech | external_link | default", "topics": string[] }
   ],
   "userFactKey": string | null,
   "userFactLabel": string | null,

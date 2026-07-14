@@ -2,7 +2,12 @@
  * KM-08 queryProfile：Intake queryType 为单一意图来源（Wave C / QU-06）。
  * inferQueryProfile 仅用于 Intake 解析失败兜底、脚本直调 KM（queryType 未传）。
  */
-export type QueryProfile = "identity" | "enumeration" | "tech" | "default";
+export type QueryProfile =
+    | "identity"
+    | "enumeration"
+    | "tech"
+    | "external_link"
+    | "default";
 
 const joinQueryText = (searchQuery: string, subTasks: string[]): string =>
     [searchQuery, ...subTasks].join(" ").toLowerCase();

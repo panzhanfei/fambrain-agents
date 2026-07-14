@@ -54,10 +54,14 @@ intake-coordinator/
 │   ├── intake-pipeline.ts # runIntakePipeline()
 │   └── parse-intake.ts    # parseIntakeDecision(), defaultIntakeDecision()
 │
+├── query-signals.ts       ← 问句结构工具（编号/并列/过期 plan；无意图词表）
+│
 ├── nodes/                 ← LangGraph 图节点（仅 intake）
 │   └── intake-node.ts     # runIntakeNode()
 │
 ├── guards/                ← LLM 之后的规则兜底
+│   ├── intake-continuation-guard.ts
+│   ├── intake-link-lookup-guard.ts
 │   ├── intake-chitchat-guard.ts
 │   ├── intake-retrieval-plan-guard.ts
 │   ├── composite-route-guard.ts
@@ -126,6 +130,9 @@ LLM 原始 JSON
     ▼ parseIntakeDecision() / defaultIntakeDecision()
     │   contract/schema.ts + pipeline/parse-intake.ts
     │
+    ▼ applyIntakeContinuationGuard()     guards/intake-continuation-guard.ts
+    │   短省略续问 / 历史含 URL → retrieve（在 clarify 早退之前）
+    │
     ▼ LLM指代决策（透传 + 日志）       pipeline/intake-pipeline.ts
     │   clarify → pipeline 早退（跳过 plan/composite）
     │
@@ -135,11 +142,62 @@ LLM 原始 JSON
     ▼ isUserFactIntent → pipeline 早退
     │   （解析在 ../user-fact/nodes/user-fact-node.ts）
     │
+    ▼ applyIntakeLinkLookupGuard()       guards/intake-link-lookup-guard.ts
+    │   queryType=external_link：stale multipart → 单槽；编号行 → 分实体槽
+    │
     ▼ applyIntakeRetrievalPlanGuard()    guards/intake-retrieval-plan-guard.ts
     │
     ▼ applyCompositeRouteGuard()         guards/composite-route-guard.ts
     │
+    ▼ applyEnumerationListIntentGuard()  guards/enumeration-list-intent.ts
+    │
     ▼ RoutedIntakeDecision → state.decision
+```
+
+详见坑点 [§2.5.9 GitHub 对外链接](../../../../../../../docs/04-pitfalls.md#259-简历-github--对外链接问法-p0-25--2026-07)（P0-25）。
+
+### 3.4 单问 / 多问统一（`routeMode=slots` · 2026-07）
+
+早期文档曾写 `routeMode` 为 `single` / `slot` / `composite` 三档；**现已合并**：凡需 KM 检索 → **`routeMode=slots`**，`compositeSlots.length` **1～N**。单问只是 **1 槽的 slots**，多问是 **≥2 槽的 slots**，下游 KM / Analyst 共用同一套分槽并行 + merge 路径。
+
+```text
+applyCompositeRouteGuard
+    │
+    ├─ resolveCompositeRoute() → slots.length ≥ 1
+    │       → applySlotsDecision(slots)     # 1～N 槽，routeMode 恒为 slots
+    │
+    └─ slots.length === 0
+            → decisionToRetrievalSlot()     # 包装为 1 槽 slots_default
+```
+
+**为何合并：** 单问、多问原先在 KM / cache / Analyst 分叉（single vs composite），重复逻辑多；统一后 cache key、日志、verify 脚本只需看 `compositeSlots.length`。
+
+### 3.5 单问 ↔ 多问结构对齐（`query-signals.ts`）
+
+LLM 的 `retrievalPlan` / `subTasks` 可能**与当前问句不一致**（尤其多轮会话 inherited plan）。guard 用**结构信号**对齐，**不用** github/开源 等意图词表：
+
+| 函数 | 判断什么 | 典型用途 |
+|------|----------|----------|
+| `hasExplicitMultipartStructure(q)` | ≥2 编号行，或 ≥2 问号/并列 | 当前问句是否**真**多问 |
+| `hasStaleMultipartFromDecision(d, q)` | plan≥2 或 subTasks≥2，但问句**无**并列结构 | **过期 plan** → 应收束 |
+| `extractNumberedPlanUnits(q)` | 从 `1.` `2.` 行提取子问 label | 按实体拆槽 |
+| `decisionRequestsExternalLink(d)` | LLM 已标 `external_link` | link guard 入口，不在 guard 猜意图 |
+
+**`applyIntakeLinkLookupGuard` 收束 / 展开：**
+
+| 问句 | LLM 输出 | guard 结果 | `linkLookupGuardReason` |
+|------|----------|------------|-------------------------|
+| 「开源两个项目 github 都给我」（单句） | plan 2 项（物联网、工具库） | **收束 1 槽** + `EXTERNAL_LINK_SLOT` | `aggregate_external_link` |
+| 同上 + 正文含 `1. … 2. …` 两行 | plan 空或任意 | **展开 2 槽**，每槽 entity + 对外链接 canonical query | `multipart_external_link` |
+| 单句 external_link | queryType 已对 | 补全 searchQuery / topics | `single_external_link` / `harmonize_query_type` |
+
+⑤ `applyIntakeRetrievalPlanGuard` 只做**多问补 plan**（`filled_fallback`）与 canonicalize，**不**收束 stale plan（收束在 profile 专用 guard，如 link lookup）。
+
+**验证：**
+
+```bash
+pnpm --filter @fambrain/brain-service run verify:intake-link-lookup   # 收束 + 展开 + 续问
+pnpm --filter @fambrain/brain-service run verify:composite-route        # 1 槽 / N 槽 slots 路由
 ```
 
 ### 3.3 Web 运行日志里 Intake 的标签
@@ -151,10 +209,13 @@ LLM 原始 JSON
 | `同问短路` | 同句再问命中 |
 | `解析LLM输出` | parse 成功 / fallback |
 | `LLM指代决策` | LLM 指代/澄清 intent；clarify 时标记 earlyExit |
+| `guard_续问指代` | continuation：省略续问 → retrieve |
 | `guard_闲聊` | chitchat 注入固定 briefReply |
 | `guard_用户记忆` | remember / recall |
+| `guard_对外链接` | external_link：stale multipart / 分槽 |
 | `guard_检索计划` | retrievalPlan 补全 / canonicalize |
 | `guard_复合路由` | routeMode、槽位列表 |
+| `guard_列举分页` | listIntent=exhaustive 等 |
 | `最终路由` | 交给下游的 decision 摘要 |
 
 ---
@@ -171,7 +232,7 @@ Intake 产出两层结构：**LLM 层** `IntakeRoutingDecision` → **编排层*
 |------|------|------|--------|
 | `label` | string | 子问题摘要，如「姓名」「项目经历」 | Analyst 分段标题；composite 槽 label |
 | `searchQuery` | string | 该子问题专用检索词（含目录词如「个人简介 简历」） | KM 检索；检索 hits 缓存 key 的一部分 |
-| `queryType` | identity \| enumeration \| tech \| default | 该子问题的检索 profile | KM `queryProfile` |
+| `queryType` | identity \| enumeration \| tech \| **external_link** \| default | 该子问题的检索 profile | KM `queryProfile` |
 | `topics` | string[] | 语料主题 hint，如 personal / project | KM 过滤 / 精排 |
 
 ### 4.2 `IntakeRoutingDecision`（LLM 工单 — 核心）
@@ -186,10 +247,10 @@ Intake 产出两层结构：**LLM 层** `IntakeRoutingDecision` → **编排层*
 | **topics** | string[] | 语料主题标签 | personal, resume, project, experience, tech-stack… |
 | **language** | zh \| en \| mixed | 用户语言 | Analyst / 短答话术 |
 | **confidence** | 0–1 | 模型对路由的把握 | 日志 / eval 用 |
-| **queryType** | identity \| enumeration \| tech \| default \| null | 检索问法类型 | 与 KM `queryProfile` 对齐；不检索时为 null |
+| **queryType** | identity \| enumeration \| tech \| **external_link** \| default \| null | 检索问法类型 | 与 KM `queryProfile` 对齐；GitHub/URL 用 **external_link**（**禁止** enumeration）；不检索时为 null |
 | **clarifyingQuestion** | string \| null | 澄清追问（只问一个） | 仅 intent=clarify 时填 |
 | **briefReply** | string \| null | 极短直接回复（≤80 字） | chitchat / clarify；retrieve / summarize 必须为 null |
-| **retrievalPlan** | IntakeRetrievalPlanItem[] | 多问并列时每项一次检索 | 单问为 `[]`；≥2 项触发 composite |
+| **retrievalPlan** | IntakeRetrievalPlanItem[] | 多问并列时每项一次检索 | 单问常为 `[]`；≥2 项 → **slots 多槽**（与 1 槽同属 `routeMode=slots`） |
 | **userFactKey** | string \| null | 记忆字段 slug | qq / wechat / phone / email / dingtalk… |
 | **userFactLabel** | string \| null | 展示名 | 「QQ号」「微信号」 |
 | **userFactValue** | string \| null | remember 时的值 | recall 时为 null |
@@ -213,6 +274,7 @@ Intake 产出两层结构：**LLM 层** `IntakeRoutingDecision` → **编排层*
 |-----------|------|------------------|
 | `identity` | 姓名、年龄、学历、行业 | `个人简介 简历 姓名` |
 | `enumeration` | 列举公司 / 全部项目 | `哪几家公司 工作经历` |
+| `external_link` | GitHub、仓库、对外 URL（**非**项目名穷举） | `开源项目 GitHub 链接 个人简历` |
 | `tech` | 技术栈、框架 | `城管平台 技术栈 React` |
 | `default` | 其他单点事实 | `西安奥卡云 工作职责` |
 
@@ -357,7 +419,7 @@ pipeline:
   → retrievalPlan → composite → retrieval → analyst
 ```
 
-### 5.5 多问 composite
+### 5.5 多问 slots×N（原 composite 多槽）
 
 ```text
 user: "我叫什么？今年多大？做过哪些项目？"
@@ -458,7 +520,8 @@ defaultIntakeDecision(userQuestion):
 
 | 文件 | 职责 |
 |------|------|
-| `intake-pipeline.ts` | parse → LLM指代决策（透传/clarify 早退）→ guard 链 |
+| `intake-continuation-guard.ts` | 省略续问 / 历史含 URL → retrieve（P0-25） |
+| `intake-link-lookup-guard.ts` | `external_link`：stale multipart 收单槽、编号行分实体（P0-25） |
 | `intake-chitchat-guard.ts` | chitchat 注入服务端固定 briefReply |
 | `intake-retrieval-plan-guard.ts` | 多问补 retrievalPlan；canonicalize 对齐 检索 hits 缓存 |
 | `composite-route-guard.ts` | plan → routeMode + compositeSlots |
@@ -518,13 +581,13 @@ Pipeline 内主要调用点：
 |---|------|--------|
 | 1 | `你好` | chitchat；无 retrieval |
 | 2 | `我的名字` | identity；有 retrieval |
-| 3 | `城管平台用了什么技术` | tech；single 路由 |
+| 3 | `城管平台用了什么技术` | tech；**slots×1** |
 | 4 | `我在哪几家公司上过班？` | enumeration |
 | 5 | `那个项目呢？`（单轮） | clarify |
 | 6 | 上轮问城管技术 → `那个项目呢？` | 指代补全；有 retrieval |
 | 7 | `我的qq是734858469` | user_fact remember |
 | 8 | 新对话 `我的qq是多少` | user_fact recall |
-| 9 | `我叫什么，我做过什么项目，我在那几家公司上过班，近两年在干什么？` | composite 多槽 |
+| 9 | `我叫什么，我做过什么项目，我在那几家公司上过班，近两年在干什么？` | **slots×N**（多槽并行） |
 | 10 | 第 9 句原样再问 | 同问短路 |
 
 对应 eval 定义：`apps/brain-service/scripts/eval/golden.json`（G1～G5b、GMem、profileProbe）。
@@ -547,8 +610,8 @@ pnpm --filter @fambrain/brain-service run golden:regression   # G1～G5b + GMem
 
 | Intake 产出字段 | 下游消费者 |
 |----------------|-----------|
-| `decision.searchQuery` + `queryType` + `topics` | KnowledgeManager（single/slot） |
-| `decision.compositeSlots[]` | KM 多槽并行 + Analyst 分段 |
+| `decision.searchQuery` + `queryType` + `topics` | KnowledgeManager（**slots×1** 时与多槽同路径） |
+| `decision.compositeSlots[]` | KM 分槽并行（1～N 槽）+ Analyst 分段（≥2 槽时） |
 | `decision.intent === summarize_content` | ContentSummarizer |
 | `intent` remember/recall | [`../user-fact/`](../user-fact/) → Mem0 |
 | `decision.clarifyingQuestion` / `briefReply` | respondEarly → 直接 answer |

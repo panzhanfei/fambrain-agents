@@ -81,6 +81,10 @@ export const buildFacetKey = (source: FacetSource): string => {
         return `id:profile:${ln.slice(0, 24) || "general"}`;
     }
 
+    if (canonical.queryType === "external_link") {
+        return `link:${ln.slice(0, 32) || "external"}`;
+    }
+
     if (canonical.queryType === "tech") {
         return `tech:${ln.slice(0, 32) || "general"}`;
     }

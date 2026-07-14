@@ -9,6 +9,7 @@ export const intakeQueryTypeSchema = z.enum([
   "identity",
   "enumeration",
   "tech",
+  "external_link",
   "default",
 ]);
 export const intakeIntentSchema = z.enum([

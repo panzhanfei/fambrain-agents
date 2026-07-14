@@ -20,6 +20,14 @@ export {
     isCompositeProfileQuestion,
 } from "./composite-route-guard";
 export {
+    applyIntakeContinuationGuard,
+} from "./intake-continuation-guard";
+export type { IntakeContinuationGuardReason } from "./intake-continuation-guard";
+export {
+    applyIntakeLinkLookupGuard,
+} from "./intake-link-lookup-guard";
+export type { IntakeLinkLookupGuardReason } from "./intake-link-lookup-guard";
+export {
     applyEnumerationListIntentGuard,
     resolveEnumerationContinuation,
     buildEnumerationListDecision,

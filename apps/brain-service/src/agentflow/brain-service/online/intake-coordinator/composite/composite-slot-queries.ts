@@ -54,6 +54,16 @@ export const EMPLOYERS_SLOT: CompositeRetrievalSlot = {
     subTasks: [],
 };
 
+/** canonical：对外链接 / 仓库 URL */
+export const EXTERNAL_LINK_SLOT: CompositeRetrievalSlot = {
+    id: "external_link",
+    label: "对外链接",
+    searchQuery: "个人简介 简历 对外链接 仓库地址 线上预览 URL",
+    queryType: "external_link",
+    topics: ["personal", "resume", "project"],
+    subTasks: [],
+};
+
 /** canonical：近况 */
 export const RECENT_SLOT: CompositeRetrievalSlot = {
     id: "recent",
@@ -94,6 +104,16 @@ export const facetTemplateForQueryType = (
 ): CompositeRetrievalSlot | null => {
     if (!queryType || queryType === "tech") return null;
     if (queryType === "identity") return { ...IDENTITY_SLOT };
+    if (queryType === "external_link") {
+        const label = planItem?.label?.trim() ?? "";
+        if (
+            /对外链接|仓库|链接|github|url/i.test(label) &&
+            !/项目.*地址|模板|工具库|草稿|归档/i.test(label)
+        ) {
+            return { ...EXTERNAL_LINK_SLOT };
+        }
+        return null;
+    }
     if (queryType === "enumeration") {
         const targetInput = planItem ?? { label: "", searchQuery: "", topics };
         if (

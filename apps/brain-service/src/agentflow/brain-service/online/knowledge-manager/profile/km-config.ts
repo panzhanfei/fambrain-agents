@@ -15,6 +15,7 @@ export const PROFILE_VECTOR_TOP_K = {
     identity: 12,
     enumeration: 24,
     tech: 16,
+    external_link: 12,
     default: 12,
 } as const;
 
@@ -22,6 +23,7 @@ export const PROFILE_MAX_HITS = {
     identity: 4,
     enumeration: 8,
     tech: 6,
+    external_link: 6,
     default: 5,
 } as const;
 

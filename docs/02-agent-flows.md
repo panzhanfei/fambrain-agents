@@ -211,9 +211,17 @@ flowchart TD
 | 1 | 拼 prompt | 系统指令定义 intent / searchQuery 等 | `IntakeCoordinator/prompt.ts` | `prompt` |
 | 2 | 调模型 | 一次 `invoke`；模型见 `OLLAMA_MODEL_INTAKE_COORDINATOR` | `IntakeCoordinator/ollama-chat.ts` | `completeIntakeCoordinator()` |
 | 3 | 解析 JSON | 抠 JSON → **Zod parse**；`userFact*` 缺省视为 `null`（勿误 fallback 检索） | `intake-coordinator/pipeline/parse-intake.ts`, `schema.ts` | `parseIntakeDecision()`, `intakeRoutingSchema` |
-| 4 | 兜底 | 解析失败 → `| 5 | 编排 | LangGraph 条件边 | `pipeline/graph/routes.ts` + `compile.ts` | `routeAfterIntake()` 等 |
+| 4 | 兜底 | 解析失败 → `defaultIntakeDecision()` | `pipeline/parse-intake.ts` | `defaultIntakeDecision()` |
+| 5 | Guard 链 | parse 后依次 guard（见下） | `pipeline/intake-pipeline.ts` | `runIntakePipeline()` |
+| 6 | 编排 | LangGraph 条件边 | `pipeline/graph/routes.ts` + `compile.ts` | `routeAfterIntake()` 等 |
 
-**Guard 链（compile intake 节点内）：** **列举续问短路**（「更多项目 / 列出全部」→ `resolveEnumerationContinuation()`，跳过 LLM）→ LLM 路由 → **LLM 指代/澄清** → chitchat → **retrievalPlan guard** → **`routeUserFactFromIntake`**（P0-16）→ **`applyCompositeRouteGuard`**（P0-15）→ **`applyEnumerationListIntentGuard`**（单问穷举 → `listIntent=exhaustive`）。详见 [坑点 §2.5.6](./04-pitfalls.md#256-综合问项目段只列-2-个-p0-22--2026-07)。
+**Guard 链（`runIntakePipeline`，compile intake 节点内）：** **列举续问短路**（「更多项目 / 列出全部」→ `resolveEnumerationContinuation()`，**跳过 LLM**）→ LLM 路由 → **`applyIntakeContinuationGuard`**（省略续问 / 历史含 URL → retrieve，**在 clarify 早退之前** · P0-25）→ **LLM 指代/澄清**（clarify 可早退）→ chitchat → userFact 早退 → **`applyIntakeLinkLookupGuard`**（`queryType=external_link` 时纠正 stale multipart / 分槽 · P0-25）→ **retrievalPlan guard** → **`applyCompositeRouteGuard`**（P0-15）→ **`applyEnumerationListIntentGuard`**（单问穷举 → `listIntent=exhaustive` · P0-22）。详见 [坑点 §2.5.6](./04-pitfalls.md#256-综合问项目段只列-2-个-p0-22--2026-07)、[§2.5.9 GitHub 对外链接](./04-pitfalls.md#259-简历-github--对外链接问法-p0-25--2026-07)。
+
+**queryType 扩展：** 除 identity / enumeration / tech / default 外，Intake 产出 **`external_link`**（GitHub、仓库、对外 URL）；与 KM `queryProfile` 同名，**不走** enumeration projects fill。见 [km-retrieval-design §六](./km-retrieval-design.md#六queryprofile-参数表)。
+
+**单问 / 多问统一路由（2026-07）：** 检索路径不再分 `single` / `slot` / `composite` 三种 **routeMode**，一律 **`routeMode=slots`**，`compositeSlots.length` 为 1～N。KM `retrieval-node` 与 Analyst 仅按槽数分支（1 槽 vs ≥2 槽）。`applyCompositeRouteGuard` 保证 0 槽时 fallback 为 1 槽。
+
+**单问 ↔ 多问结构对齐：** `query-signals.ts` 提供 **`hasExplicitMultipartStructure`**（当前问句是否真有多并列）与 **`hasStaleMultipartFromDecision`**（LLM plan/subTasks≥2 但问句无并列 → **过期 plan**）。`applyIntakeLinkLookupGuard` 据此 **收束**（泛化单句 + inherited 多槽 plan → 1 槽 `EXTERNAL_LINK_SLOT`）或 **展开**（编号 `1.` `2.` 行 → 按实体多槽）。⑤ retrievalPlan guard 仍负责多问 **补 plan**（`filled_fallback`），不与收束混用。详见 [坑点 §2.5.3](./04-pitfalls.md#253-p0-15--r6-3--composite-分槽检索-2026-06)、[§2.5.9](./04-pitfalls.md#259-简历-github--对外链接问法-p0-25--2026-07)。
 
 ### 2.5 跨会话用户事实 userFact — P0-16 ✅
 
@@ -572,7 +580,8 @@ pnpm --filter @fambrain/brain-service run experiment:bind-tools -- "我的名字
 | 英文字段 | 中文名 | 含义 | 典型去向 |
 |----------|--------|------|----------|
 | `intent` | 意图类型 | 查库回答 / 直接答 / 澄清 / 闲聊 / 拒答 | 编排器分支 |
-| `| `searchQuery` | 检索查询句 | 去掉寒暄后的检索关键词句 | → KnowledgeManager 入参 |
+| `searchQuery` | 检索查询句 | 去掉寒暄后的检索关键词句 | → KnowledgeManager 入参 |
+| `queryType` | 检索问法 | identity / enumeration / tech / **external_link** / default | → KM `queryProfile` |
 | `subTasks` | 子任务列表 | 复杂问题拆成多句 | → KM / Analyst |
 | `topics` | 主题标签 | 如 `resume`、`aky` | → KnowledgeManager 入参 |
 | `language` | 回复语言 | `zh` / `en` / `mixed` | → InformationAnalyst 入参 |
@@ -589,8 +598,11 @@ pnpm --filter @fambrain/brain-service run experiment:bind-tools -- "我的名字
 |------|----------|--------------|
 | `intent === "clarify"` 且 `clarifyingQuestion` 有值 | `respondEarly` | 澄清提问 |
 | `intent` 为 `chitchat` / `out_of_scope` 且 `briefReply` 有值 | `respondEarly` | 简短回复 |
-| `intent === "summarize_content"` 且 `| `intent === "summarize_content"` 且 `| `intent` 为 `remember_user_fact` / `recall_user_fact` 且 Intake 填齐 schema | **userFact** → 终稿 | SSE：`user_fact`；**不经 KM / FC / Analyst** |
-| `| `| FactChecker `passed=false` 且 `retryCount<1` | 再 `retrieval` → 再 **FactChecker** | 同轮可能见两次「核查证据…」 |
+| `intent === "summarize_content"` 且需查库（`searchQuery` 非空） | `retrieval` → **contentSummarizer** | 摘要终稿 |
+| `intent === "summarize_content"` 且无需查库 | **contentSummarizer** | 摘要终稿 |
+| `intent` 为 `remember_user_fact` / `recall_user_fact` 且 Intake 填齐 schema | **userFact** → 终稿 | SSE：`user_fact`；**不经 KM / FC / Analyst** |
+| `retrieve_and_answer` / composite 等需 KM | `retrieval` → **FactChecker** → … → **Analyst** | 检索 + 分析终稿 |
+| FactChecker `passed=false` 且 `retryCount<1` | 再 `retrieval` → 再 **FactChecker** | 同轮可能见两次「核查证据…」 |
 | 其余 | `respondEarly` | 简短说明或请用户补充 |
 
 ## 流式 SSE 事件（`POST .../messages`）

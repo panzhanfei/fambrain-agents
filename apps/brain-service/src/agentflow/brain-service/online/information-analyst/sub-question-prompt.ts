@@ -24,6 +24,11 @@ export const subQuestionStreamRulesForProfile = (
         return `${streamRulesBase}
 - **档案型（queryType=identity）**：直接给出字段值；只引 excerpt 原文；**禁止**按当前年份推算年龄。`;
     }
+    if (profile === "external_link") {
+        return `${streamRulesBase}
+- **对外链接（queryType=external_link）**：只输出 hits excerpt 中出现的 URL/链接；须**逐条列出**全部可见链接。
+- hits 提到项目/文档但 excerpt **无** \`http\` / \`github.com\`：说明「语料中该项目无公开仓库链接（可能为离线/内部副本）」，**禁止**输出其他项目的 URL。`;
+    }
     return `${streamRulesBase}
 - 年龄/「今年多大」：只引 excerpt 中的出生日期或原文年龄；禁止自行推算。
 - 若有列举需求：逐条列名称，勿压缩为一句概括。`;
