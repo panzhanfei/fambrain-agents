@@ -20,12 +20,16 @@
 
 **链路：** 用户提问 → **轮次开始** → 意图识别 → 检索 → **证据核查** → **内容整理** → 分析 → 回答 → **轮次结束**。跨轮 **两层 cache**（同问短路 + 检索结果 cache）见 [坑点 §2.2](./04-pitfalls.md)。
 
-**架构双线（2026-06）：**
+**架构双线（2026-06，目录 2026-07 对齐）：**
 
 | 线 | 目录 | 编排 |
 |----|------|------|
-| **在线** | `agentflow/brain-service/online/` + `pipeline/` | LangGraph 骨架（`graph/`）+ SSE 运行时（`runtime/`） |
-| **离线** | `agentflow/brain-service/offline/` | 手动脚本：Indexer / DocParser / Learning 等 |
+| **在线 Agent 实现** | `agentflow/agents/online/`（含 `tool-orchestrator/`） | 各 `*-node.ts` 图节点 |
+| **编排骨架 + SSE** | `agentflow/pipeline/` | LangGraph `graph/` + `runtime/` |
+| **离线** | `agentflow/agents/offline/` | 手动脚本：Indexer / DocParser / Learning 等 |
+| **工具定义** | `agentflow/tools/` | LangChain StructuredTool（被 tool-orchestrator 调用） |
+
+架构演进详见 [架构 v2 §9 代码布局](./05-architecture-v2-tool-orchestration.md#9-代码布局演进2026-07)、[§10 列举 per-slot](./05-architecture-v2-tool-orchestration.md#10-列举执行-per-slot-演进-2026-07)。
 
 ## 全链路总览（离线入库 + 在线对话）
 
@@ -73,15 +77,18 @@ flowchart TB
 
 ## 在线编排流程
 
-入口接线员只输出 **JSON 路由决策**；**进哪个节点由 LangGraph 查表决定**（`IntakeRoutingDecision` 见 `agentflow/brain-service/online/intake-coordinator/prompt.ts`），不是模型在回复里写「下一个 Agent 名字」。
+入口接线员只输出 **JSON 路由决策**；**进哪个节点由 LangGraph 查表决定**（`IntakeRoutingDecision` 见 `agentflow/agents/online/intake-coordinator/prompt.ts`），不是模型在回复里写「下一个 Agent 名字」。
 
-**Pipeline 目录（2026-06 方案 2）：**
+**Pipeline 目录（2026-06 方案 2 · 2026-07 对齐）：**
 
 | 子目录 | 职责 | 关键文件 |
 |--------|------|----------|
 | `pipeline/graph/` | **LangGraph 骨架**：状态、条件路由、节点注册 | `state.ts`、`routes.ts`、`compile.ts`（~50 行） |
 | `pipeline/runtime/` | **SSE 运行时**：初始 state、耗时、stream 消费 | `initial-state.ts`、`pipeline-timing.ts`、`stream.ts` |
-| `agents/online/*/` | **节点业务**：各 Agent 的 `*-node.ts` | 见下表 |
+| `agents/online/*/` | **节点业务**：各 Agent 的 `*-node.ts`（含 **`tool-orchestrator/`**） | 见下表 |
+| `agents/offline/*/` | **离线脚本**：Indexer / DocParser / Learning | — |
+| `tools/` | LangChain 工具定义 | `retrieve-corpus.ts`、`search-web.ts` 等 |
+| `utils/` | 跨 Agent 小工具 | `json-parse.ts`、`zod-utils.ts` |
 
 实现：`pipeline/graph/compile.ts`（只注册节点 + 连边）· `pipeline/runtime/stream.ts` → `runPipelineStream()`（SSE + 步骤耗时；**不含** Agent 业务逻辑）。
 
@@ -136,7 +143,7 @@ flowchart TD
 2. **同问短路** `findRepeatAnswerInHistory` — 命中 → `exitEarly` + `respondEarly`
 3. `preparePipelineMemory` — Mem0 检索 + LangMem 摘要 → 写入 state 的 `memoryBlock` / `intakeHistory` / `userMemories`
 
-**代码：** `agentflow/brain-service/online/prepare-turn-start/` · 图节点 `compile.ts` · SSE step 名 **`prepare_turn_start`**（UI：准备上下文）
+**代码：** `agentflow/agents/online/prepare-turn-start/` · 图节点 `compile.ts` · SSE step 名 **`prepare_turn_start`**（UI：准备上下文）
 
 **验证：** `pnpm run verify:repeat-question-smoke`（同问短路，无 Ollama）；全链路 `verify:fact-checker:pipeline`（首步 `prepare_turn_start`，末步 `persist_turn_end`）。
 
@@ -150,7 +157,7 @@ flowchart TD
 2. `persistLearningAfterTurn` — Learning 候选（`userFact` 轮次跳过）
 3. **跳过：** `repeatQuestionHit`、空 `answer`
 
-**代码：** `agentflow/brain-service/online/persist-turn-end/` · SSE step 名 **`persist_turn_end`**（UI：写入记忆）
+**代码：** `agentflow/agents/online/persist-turn-end/` · SSE step 名 **`persist_turn_end`**（UI：写入记忆）
 
 **验证：** `verify:fact-checker:pipeline` 闲聊/检索链末步应为 `persist_turn_end`；同问短路仍会经过 `persist_turn_end`（内部 no-op）。
 
@@ -215,7 +222,7 @@ flowchart TD
 | 5 | Guard 链 | parse 后依次 guard（见下） | `pipeline/intake-pipeline.ts` | `runIntakePipeline()` |
 | 6 | 编排 | LangGraph 条件边 | `pipeline/graph/routes.ts` + `compile.ts` | `routeAfterIntake()` 等 |
 
-**Guard 链（`runIntakePipeline`，compile intake 节点内）：** **列举续问短路**（「更多项目 / 列出全部」→ `resolveEnumerationContinuation()`，**跳过 LLM**）→ LLM 路由 → **`applyIntakeContinuationGuard`**（省略续问 / 历史含 URL → retrieve，**在 clarify 早退之前** · P0-25）→ **LLM 指代/澄清**（clarify 可早退）→ chitchat → userFact 早退 → **`applyIntakeLinkLookupGuard`**（`queryType=external_link` 时纠正 stale multipart / 分槽 · P0-25）→ **retrievalPlan guard** → **`applyCompositeRouteGuard`**（P0-15）→ **`applyEnumerationListIntentGuard`**（单问穷举 → `listIntent=exhaustive` · P0-22）。详见 [坑点 §2.5.6](./04-pitfalls.md#256-综合问项目段只列-2-个-p0-22--2026-07)、[§2.5.9 GitHub 对外链接](./04-pitfalls.md#259-简历-github--对外链接问法-p0-25--2026-07)。
+**Guard 链（`runIntakePipeline`，compile intake 节点内）：** **UI 列举按钮 exact-match**（`ENUMERATION_ACTION_PROMPTS` → 跳过 LLM · P0-26）→ LLM 路由 → **`applyIntakeContinuationGuard`**（省略续问 / 历史含 URL → retrieve，**在 clarify 早退之前** · P0-25）→ **LLM 指代/澄清**（clarify 可早退）→ chitchat → userFact 早退 → **`applyIntakeLinkLookupGuard`**（`queryType=external_link` 时纠正 stale multipart / 分槽 · P0-25）→ **retrievalPlan guard** → **`applyCompositeRouteGuard`**（P0-15）→ **`applyEnumerationSlotGuard`**（per-slot `enumerationControl` + `executor` · P0-26）。详见 [坑点 §2.5.6](./04-pitfalls.md#256-综合问项目列举--分页-p0-22--2026-07)、[§2.5.10 列举 per-slot](./04-pitfalls.md#2510-列举执行-per-slot-架构升级-p0-26--2026-07)、[§2.5.9 GitHub 对外链接](./04-pitfalls.md#259-简历-github--对外链接问法-p0-25--2026-07)。
 
 **queryType 扩展：** 除 identity / enumeration / tech / default 外，Intake 产出 **`external_link`**（GitHub、仓库、对外 URL）；与 KM `queryProfile` 同名，**不走** enumeration projects fill。见 [km-retrieval-design §六](./km-retrieval-design.md#六queryprofile-参数表)。
 
@@ -232,7 +239,7 @@ flowchart TD
 | 层 | 模块 | 行为 |
 |----|------|------|
 | **Intake schema** | `prompt.ts` + `schema.ts` | `intent`: `remember_user_fact` / `recall_user_fact`；字段 `userFactKey` / `userFactLabel` / `userFactValue` |
-| **路由** | [`user-fact/user-fact.ts`](../apps/brain-service/src/agentflow/brain-service/online/user-fact/user-fact.ts) | `isUserFactIntent` + `routeUserFactFromIntake()`；**不靠问句 regex 词表** |
+| **路由** | [`user-fact/user-fact.ts`](../apps/brain-service/src/agentflow/agents/online/user-fact/user-fact.ts) | `isUserFactIntent` + `routeUserFactFromIntake()`；**不靠问句 regex 词表** |
 | **编排** | `routes.ts` | Intake 后 `remember_user_fact` / `recall_user_fact` → **userFact 节点** → persistTurnEnd |
 | **Mem0** | `mem0/store.ts` | `addStructuredUserFact()` 写入；`searchUserFactMemories(factKey, label, question)` 语义检索 |
 | **值提取** | `user-fact.ts` | `extractByFactKey` + `validateFactValueForKey`；Mem0 行如 `QQ号是734858469` 须提取完整号码（勿误切「码」） |
@@ -333,7 +340,9 @@ flowchart TD
 
 **P0-19 / P0-20（2026-06）：** 单问 `identity` / `enumeration` / `default` 走 **plain-text 流式**（与 composite 子问同路径，`think: false`），避免 JSON 解析失败退回「根据知识库摘录」体；hits 上限与 KM **queryProfile** 对齐（`analyst-recall-limits.ts`）；ContentOrganizer 按 profile 设 `maxHits`。详见 [坑点 §2.5.5](./04-pitfalls.md#255-analyst-纯文本流--enumeration-项目公司分流-p0-19--p0-20--p0-21--2026-06)。
 
-**P0-24（2026-07）：** 四类数据源架构 — Intake `applyToolPlanGuard` 富化 `enrichedPlan` / `executionPlan`；**`toolOrchestrator`** 节点在 CO 之后执行 `compute_age_from_hits` / `compose_enumeration` / `search_web`；混合评估走 **`dagExecutor`**。年龄从 Analyst 内联上移到编排层；`prepareTurnStart` 注入 `asOfDate`。详见 [架构 v2](./05-architecture-v2-tool-orchestration.md)。
+**P0-24（2026-07）：** 四类数据源架构 — Intake `applyToolPlanGuard` 富化 `enrichedPlan` / `executionPlan`；**`toolOrchestrator`** 节点在 CO 之后执行 `compute_age_from_hits` / `compose_enumeration` / `search_web`；混合评估走 **`dagExecutor`**。年龄从 Analyst 内联上移到编排层；`prepareTurnStart` 注入 `asOfDate`。代码位于 `agents/online/tool-orchestrator/`。详见 [架构 v2](./05-architecture-v2-tool-orchestration.md)。
+
+**P0-26（2026-07）：** 列举执行从整句 **`routeMode=list`** 改为 **per-slot** `enumerationControl` + `executor`；`retrieval-node` 可同轮混跑 KM hybrid 与 list API。详见 [坑点 §2.5.10](./04-pitfalls.md#2510-列举执行-per-slot-架构升级-p0-26--2026-07)。
 
 **P0-23（2026-07，已被 P0-24 吸收）：** composite / 单问 **identity 年龄槽** → `compute_age_from_hits`；原 `resolveOrchestratedTool` 在 Analyst 内，现优先走 `state.toolResults`。详见 [坑点 §2.5.7](./04-pitfalls.md#257-identity-年龄编排工具-p0-23--2026-07)。
 
@@ -441,7 +450,7 @@ flowchart TD
 
 ### 8. 记忆层 — Mem0 + LangMem（D8）✅
 
-**触发：** 每轮 LangGraph **`prepareTurnStart` 节点**内调用 `preparePipelineMemory()`（`agentflow/brain-service/online/prepare-turn-start/prepare-turn-start.ts`）。**不参与**离线入库链路。
+**触发：** 每轮 LangGraph **`prepareTurnStart` 节点**内调用 `preparePipelineMemory()`（`agentflow/agents/online/prepare-turn-start/prepare-turn-start.ts`）。**不参与**离线入库链路。
 
 **职责：** **Mem0** 按 `actorUserId` 检索跨会话偏好/事实；**LangMem** 按 `conversationId` 维护会话摘要；合并为 `memoryBlock` 注入 **IntakeCoordinator** 与 **InformationAnalyst** prompt。轮次结束后由 **`persistTurnEnd` 节点**写回 Mem0 与 LangMem。
 

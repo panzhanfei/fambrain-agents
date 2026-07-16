@@ -10,7 +10,7 @@ import path from "node:path";
 import {
     buildEarlyExitRoutedDecision,
     type IntakeRoutingDecision,
-} from "../src/agentflow/brain-service/online/intake-coordinator";
+} from "../src/agentflow/agents/online/intake-coordinator";
 import {
     findUserFactValueInTexts,
     isUserFactIntent,
@@ -18,7 +18,7 @@ import {
     routeUserFactFromIntake,
     serializeUserFactRecord,
     userFactNode,
-} from "../src/agentflow/brain-service/online/user-fact";
+} from "../src/agentflow/agents/online/user-fact";
 import type { PipelineGraphState } from "../src/agentflow/pipeline/graph/state";
 
 const QQ = "734858469";

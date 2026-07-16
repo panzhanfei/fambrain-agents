@@ -49,7 +49,7 @@ const main = async (): Promise<void> => {
     bootstrapBrainServiceRuntime();
 
     const { listCorpusUserIds } = await import(
-        "@/agentflow/brain-service/offline/knowledge-indexer/list-corpus-users"
+        "@/agentflow/agents/offline/knowledge-indexer/list-corpus-users"
     );
     const { getChromaServerUrl } = await import("@fambrain/corpus");
     const { retrieveCorpusTool, runWithToolContext } = await import(

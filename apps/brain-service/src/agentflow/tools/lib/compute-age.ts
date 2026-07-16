@@ -1,4 +1,4 @@
-import type { KnowledgeHit } from "@/agentflow/brain-service/online/knowledge-manager";
+import type { KnowledgeHit } from "@/agentflow/agents/online/knowledge-manager";
 
 export type BirthDate = {
     year: number;

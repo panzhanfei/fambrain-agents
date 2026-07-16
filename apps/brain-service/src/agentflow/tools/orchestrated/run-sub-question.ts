@@ -1,8 +1,8 @@
-import { dedupeCitations } from "@/agentflow/brain-service/online/content-organizer";
-import { composeEnumerationAnswer } from "@/agentflow/brain-service/online/information-analyst/compose-message";
-import type { SubQuestionAnalyzeInput } from "@/agentflow/brain-service/online/information-analyst/analyze-helpers";
-import { resolveAnalystQueryProfile } from "@/agentflow/brain-service/online/information-analyst/analyst-recall-limits";
-import type { InformationAnalystResult } from "@/agentflow/brain-service/online/information-analyst/prompt";
+import { dedupeCitations } from "@/agentflow/agents/online/content-organizer";
+import { composeEnumerationAnswer } from "@/agentflow/agents/online/information-analyst/compose-message";
+import type { SubQuestionAnalyzeInput } from "@/agentflow/agents/online/information-analyst/analyze-helpers";
+import { resolveAnalystQueryProfile } from "@/agentflow/agents/online/information-analyst/analyst-recall-limits";
+import type { InformationAnalystResult } from "@/agentflow/agents/online/information-analyst/prompt";
 import {
     buildAgeAnswer,
     extractBirthOrAgeFromHits,

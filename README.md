@@ -26,7 +26,7 @@ pnpm run dev    # 一键：Chroma + Redis + Web + Brain Service
 | [01 · 项目简介与技术栈](docs/01-project-overview.md) | 快速开始、脚本、环境变量、代码结构 |
 | [02 · Agent 流程图](docs/02-agent-flows.md) | 全链路 / 在线编排 / 单 Agent 实现、SSE 契约 |
 | [03 · 坑点清单](docs/04-pitfalls.md) | 行业常见坑 + 本项目踩坑 + 调试 checklist |
-| [04 · 架构 v2 工具编排](docs/05-architecture-v2-tool-orchestration.md) | 四类数据源、ToolOrchestrator/DagExecutor |
+| [04 · 架构 v2 工具编排](docs/05-architecture-v2-tool-orchestration.md) | 四类数据源、ToolOrchestrator/DagExecutor、**代码布局演进**、**列举 per-slot** |
 
 **测试：** `pnpm test:all`（依赖树校验 + 单元测试）· `pnpm test:unit` · `pnpm check:deps`
 

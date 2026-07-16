@@ -1,7 +1,7 @@
 import type { PipelineGraphState } from "./state";
-import type { IntakeRoutingDecision } from "@/agentflow/brain-service/online/intake-coordinator/contract/prompt";
-import { intakeRequiresKmRetrieval } from "@/agentflow/brain-service/online/intake-coordinator/pipeline/intake-km-routing";
-import { isUserFactIntent } from "@/agentflow/brain-service/online/user-fact";
+import type { IntakeRoutingDecision } from "@/agentflow/agents/online/intake-coordinator/contract/prompt";
+import { intakeRequiresKmRetrieval } from "@/agentflow/agents/online/intake-coordinator/pipeline/intake-km-routing";
+import { isUserFactIntent } from "@/agentflow/agents/online/user-fact";
 
 /** clarify / 闲聊 / 越界 / direct_answer 等可直接出 briefReply 的路径 */
 const shouldRespondEarlyFromIntake = (

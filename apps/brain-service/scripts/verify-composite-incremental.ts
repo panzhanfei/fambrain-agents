@@ -12,8 +12,8 @@ import {
     analystResultToCachedFacet,
     buildFacetKey,
     resolveIncrementalCompositePlan,
-} from "../src/agentflow/brain-service/online/knowledge-manager";
-import { planItemToSlot } from "../src/agentflow/brain-service/online/intake-coordinator";
+} from "../src/agentflow/agents/online/knowledge-manager";
+import { planItemToSlot } from "../src/agentflow/agents/online/intake-coordinator";
 
 process.env.REDIS_ENABLED = "0";
 process.env.COMPOSITE_ANSWER_CACHE_DISABLED = "0";

@@ -4,7 +4,7 @@
  *   pnpm --filter @fambrain/brain-service exec tsx --env-file=../../.env scripts/experiments/verify-d5-repeat-e2e.ts
  */
 import type { AgentPipelineContext, DbChatTurn } from "@fambrain/brain-types";
-import { listCorpusUserIds } from "@/agentflow/brain-service/offline/knowledge-indexer/list-corpus-users";
+import { listCorpusUserIds } from "@/agentflow/agents/offline/knowledge-indexer/list-corpus-users";
 import { runPipelineStream } from "@/agentflow/index";
 import { bootstrapBrainServiceRuntime } from "@/config";
 import { enableRepeatGuardForVerify } from "../verify-test-env";

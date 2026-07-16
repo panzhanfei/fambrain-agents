@@ -3,7 +3,7 @@
  */
 import { runPipelineStream } from "@/agentflow/index";
 import { bootstrapBrainServiceRuntime } from "@/config";
-import { listCorpusUserIds } from "@/agentflow/brain-service/offline/knowledge-indexer/list-corpus-users";
+import { listCorpusUserIds } from "@/agentflow/agents/offline/knowledge-indexer/list-corpus-users";
 import { enableRepeatGuardForVerify } from "./verify-test-env";
 
 await bootstrapBrainServiceRuntime();

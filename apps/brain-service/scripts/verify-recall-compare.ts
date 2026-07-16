@@ -6,9 +6,9 @@
  * Chroma + Ollama 在线时要求 recallSource=hybrid；未起时 sparse 段仍跑，hybrid 段 skip 并 exit 1。
  */
 import { recallSparseRetrieve, searchCorpusVectors } from "@fambrain/corpus";
-import { listCorpusUserIds } from "../src/agentflow/brain-service/offline/knowledge-indexer/list-corpus-users";
-import { hybridRecall } from "../src/agentflow/brain-service/online/knowledge-manager/recall/hybrid-recall";
-import { getKmRetrievalConfig } from "../src/agentflow/brain-service/online/knowledge-manager/profile/km-config";
+import { listCorpusUserIds } from "../src/agentflow/agents/offline/knowledge-indexer/list-corpus-users";
+import { hybridRecall } from "../src/agentflow/agents/online/knowledge-manager/recall/hybrid-recall";
+import { getKmRetrievalConfig } from "../src/agentflow/agents/online/knowledge-manager/profile/km-config";
 
 const TOP_K = 8;
 

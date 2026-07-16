@@ -27,10 +27,10 @@ import { applyCompositeRouteGuard } from "./composite-route-guard";
 import {
   applyCompositeRouteGuard,
   type RoutedIntakeDecision,
-} from "@/agentflow/brain-service/online/intake-coordinator/guards";
+} from "@/agentflow/agents/online/intake-coordinator/guards";
 
 // ✅ 仅类型、且要避开 barrel 循环依赖时：可直接 import type 自 interface
-import type { CompositeRetrievalSlot } from "@/agentflow/brain-service/online/intake-coordinator/composite/interface";
+import type { CompositeRetrievalSlot } from "@/agentflow/agents/online/intake-coordinator/composite/interface";
 
 // ❌ 禁止：跨目录深挖具体实现文件
 import { applyCompositeRouteGuard } from "@/agentflow/.../guards/composite-route-guard";

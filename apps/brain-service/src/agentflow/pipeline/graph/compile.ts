@@ -1,25 +1,25 @@
 import { END, START, StateGraph } from "@langchain/langgraph";
-import { runContentOrganizerNode } from "@/agentflow/brain-service/online/content-organizer/content-organizer-node";
-import { runContentSummarizerNode } from "@/agentflow/brain-service/online/content-summarizer/content-summarizer-node";
-import { runFactCheckerNode } from "@/agentflow/brain-service/online/fact-checker/fact-checker-node";
-import { runIntakeNode } from "@/agentflow/brain-service/online/intake-coordinator/nodes/intake-node";
-import { runRespondEarlyNode } from "@/agentflow/brain-service/online/respond-early";
-import { userFactNode } from "@/agentflow/brain-service/online/user-fact";
-import { runAnalystNode } from "@/agentflow/brain-service/online/information-analyst/analyst-node";
-import { runRetrievalNode } from "@/agentflow/brain-service/online/knowledge-manager";
+import { runContentOrganizerNode } from "@/agentflow/agents/online/content-organizer/content-organizer-node";
+import { runContentSummarizerNode } from "@/agentflow/agents/online/content-summarizer/content-summarizer-node";
+import { runFactCheckerNode } from "@/agentflow/agents/online/fact-checker/fact-checker-node";
+import { runIntakeNode } from "@/agentflow/agents/online/intake-coordinator/nodes/intake-node";
+import { runRespondEarlyNode } from "@/agentflow/agents/online/respond-early";
+import { userFactNode } from "@/agentflow/agents/online/user-fact";
+import { runAnalystNode } from "@/agentflow/agents/online/information-analyst/analyst-node";
+import { runRetrievalNode } from "@/agentflow/agents/online/knowledge-manager";
 import {
   runDagExecutorNode,
   runToolOrchestratorNode,
-} from "@/agentflow/tool-orchestration";
+} from "@/agentflow/agents/online/tool-orchestrator";
 import {
   runPreparePipelineMemory,
   runPrepareTurnStart,
-} from "@/agentflow/brain-service/online/prepare-turn-start";
+} from "@/agentflow/agents/online/prepare-turn-start";
 import {
   runRepeatQuestionGuard,
   runRepeatRespondEarlyNode,
-} from "@/agentflow/brain-service/online/repeat-question-guard";
-import { runPersistTurnEnd } from "@/agentflow/brain-service/online/persist-turn-end";
+} from "@/agentflow/agents/online/repeat-question-guard";
+import { runPersistTurnEnd } from "@/agentflow/agents/online/persist-turn-end";
 import { PipelineGraphAnnotation } from "./state";
 import {
   routeAfterFactChecker,

@@ -169,11 +169,13 @@ pnpm run dev
 | 路径 | 职责 |
 |------|------|
 | `apps/web/` | Next.js UI + BFF；`.next` 产物在此目录 |
-| `apps/brain-service/` | Agent 业务：orchestrator、**在线** LangGraph pipeline、**离线** Indexer/Learning CLI |
+| `apps/brain-service/` | Brain HTTP 服务入口；Agent 业务在 `src/agentflow/` |
 | `apps/brain-service/src/agentflow/pipeline/graph/` | LangGraph 骨架：`state.ts`、`routes.ts`、`compile.ts` |
 | `apps/brain-service/src/agentflow/pipeline/runtime/` | SSE 运行时：`stream.ts`、`pipeline-timing.ts`、`initial-state.ts` |
-| `apps/brain-service/src/agentflow/brain-service/online/` | 在线 Agent + 各 `*-node.ts` 图节点实现 |
-| `apps/brain-service/src/agentflow/brain-service/offline/` | 离线：knowledge-indexer、doc-parser、learning |
+| `apps/brain-service/src/agentflow/agents/online/` | 在线 Agent + 各 `*-node.ts`（Intake / KM / **tool-orchestrator** / Analyst …） |
+| `apps/brain-service/src/agentflow/agents/offline/` | 离线：knowledge-indexer、doc-parser、learning |
+| `apps/brain-service/src/agentflow/tools/` | LangChain StructuredTool 定义（`createFambrainTools`） |
+| `apps/brain-service/src/agentflow/utils/` | 跨 Agent 通用工具（JSON 解析、Zod 辅助） |
 | `packages/auth/` | JWT、登录注册、会话 |
 | `packages/brain-types/` | `DbChatTurn`、`AgentPipelineContext` 等共享类型 |
 | `packages/brain-config/` | Ollama / Chroma 环境配置 |
@@ -184,23 +186,25 @@ pnpm run dev
 
 **约定：** `@fambrain/brain-service` 不直接访问数据库；编排层不把中间 Agent 输出写入 `messages`。
 
+**架构演进（2026-07）：** 原 `agentflow/brain-service/` 重命名为 **`agents/`**（避免与应用包同名）；`tool-orchestration/` 移入 **`agents/online/tool-orchestrator/`**（与文档 Agent 角色对齐）。列举执行从整句 `routeMode=list` 改为 **per-slot** `enumerationControl`（P0-26）。详见 [架构 v2](./05-architecture-v2-tool-orchestration.md#9-代码布局演进2026-07)、[坑点 §2.5.10](./04-pitfalls.md#2510-列举执行-per-slot-架构升级-p0-26--2026-07)。
+
 ## P0 已落地能力（代码索引）
 
 | 技能点 | 代码位置 | 用途 |
 |--------|----------|------|
 | `runAgentStream` + `runPipelineStream` | `agentflow/`、`pipeline/runtime/stream.ts` | SSE 运行时（步骤耗时 + SSE；业务在 agents/online） |
-| `runPrepareTurnStart` | `agentflow/brain-service/online/prepare-turn-start/` | 图首节点：ALS、同问短路、Mem0/LangMem **读** |
-| `runPersistTurnEnd` | `agentflow/brain-service/online/persist-turn-end/` | 图末节点：Mem0/LangMem **写**、Learning 候选 |
+| `runPrepareTurnStart` | `agentflow/agents/online/prepare-turn-start/` | 图首节点：ALS、同问短路、Mem0/LangMem **读** |
+| `runPersistTurnEnd` | `agentflow/agents/online/persist-turn-end/` | 图末节点：Mem0/LangMem **写**、Learning 候选 |
 | `getCompiledPipelineGraph` | `pipeline/graph/compile.ts` + `routes.ts` | **prepareTurnStart** → Intake → … → **persistTurnEnd** → END |
 | `userFactNode` / `routeUserFactFromIntake` | `user-fact/nodes/user-fact-node.ts`、`user-fact/user-fact.ts` | P0-16：跨会话 remember/recall；绕过 KM / FC / Analyst |
 | `parseIntakeDecision` / `defaultIntakeDecision` | `intake-coordinator/pipeline/parse-intake.ts` | 解析 Intake 路由 JSON |
 | `runRetrievalNode` | `knowledge-manager/nodes/retrieval-node.ts` + `pipeline/` | 检索 hits 缓存与槽答案缓存 + composite 增量检索 |
 | `addStructuredUserFact` / `searchUserFactMemories` | `packages/brain-memory/src/mem0/store.ts` | Mem0 结构化写入 + 按 factKey 语义检索 |
-| `completeIntakeCoordinator` | `agentflow/brain-service/online/intake-coordinator/` | 一次 `invoke` → 路由 JSON |
-| `retrieveKnowledge` | `agentflow/brain-service/online/knowledge-manager/` | 向量 + 关键词扫盘 + **规则精排**（无 LLM）；v3 业界对标见 [km-retrieval-design.md](./km-retrieval-design.md) |
-| `completeFactCheck` | `agentflow/brain-service/online/fact-checker/` | 证据包核查；打回再检索 |
-| `organizeKnowledge` | `agentflow/brain-service/online/content-organizer/` | hits Zod 规范化 + path 去重 |
-| `streamAnalyzeInformation` | `agentflow/brain-service/online/information-analyst/` | 流式 thinking + assistant |
+| `completeIntakeCoordinator` | `agentflow/agents/online/intake-coordinator/` | 一次 `invoke` → 路由 JSON |
+| `retrieveKnowledge` | `agentflow/agents/online/knowledge-manager/` | 向量 + 关键词扫盘 + **规则精排**（无 LLM）；v3 业界对标见 [km-retrieval-design.md](./km-retrieval-design.md) |
+| `completeFactCheck` | `agentflow/agents/online/fact-checker/` | 证据包核查；打回再检索 |
+| `organizeKnowledge` | `agentflow/agents/online/content-organizer/` | hits Zod 规范化 + path 去重 |
+| `streamAnalyzeInformation` | `agentflow/agents/online/information-analyst/` | 流式 thinking + assistant |
 | `golden:regression` | `apps/brain-service/scripts/golden-regression.ts` | 在线 Agent **G1～G5b + GMem** 全链路回归（`GOLDEN_RUNS=3` 稳定性） |
 | `verify:fact-checker` / `verify:fact-checker:pipeline` | `apps/brain-service/scripts/` | FactChecker 规则 + 轻量全链路冒烟 |
 | `verify:content-organizer` / `verify:agent-schemas` | `apps/brain-service/scripts/` | ContentOrganizer / 全 Agent Zod |
@@ -208,8 +212,8 @@ pnpm run dev
 | `verify:memory` / `verify:doc-parser` | `apps/brain-service/scripts/` | Mem0+LangMem / DocParser |
 | `preparePipelineMemory` | `packages/brain-memory/`（由 **prepare-turn-start** 调用） | 每轮加载 Mem0 + LangMem → `memoryBlock` |
 | `persistPipelineMemory` | `packages/brain-memory/`（由 **persist-turn-end** 调用） | 每轮写入 Mem0 + LangMem |
-| `ingestDocumentBatch` | `agentflow/brain-service/offline/doc-parser/` | 批量上传解析 → corpus + 可选入库 |
-| `summarizeContent` | `agentflow/brain-service/online/content-summarizer/` | 在线摘要分支 + CLI（D9） |
+| `ingestDocumentBatch` | `agentflow/agents/offline/doc-parser/` | 批量上传解析 → corpus + 可选入库 |
+| `summarizeContent` | `agentflow/agents/online/content-summarizer/` | 在线摘要分支 + CLI（D9） |
 | `listVaultFiles` | `agentflow/knowledge/list-vault-files.ts` | vault 只读列举（MCP 共用） |
 | `recallSparseRetrieve` | `packages/corpus/src/recall-keyword-retrieve.ts` | BM25 sparse 检索（HY-01） |
 | `hybridRecall` / `fuseRrf` | `knowledge-manager/recall/hybrid-recall.ts`、`fusion-rrf.ts` | 并行 Hybrid + RRF（HY-02～03） |
@@ -234,10 +238,12 @@ pnpm run dev
 | `verify:learning-extract` | `apps/brain-service/scripts/` | 自主学习候选抽取（Phase A 前置） |
 | `verify-test-env.ts` | `apps/brain-service/scripts/` | verify 脚本内覆盖 `.env` cache 开关；**勿**在生产入口引用 |
 | `createFambrainTools` | `agentflow/tools/` | LangChain **StructuredTool**：`retrieve_corpus` / `remember_user_fact` / `recall_user_fact` / `list_vault_files` / `summarize_text` |
+| `applyToolPlanGuard` / `runToolOrchestratorNode` | `agentflow/agents/online/tool-orchestrator/` | P0-24 四类数据源编排；P0-26 列举 compose |
+| `applyEnumerationSlotGuard` | `intake-coordinator/guards/enumeration-list-intent.ts` | P0-26 per-slot 列举 executor |
 | `configureLangSmithTracing` | `packages/brain-config/langsmith.ts` | 启动时启用 tracing；`stream.ts` 附加 conversationId 等 metadata |
 | `verify:langchain-tools` | `apps/brain-service/scripts/` | Tool 注册 + retrieve / Mem0 / vault invoke 冒烟 |
-| `persistLearningAfterTurn` | `agentflow/brain-service/offline/learning/` | 每轮结束后按置信度路由：Mem0 / `corpus/learned/` / `PendingMemoryFact` |
+| `persistLearningAfterTurn` | `agentflow/agents/offline/learning/` | 每轮结束后按置信度路由：Mem0 / `corpus/learned/` / `PendingMemoryFact` |
 | Web `/learning` | `apps/web/src/app/(main)/learning/` | 待审核事实 + 已写入 learned 文档列表 |
 | `golden:regression` | `apps/brain-service/scripts/` | **G1～G5b + GMem** 全链路回归（`GOLDEN_RUNS=3` 稳定性） |
-| `indexAllCorpora` | `agentflow/brain-service/offline/knowledge-indexer/` | 离线 corpus → Chroma |
+| `indexAllCorpora` | `agentflow/agents/offline/knowledge-indexer/` | 离线 corpus → Chroma |
 | `logAgentIn` / `logAgentOut` | `packages/brain-shared/src/agent-log.ts` | 调试：含 FactChecker 🔍、ContentOrganizer 📋 |

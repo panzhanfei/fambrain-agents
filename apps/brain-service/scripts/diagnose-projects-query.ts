@@ -5,13 +5,13 @@
  */
 import path from "node:path";
 import { listCorpusScanRoots, listMarkdownFiles, toRepoPath } from "@fambrain/corpus";
-import { PROJECTS_SLOT } from "../src/agentflow/brain-service/online/intake-coordinator";
-import { organizeKnowledge } from "../src/agentflow/brain-service/online/content-organizer/organize-knowledge";
-import { maxAnalystHitsForProfile } from "../src/agentflow/brain-service/online/information-analyst/complete-analyze";
-import { buildSubQuestionFallbackAnswer } from "../src/agentflow/brain-service/online/information-analyst/analyze-helpers";
-import { isProjectEntryPath } from "../src/agentflow/brain-service/online/knowledge-manager/recall/retrieve-helpers";
-import { retrieveKnowledge } from "../src/agentflow/brain-service/online/knowledge-manager/recall/retrieve";
-import { listCorpusUserIds } from "../src/agentflow/brain-service/offline/knowledge-indexer/list-corpus-users";
+import { PROJECTS_SLOT } from "../src/agentflow/agents/online/intake-coordinator";
+import { organizeKnowledge } from "../src/agentflow/agents/online/content-organizer/organize-knowledge";
+import { maxAnalystHitsForProfile } from "../src/agentflow/agents/online/information-analyst/complete-analyze";
+import { buildSubQuestionFallbackAnswer } from "../src/agentflow/agents/online/information-analyst/analyze-helpers";
+import { isProjectEntryPath } from "../src/agentflow/agents/online/knowledge-manager/recall/retrieve-helpers";
+import { retrieveKnowledge } from "../src/agentflow/agents/online/knowledge-manager/recall/retrieve";
+import { listCorpusUserIds } from "../src/agentflow/agents/offline/knowledge-indexer/list-corpus-users";
 
 const resolveCorpusUserId = async (): Promise<string> => {
     const fromEnv = process.env.FAMBRAIN_CORPUS_USER_ID?.trim();

@@ -1,7 +1,7 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { z } from "zod";
 import { MemoryCandidateTarget } from "@fambrain/db";
-import { promoteLearnedCandidate } from "@/agentflow/brain-service/offline/learning";
+import { promoteLearnedCandidate } from "@/agentflow/agents/offline/learning";
 import { requireAuth } from "@/server/auth-middleware";
 
 const readJsonBody = async (req: IncomingMessage, maxBytes = 512000): Promise<unknown> => {

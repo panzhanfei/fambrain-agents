@@ -15,14 +15,14 @@ import {
     pickExcerpt,
     pickTableExcerpt,
     rankCandidates,
-} from "../src/agentflow/brain-service/online/knowledge-manager/recall/retrieve-helpers";
+} from "../src/agentflow/agents/online/knowledge-manager/recall/retrieve-helpers";
 import {
     getProfileRecallParams,
-} from "../src/agentflow/brain-service/online/knowledge-manager/profile/km-config";
+} from "../src/agentflow/agents/online/knowledge-manager/profile/km-config";
 import {
     inferQueryProfile,
     resolveQueryProfile,
-} from "../src/agentflow/brain-service/online/knowledge-manager/profile/query-profile";
+} from "../src/agentflow/agents/online/knowledge-manager/profile/query-profile";
 
 const stubExcerpt = (body: string) => body.slice(0, 120);
 

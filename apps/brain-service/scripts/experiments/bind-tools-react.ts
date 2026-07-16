@@ -14,7 +14,7 @@ import {
 import { ChatOllama } from "@langchain/ollama";
 import { getBrainServiceConfig } from "@fambrain/brain-config";
 import { bootstrapBrainServiceRuntime } from "@/config";
-import { listCorpusUserIds } from "@/agentflow/brain-service/offline/knowledge-indexer/list-corpus-users";
+import { listCorpusUserIds } from "@/agentflow/agents/offline/knowledge-indexer/list-corpus-users";
 import {
     createFambrainTools,
     runWithToolContext,

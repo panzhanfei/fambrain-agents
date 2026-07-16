@@ -3,13 +3,13 @@
  *
  *   pnpm --filter @fambrain/brain-service run verify:confidence-tier
  */
-import { listCorpusUserIds } from "../src/agentflow/brain-service/offline/knowledge-indexer/list-corpus-users";
+import { listCorpusUserIds } from "../src/agentflow/agents/offline/knowledge-indexer/list-corpus-users";
 import {
     assessConfidence,
     deriveCoverageFromTier,
     shouldCoalesceEmptyHits,
-} from "../src/agentflow/brain-service/online/knowledge-manager/profile/score-candidate";
-import { retrieveKnowledge } from "../src/agentflow/brain-service/online/knowledge-manager/recall/retrieve";
+} from "../src/agentflow/agents/online/knowledge-manager/profile/score-candidate";
+import { retrieveKnowledge } from "../src/agentflow/agents/online/knowledge-manager/recall/retrieve";
 
 const assert = (name: string, fn: () => void) => {
     try {

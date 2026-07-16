@@ -15,7 +15,7 @@ import {
     clearMemoryRetrievalCache,
     resetInfraConfigForTests,
 } from "@fambrain/infra";
-import { listCorpusUserIds } from "@/agentflow/brain-service/offline/knowledge-indexer/list-corpus-users";
+import { listCorpusUserIds } from "@/agentflow/agents/offline/knowledge-indexer/list-corpus-users";
 import { runPipelineStream } from "@/agentflow/index";
 import { bootstrapBrainServiceRuntime } from "@/config";
 import {

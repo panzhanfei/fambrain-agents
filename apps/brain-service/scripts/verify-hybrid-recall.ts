@@ -3,10 +3,10 @@
  *
  *   pnpm --filter @fambrain/brain-service run verify:hybrid-recall
  */
-import { fuseRrf } from "../src/agentflow/brain-service/online/knowledge-manager/recall/fusion-rrf";
-import { hybridRecall } from "../src/agentflow/brain-service/online/knowledge-manager/recall/hybrid-recall";
-import { sparseScoreToRelevance } from "../src/agentflow/brain-service/online/knowledge-manager/recall/retrieve-helpers";
-import { listCorpusUserIds } from "../src/agentflow/brain-service/offline/knowledge-indexer/list-corpus-users";
+import { fuseRrf } from "../src/agentflow/agents/online/knowledge-manager/recall/fusion-rrf";
+import { hybridRecall } from "../src/agentflow/agents/online/knowledge-manager/recall/hybrid-recall";
+import { sparseScoreToRelevance } from "../src/agentflow/agents/online/knowledge-manager/recall/retrieve-helpers";
+import { listCorpusUserIds } from "../src/agentflow/agents/offline/knowledge-indexer/list-corpus-users";
 
 const assert = (name: string, fn: () => void) => {
     try {

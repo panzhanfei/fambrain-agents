@@ -1,15 +1,15 @@
 import { Annotation } from "@langchain/langgraph";
 import type { AgentPipelineContext, DbChatTurn, } from "@fambrain/brain-types";
 import type { AssistantMessageBlock } from "@fambrain/brain-types";
-import type { RoutedIntakeDecision } from "@/agentflow/brain-service/online/intake-coordinator";
-import type { InformationAnalystInput } from "@/agentflow/brain-service/online/information-analyst";
+import type { RoutedIntakeDecision } from "@/agentflow/agents/online/intake-coordinator";
+import type { InformationAnalystInput } from "@/agentflow/agents/online/information-analyst";
 import type {
     ConfidenceTier,
     CompositeSubRetrieval,
     EnumerationMeta,
     IncrementalCompositePlan,
-} from "@/agentflow/brain-service/online/knowledge-manager";
-import type { PipelineToolResults } from "@/agentflow/tool-orchestration/types";
+} from "@/agentflow/agents/online/knowledge-manager";
+import type { PipelineToolResults } from "@/agentflow/agents/online/tool-orchestrator";
 /**
  * LangGraph 编排共享状态（Intake → KM → FactChecker → ContentOrganizer → Analyst；摘要分支 Intake → KM → ContentSummarizer）。
  * 初始值由 `runtime/initial-state.ts` 的 `buildInitialState()` 注入；prepareTurnStart 填充 memory 字段；节点只返回需要更新的字段。

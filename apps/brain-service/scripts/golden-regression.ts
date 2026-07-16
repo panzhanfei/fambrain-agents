@@ -12,7 +12,7 @@
  * 或 data/doc/users/ 下首个有 corpus 的用户。
  */
 import type { AgentPipelineContext, DbChatTurn } from "@fambrain/brain-types";
-import { listCorpusUserIds } from "@/agentflow/brain-service/offline/knowledge-indexer/list-corpus-users";
+import { listCorpusUserIds } from "@/agentflow/agents/offline/knowledge-indexer/list-corpus-users";
 import { runPipelineStream } from "@/agentflow/index";
 import { bootstrapBrainServiceRuntime } from "@/config";
 

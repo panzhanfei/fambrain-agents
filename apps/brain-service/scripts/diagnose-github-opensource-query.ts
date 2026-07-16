@@ -9,9 +9,9 @@ import { listCorpusScanRoots, listMarkdownFiles, toRepoPath } from "@fambrain/co
 import {
     completeIntakeCoordinator,
     runIntakePipeline,
-} from "../src/agentflow/brain-service/online/intake-coordinator";
-import { listCorpusUserIds } from "../src/agentflow/brain-service/offline/knowledge-indexer/list-corpus-users";
-import { retrieveKnowledge } from "../src/agentflow/brain-service/online/knowledge-manager/recall/retrieve";
+} from "../src/agentflow/agents/online/intake-coordinator";
+import { listCorpusUserIds } from "../src/agentflow/agents/offline/knowledge-indexer/list-corpus-users";
+import { retrieveKnowledge } from "../src/agentflow/agents/online/knowledge-manager/recall/retrieve";
 import { bootstrapBrainServiceRuntime } from "../src/config/index";
 
 const GITHUB_RE = /https?:\/\/github\.com\/[^\s)>]+/gi;
@@ -74,7 +74,7 @@ const intakeLive = async (
     console.log(`userQuestion=${JSON.stringify(userQuestion)}`);
     try {
         const raw = await completeIntakeCoordinator({ userQuestion, history });
-        const { decision, earlyExit } = runIntakePipeline({
+        const { decision, earlyExit } = await runIntakePipeline({
             intakeRaw: raw,
             userQuestion,
             intakeHistory: history,

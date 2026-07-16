@@ -38,6 +38,7 @@
 | `ab25432` | P0-22 列举分页（`listIntent` / `enumerationPage`） | Intake guard ⑦ 模式 → 本次 guard ⑧ `applyToolPlanGuard` 同级扩展 |
 | `c0614e9` | P0-23 年龄编排工具 + `search_web` stub | **触发架构债**；工具逻辑先在 Analyst 内联 |
 | **（本次未提交）** | P0-24 四类架构 + `toolOrchestrator` / `dagExecutor` | 将 P0-23 上移到编排节点；落地 Tavily `search_web` |
+| **（2026-07）** | P0-26 列举 **per-slot** + 代码布局 `agents/` / `tool-orchestrator/` | 废弃整句 `routeMode=list`；ToolOrchestrator 移入 `agents/online/` |
 
 更早基础：`aec9cdb`（`retrieve_and_answer` 决定是否进 KM）、`c466a28`（LangGraph 纯化）、`12a6b13`（Intake 节点拆分）。
 
@@ -78,10 +79,10 @@ Intake（enrichedPlan / executionPlan）
 
 | 路径 | 职责 |
 |------|------|
-| `tool-orchestration/field-catalog.ts` | 声明式 identity 字段表（`age` → `compute_age_from_hits`）；混合问句 / 外部事实启发式 |
-| `tool-orchestration/enrich-plan.ts` | `applyToolPlanGuard`：富化 `enrichedPlan`；混合问句 → `routeMode=dag` + `executionPlan` |
-| `tool-orchestration/execute-tools.ts` | 工具执行：`invokeComputeAge`、`invokeSearchWeb`、`executeDagPlan` |
-| `tool-orchestration/nodes.ts` | `runDagExecutorNode`、`runToolOrchestratorNode` |
+| `agents/online/tool-orchestrator/field-catalog.ts` | 声明式 identity 字段表（`age` → `compute_age_from_hits`）；混合问句 / 外部事实启发式 |
+| `agents/online/tool-orchestrator/enrich-plan.ts` | `applyToolPlanGuard`：富化 `enrichedPlan`；混合问句 → `routeMode=dag` + `executionPlan` |
+| `agents/online/tool-orchestrator/execute-tools.ts` | 工具执行：`invokeComputeAge`、`invokeSearchWeb`、`executeDagPlan` |
+| `agents/online/tool-orchestrator/nodes.ts` | `runDagExecutorNode`、`runToolOrchestratorNode` |
 | `pipeline/graph/state.ts` | 新增 `asOfDate`、`toolResults` |
 | `prepare-turn-start` | 注入 `asOfDate`（年龄计算基准日） |
 | `tools/search-web.ts` | Tavily API；未配置时 `status=disabled` |
@@ -146,4 +147,81 @@ pnpm --filter @fambrain/brain-service run verify:langchain-tools
 
 - [Agent 流程图 · ToolOrchestrator / DagExecutor](./02-agent-flows.md)
 - [坑点 §2.5.7 identity 年龄](./04-pitfalls.md#257-identity-年龄编排工具-p0-23--2026-07)（已更新 P0-24 架构）
+- [坑点 §2.5.10 列举 per-slot](./04-pitfalls.md#2510-列举执行-per-slot-架构升级-p0-26--2026-07)
 - [KM 检索设计](./km-retrieval-design.md)
+
+---
+
+## 9. 代码布局演进（2026-07）
+
+> **动机：** 业务 Agent 代码与应用包 `apps/brain-service` **同名**（`agentflow/brain-service/`），新人读文档、搜路径时易混淆；`ToolOrchestrator` / `DagExecutor` 在文档里是正式 Agent 角色，实现却落在 `agentflow/tool-orchestration/`，与 `intake-coordinator`、`knowledge-manager` 等 **不同级**，`compile.ts` 接线时 mental model 断裂。
+
+### 9.1 变更对照
+
+| 旧路径 | 新路径 | 原因 |
+|--------|--------|------|
+| `agentflow/brain-service/online/` | `agentflow/agents/online/` | 与应用名脱钩；`agents` = 全部 Agent 实现 |
+| `agentflow/brain-service/offline/` | `agentflow/agents/offline/` | 同上 |
+| `agentflow/tool-orchestration/` | `agentflow/agents/online/tool-orchestrator/` | 与 Intake / KM / Analyst **同级**；图节点实现归 online Agent |
+| `agentflow/pipeline/` | **不变** | LangGraph **编排骨架**（state / routes / compile / SSE runtime） |
+| `agentflow/tools/` | **不变** | LangChain **StructuredTool** 定义；包边界导出 `createFambrainTools` |
+| `agentflow/utils/` | **不变** | 跨 Agent 的 LLM / Zod 小工具，非业务域 |
+
+### 9.2 目标目录树
+
+```
+agentflow/
+├── agents/
+│   ├── online/          # IntakeCoordinator, KM, ToolOrchestrator, Analyst, …
+│   └── offline/         # Indexer, DocParser, Learning
+├── pipeline/            # graph/ + runtime/（只接线，不写业务）
+├── tools/               # retrieve_corpus, search_web, …
+├── utils/               # parseJsonObject, zod-utils, …
+└── index.ts             # 对外 export
+```
+
+### 9.3 导入约定
+
+跨目录引用走模块 **index** barrel，例如：
+
+```ts
+import { applyToolPlanGuard, runToolOrchestratorNode } from "@/agentflow/agents/online/tool-orchestrator";
+```
+
+详见 [`.cursor/rules/module-folder-conventions.mdc`](../.cursor/rules/module-folder-conventions.mdc)。
+
+---
+
+## 10. 列举执行 per-slot 演进（2026-07）
+
+> **触发：** P0-22 列举分页上线后，穷举仍用 **整句 `routeMode=list`**；P0-26 混合问句暴露「整句只能一种执行模式」的架构上限。详见 [坑点 §2.5.10](./04-pitfalls.md#2510-列举执行-per-slot-架构升级-p0-26--2026-07)。
+
+### 10.1 旧模型 vs 新模型
+
+| 维度 | 旧（P0-22 初版） | 新（P0-26） |
+|------|------------------|-------------|
+| 穷举路由 | 整句 **`routeMode=list`** | 恒 **`routeMode=slots`**，N 槽各带 executor |
+| 续问识别 | `enumeration-list-intent` **口语 regex** | Intake **`enumerationControl`** 或 UI **exact-match prompt** |
+| KM 执行 | list 与 hybrid **互斥整句分支** | **`retrieval-node` 按槽**：`km_retrieve` ∥ `list_corpus` |
+| 混合问 | 无法同轮 tech + 穷举 | 一槽 hybrid、一槽 list API |
+
+### 10.2 数据流
+
+```mermaid
+flowchart LR
+  IC[Intake LLM<br/>enumerationControl per plan item] --> G[applyEnumerationSlotGuard<br/>补 executor + 页码]
+  G --> R[retrieval-node]
+  R -->|executor=km_retrieve| KM[hybridRecall]
+  R -->|executor=list_corpus| LIST[list-corpus-entries API]
+  KM --> TO[ToolOrchestrator<br/>compose_enumeration]
+  LIST --> TO
+  TO --> IA[Analyst]
+```
+
+### 10.3 与 P0-24 工具编排的关系
+
+- **取数**（KM / list API）在 **`retrieval-node` 按槽** 完成。
+- **成稿**（blocks + 分页文案）仍由 **`ToolOrchestrator` → `compose_enumeration`** 确定性输出。
+- Analyst **不**再内联列举 regex，只消费 `toolResults` + 整理后的 hits。
+
+**验证：** `verify:enumeration-pagination`（含混合 2 槽）、`verify:enumeration-compose`。

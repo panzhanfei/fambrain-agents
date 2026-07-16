@@ -8,7 +8,7 @@ import {
   shouldSkipAnalystLlm,
   streamAnalyzeInformation,
   type InformationAnalystInput,
-} from "../src/agentflow/brain-service/online/information-analyst/index";
+} from "../src/agentflow/agents/online/information-analyst/index";
 import { bootstrapBrainServiceRuntime } from "../src/config/index";
 
 const HALLUCINATION_NAMES = /陈明|Charlie|赵一|潘展飞/;

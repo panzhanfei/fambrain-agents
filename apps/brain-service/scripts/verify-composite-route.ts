@@ -15,12 +15,12 @@ import {
   resolveCompositeRoute,
   splitQuestionUnits,
   type IntakeRoutingDecision,
-} from "../src/agentflow/brain-service/online/intake-coordinator/index";
+} from "../src/agentflow/agents/online/intake-coordinator/index";
 import {
   mergeCompositeHits,
   mergeCompositeRetrieval,
-} from "../src/agentflow/brain-service/online/knowledge-manager/composite/merge";
-import { mergeSubQuestionAnswers } from "../src/agentflow/brain-service/online/information-analyst/analyze-helpers";
+} from "../src/agentflow/agents/online/knowledge-manager/composite/merge";
+import { mergeSubQuestionAnswers } from "../src/agentflow/agents/online/information-analyst/analyze-helpers";
 
 const retrieveStub: IntakeRoutingDecision = {
   intent: "retrieve_and_answer",

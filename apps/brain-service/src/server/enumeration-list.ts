@@ -1,6 +1,6 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { z } from "zod";
-import { listCorpusEntriesPage, corpusEntryToHit } from "@/agentflow/brain-service/online/knowledge-manager/list/list-corpus-entries";
+import { listCorpusEntriesPage, corpusEntryToHit } from "@/agentflow/agents/online/knowledge-manager/list/list-corpus-entries";
 import { requireAuth } from "@/server/auth-middleware";
 
 const enumerationListBodySchema = z.object({

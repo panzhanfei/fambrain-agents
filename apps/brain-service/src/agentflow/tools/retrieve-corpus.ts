@@ -1,6 +1,6 @@
 import { tool } from "@langchain/core/tools";
 import { z } from "zod";
-import { retrieveKnowledge } from "@/agentflow/brain-service/online/knowledge-manager";
+import { retrieveKnowledge } from "@/agentflow/agents/online/knowledge-manager";
 import { getToolContext } from "./context";
 
 const queryTypeSchema = z.enum([

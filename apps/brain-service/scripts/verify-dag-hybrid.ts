@@ -4,10 +4,12 @@
  *   pnpm --filter @fambrain/brain-service run verify:dag-hybrid
  */
 import assert from "node:assert/strict";
-import { buildHybridExecutionPlan } from "../src/agentflow/tool-orchestration/enrich-plan";
-import { invokeSynthesizeMerge } from "../src/agentflow/tool-orchestration/execute-tools";
-import type { RoutedIntakeDecision } from "../src/agentflow/brain-service/online/intake-coordinator";
-import type { ToolRunResult } from "../src/agentflow/tool-orchestration/types";
+import {
+    buildHybridExecutionPlan,
+    invokeSynthesizeMerge,
+    type ToolRunResult,
+} from "../src/agentflow/agents/online/tool-orchestrator";
+import type { RoutedIntakeDecision } from "../src/agentflow/agents/online/intake-coordinator";
 
 const ok = (msg: string) => console.log(`  ✓ ${msg}`);
 

@@ -11,7 +11,7 @@ import {
     DEFAULT_CHITCHAT_BRIEF_REPLY,
     runIntakePipeline,
     type IntakeRoutingDecision,
-} from "../src/agentflow/brain-service/online/intake-coordinator/index";
+} from "../src/agentflow/agents/online/intake-coordinator/index";
 import { bootstrapBrainServiceRuntime } from "../src/config/index";
 
 const DEFAULT_RUNS = 10;
@@ -94,7 +94,7 @@ const history: DbChatTurn[] = [{ role: "user", content: "你好" }];
 for (let i = 1; i <= runs; i++) {
     try {
         const raw = await completeIntakeCoordinator(history);
-        const { decision, earlyExit } = runIntakePipeline({
+        const { decision, earlyExit } = await runIntakePipeline({
             intakeRaw: raw,
             userQuestion: "你好",
             intakeHistory: history,

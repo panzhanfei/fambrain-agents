@@ -10,14 +10,14 @@ import {
     isClarifyEarlyExit,
     parseIntakeDecision,
     runIntakePipeline,
-} from "../src/agentflow/brain-service/online/intake-coordinator/index";
-import { findRepeatAnswerInHistory } from "../src/agentflow/brain-service/online/intake-coordinator";
+} from "../src/agentflow/agents/online/intake-coordinator/index";
+import { findRepeatAnswerInHistory } from "../src/agentflow/agents/online/intake-coordinator";
 import { bootstrapBrainServiceRuntime } from "../src/config/index";
 import { enableRepeatGuardForVerify } from "./verify-test-env";
 
-const assertSync = (name: string, fn: () => void) => {
+const assertCase = async (name: string, fn: () => void | Promise<void>) => {
     try {
-        fn();
+        await fn();
         console.log(`  ✓ ${name}`);
     } catch (e) {
         const msg = e instanceof Error ? e.message : String(e);
@@ -54,16 +54,16 @@ const retrieveWithEntityJson = JSON.stringify({
 
 console.log("verify-intake-coreference\n— pipeline 单测（LLM JSON 透传） —");
 
-assertSync("isClarifyEarlyExit：clarify + 反问", () => {
+await assertCase("isClarifyEarlyExit：clarify + 反问", async () => {
     const parsed = parseIntakeDecision(clarifyJson);
     if (!parsed || !isClarifyEarlyExit(parsed)) {
         throw new Error("应识别为 clarify 早退");
     }
 });
 
-assertSync("pipeline：LLM clarify → earlyExit", () => {
+await assertCase("pipeline：LLM clarify → earlyExit", async () => {
     const history: DbChatTurn[] = [{ role: "user", content: "那个项目呢？" }];
-    const { decision, earlyExit } = runIntakePipeline({
+    const { decision, earlyExit } = await runIntakePipeline({
         intakeRaw: clarifyJson,
         userQuestion: "那个项目呢？",
         intakeHistory: history,
@@ -78,13 +78,13 @@ assertSync("pipeline：LLM clarify → earlyExit", () => {
     }
 });
 
-assertSync("pipeline：LLM retrieve 含实体 → 非早退", () => {
+await assertCase("pipeline：LLM retrieve 含实体 → 非早退", async () => {
     const history: DbChatTurn[] = [
         { role: "user", content: "城管平台用了什么技术" },
         { role: "assistant", content: "React TypeScript" },
         { role: "user", content: "那个项目呢？" },
     ];
-    const { decision, earlyExit } = runIntakePipeline({
+    const { decision, earlyExit } = await runIntakePipeline({
         intakeRaw: retrieveWithEntityJson,
         userQuestion: "那个项目呢？",
         intakeHistory: history,
@@ -97,7 +97,7 @@ assertSync("pipeline：LLM retrieve 含实体 → 非早退", () => {
     }
 });
 
-assertSync("pipeline：多问 retrieve → composite", () => {
+await assertCase("pipeline：多问 retrieve → composite", async () => {
     const contradictory = JSON.stringify({
         intent: "retrieve_and_answer",
         searchQuery: "个人简介 简历 姓名 年龄 项目经历",
@@ -132,7 +132,7 @@ assertSync("pipeline：多问 retrieve → composite", () => {
         userFactLabel: null,
         userFactValue: null,
     });
-    const { decision, earlyExit } = runIntakePipeline({
+    const { decision, earlyExit } = await runIntakePipeline({
         intakeRaw: contradictory,
         userQuestion: "我叫什么？今年多大？做过哪些项目？",
         intakeHistory: [{ role: "user", content: "我叫什么？今年多大？做过哪些项目？" }],
@@ -150,7 +150,7 @@ console.log("\n— repeat guard 单测 —");
 await bootstrapBrainServiceRuntime();
 enableRepeatGuardForVerify();
 
-assertSync("repeat：同句再问命中 history 答", () => {
+await assertCase("repeat：同句再问命中 history 答", async () => {
     const q = "我叫什么，我做过什么项目？";
     const history: DbChatTurn[] = [
         { role: "user", content: q },
@@ -163,7 +163,7 @@ assertSync("repeat：同句再问命中 history 答", () => {
     }
 });
 
-assertSync("repeat：标点差异仍命中", () => {
+await assertCase("repeat：标点差异仍命中", async () => {
     const history: DbChatTurn[] = [
         { role: "user", content: "城管平台用了什么技术" },
         { role: "assistant", content: "React + TypeScript" },
@@ -175,7 +175,7 @@ assertSync("repeat：标点差异仍命中", () => {
     }
 });
 
-assertSync("repeat：首次提问不命中", () => {
+await assertCase("repeat：首次提问不命中", async () => {
     const hit = findRepeatAnswerInHistory(
         [{ role: "user", content: "你好" }],
         "你好"
@@ -183,7 +183,7 @@ assertSync("repeat：首次提问不命中", () => {
     if (hit) throw new Error("首次问不应命中");
 });
 
-assertSync("repeat：REPEAT_QUESTION_CACHE_DISABLED=1 时不命中", () => {
+await assertCase("repeat：REPEAT_QUESTION_CACHE_DISABLED=1 时不命中", async () => {
     process.env.REPEAT_QUESTION_CACHE_DISABLED = "1";
     resetInfraConfigForTests();
     const q = "我今年多大";
@@ -204,14 +204,14 @@ console.log("\n— Intake live + pipeline —");
 const assertLive = async (
     name: string,
     history: DbChatTurn[],
-    check: (result: ReturnType<typeof runIntakePipeline>) => void
+    check: (result: Awaited<ReturnType<typeof runIntakePipeline>>) => void
 ) => {
     try {
         const lastUser =
             [...history].reverse().find((t) => t.role === "user")?.content ??
             "";
         const raw = await completeIntakeCoordinator(history);
-        const result = runIntakePipeline({
+        const result = await runIntakePipeline({
             intakeRaw: raw,
             userQuestion: lastUser,
             intakeHistory: history,

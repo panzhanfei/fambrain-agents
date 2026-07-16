@@ -12,8 +12,8 @@ import {
     resolveOrchestratedTool,
     runOrchestratedSubQuestion,
 } from "../src/agentflow/tools/orchestrated/run-sub-question";
-import { completeAnalyzeSubQuestion } from "../src/agentflow/brain-service/online/information-analyst/complete-analyze";
-import type { KnowledgeHit } from "../src/agentflow/brain-service/online/knowledge-manager";
+import { completeAnalyzeSubQuestion } from "../src/agentflow/agents/online/information-analyst/complete-analyze";
+import type { KnowledgeHit } from "../src/agentflow/agents/online/knowledge-manager";
 
 const ok = (msg: string) => console.log(`  ✓ ${msg}`);
 

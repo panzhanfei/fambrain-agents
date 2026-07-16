@@ -4,7 +4,7 @@
 > **原则：** 检索层不调 Chat LLM；快、稳、可回归；Pipeline 对外合同保持 `hits / coverage / notes`（可选扩展 `confidenceTier`）  
 > **范围：** **KM 为主** + 必须/建议配合的模块；FC / Organizer / Analyst 默认不动
 
-> **代码布局：** 见 `apps/brain-service/src/agentflow/brain-service/online/knowledge-manager/README.md`（`contract/` · `nodes/` · `pipeline/` · `recall/` · `profile/`）。
+> **代码布局：** 见 `apps/brain-service/src/agentflow/agents/online/knowledge-manager/README.md`（`contract/` · `nodes/` · `pipeline/` · `recall/` · `profile/`）。
 
 ---
 

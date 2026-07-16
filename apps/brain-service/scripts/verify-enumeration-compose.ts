@@ -4,13 +4,13 @@
  *   pnpm --filter @fambrain/brain-service exec tsx scripts/verify-enumeration-compose.ts
  */
 import assert from "node:assert/strict";
-import { PROJECTS_SLOT } from "../src/agentflow/brain-service/online/intake-coordinator";
-import { organizeKnowledge } from "../src/agentflow/brain-service/online/content-organizer/organize-knowledge";
-import { shouldSkipSubQuestionLlm } from "../src/agentflow/brain-service/online/information-analyst/analyze-helpers";
-import { composeEnumerationAnswer } from "../src/agentflow/brain-service/online/information-analyst/compose-message";
-import { parseKnowledgeHits } from "../src/agentflow/brain-service/online/knowledge-manager/contract/schema";
-import { organizeHits } from "../src/agentflow/brain-service/online/content-organizer/organize-hits";
-import type { KnowledgeHit } from "../src/agentflow/brain-service/online/knowledge-manager";
+import { PROJECTS_SLOT } from "../src/agentflow/agents/online/intake-coordinator";
+import { organizeKnowledge } from "../src/agentflow/agents/online/content-organizer/organize-knowledge";
+import { shouldSkipSubQuestionLlm } from "../src/agentflow/agents/online/information-analyst/analyze-helpers";
+import { composeEnumerationAnswer } from "../src/agentflow/agents/online/information-analyst/compose-message";
+import { parseKnowledgeHits } from "../src/agentflow/agents/online/knowledge-manager/contract/schema";
+import { organizeHits } from "../src/agentflow/agents/online/content-organizer/organize-hits";
+import type { KnowledgeHit } from "../src/agentflow/agents/online/knowledge-manager";
 
 const mkHit = (i: number): KnowledgeHit => ({
     path: `data/doc/users/u/corpus/projects/project-${i}.md`,

@@ -4,15 +4,15 @@
  *   pnpm --filter @fambrain/brain-service run verify:tool-orchestration
  */
 import assert from "node:assert/strict";
-import { applyToolPlanGuard } from "../src/agentflow/tool-orchestration/enrich-plan";
 import {
+    applyToolPlanGuard,
+    pickToolResultForSubQuestion,
     resolveIdentityField,
+    resolvePostRetrievalToolRuns,
     userQuestionSuggestsHybridDag,
-} from "../src/agentflow/tool-orchestration/field-catalog";
-import { resolvePostRetrievalToolRuns } from "../src/agentflow/tool-orchestration/execute-tools";
-import { pickToolResultForSubQuestion } from "../src/agentflow/tool-orchestration";
-import type { RoutedIntakeDecision } from "../src/agentflow/brain-service/online/intake-coordinator";
-import type { KnowledgeHit } from "../src/agentflow/brain-service/online/knowledge-manager";
+} from "../src/agentflow/agents/online/tool-orchestrator";
+import type { RoutedIntakeDecision } from "../src/agentflow/agents/online/intake-coordinator";
+import type { KnowledgeHit } from "../src/agentflow/agents/online/knowledge-manager";
 import type { PipelineGraphState } from "../src/agentflow/pipeline/graph/state";
 
 const ok = (msg: string) => console.log(`  ✓ ${msg}`);

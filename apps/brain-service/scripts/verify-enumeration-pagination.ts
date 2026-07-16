@@ -1,23 +1,25 @@
 /**
- * 列举分页：continuation 检测、list API、槽答案 blocks cache。
+ * 列举分页：UI exact-match、按槽 list_corpus、list API、槽答案 blocks cache。
  *
- *   pnpm --filter @fambrain/brain-service exec tsx scripts/verify-enumeration-pagination.ts
+ *   pnpm --filter @fambrain/brain-service run verify:enumeration-pagination
  */
 import assert from "node:assert/strict";
 import {
-    applyEnumerationListIntentGuard,
+    applyEnumerationSlotGuard,
     buildEnumerationListDecision,
     detectEnumerationContinuationKind,
     isExhaustiveListRequest,
+    matchUiEnumerationPrompt,
     resolveEnumerationContinuation,
-} from "../src/agentflow/brain-service/online/intake-coordinator";
+    runIntakePipeline,
+} from "../src/agentflow/agents/online/intake-coordinator";
 import {
     analystResultToCachedFacet,
     cachedFacetToAnalystResult,
-} from "../src/agentflow/brain-service/online/knowledge-manager";
-import { composeEnumerationAnswer } from "../src/agentflow/brain-service/online/information-analyst/compose-message";
-import { listCorpusEntriesPage } from "../src/agentflow/brain-service/online/knowledge-manager/list/list-corpus-entries";
-import { retrieveEnumerationPage } from "../src/agentflow/brain-service/online/knowledge-manager/list/retrieve-enumeration-page";
+} from "../src/agentflow/agents/online/knowledge-manager";
+import { composeEnumerationAnswer } from "../src/agentflow/agents/online/information-analyst/compose-message";
+import { listCorpusEntriesPage } from "../src/agentflow/agents/online/knowledge-manager/list/list-corpus-entries";
+import { retrieveEnumerationPage } from "../src/agentflow/agents/online/knowledge-manager/list/retrieve-enumeration-page";
 import {
     clearMemoryEnumerationListSessions,
     upsertEnumerationListSession,
@@ -25,10 +27,13 @@ import {
 
 console.log("verify-enumeration-pagination");
 
-assert.equal(isExhaustiveListRequest("列出全部36个项目"), true);
+// UI exact-match only（无口语 regex）
+assert.equal(isExhaustiveListRequest("列出全部项目名称"), true);
 assert.equal(isExhaustiveListRequest("做过哪些项目"), false);
+assert.equal(isExhaustiveListRequest("列出全部36个项目"), false);
 assert.equal(detectEnumerationContinuationKind("更多项目"), "project");
 assert.equal(detectEnumerationContinuationKind("更多经历"), "experience");
+assert.equal(matchUiEnumerationPrompt("更多项目")?.action, "continue");
 
 const exhaustiveDecision = buildEnumerationListDecision({
     userQuestion: "列出全部项目名称",
@@ -38,21 +43,87 @@ const exhaustiveDecision = buildEnumerationListDecision({
     pageSize: 20,
 });
 assert.equal(exhaustiveDecision.listIntent, "exhaustive");
+assert.equal(exhaustiveDecision.routeMode, "slots");
+assert.equal(exhaustiveDecision.compositeSlots[0]?.executor, "list_corpus");
 assert.equal(exhaustiveDecision.enumerationPageSize, 20);
 
-const guarded = applyEnumerationListIntentGuard(
+const session = { conversationId: "c-enum", corpusUserId: "u-enum" };
+const guarded = await applyEnumerationSlotGuard(
     {
         ...exhaustiveDecision,
         listIntent: null,
         routeMode: "slots",
-        compositeSlots: [],
+        compositeSlots: [
+            {
+                id: "projects",
+                label: "项目经历",
+                searchQuery: "项目",
+                queryType: "enumeration",
+                topics: ["project"],
+                subTasks: [],
+                enumerationControl: {
+                    action: "exhaustive",
+                    listKind: "project",
+                },
+            },
+        ],
         searchQuery: "项目",
         queryType: "enumeration",
     },
-    "请把全部36个项目都列出来"
+    "任意问法",
+    session
 );
 assert.equal(guarded.listIntent, "exhaustive");
-assert.equal(guarded.routeMode, "list");
+assert.equal(guarded.routeMode, "slots");
+assert.equal(guarded.compositeSlots[0]?.executor, "list_corpus");
+
+// 混合问：tech + list 槽
+const mixedRaw = JSON.stringify({
+    intent: "retrieve_and_answer",
+    searchQuery: "城管 技术栈 项目",
+    subTasks: ["城管技术", "全部项目"],
+    topics: ["project", "tech-stack"],
+    language: "zh",
+    confidence: 0.9,
+    queryType: "tech",
+    clarifyingQuestion: null,
+    briefReply: null,
+    retrievalPlan: [
+        {
+            label: "城管平台技术栈",
+            searchQuery: "城市管理平台 技术栈",
+            queryType: "tech",
+            topics: ["project", "tech-stack"],
+            enumerationControl: null,
+        },
+        {
+            label: "其它项目全部列出",
+            searchQuery: "项目经历 全部项目",
+            queryType: "enumeration",
+            topics: ["project"],
+            enumerationControl: {
+                action: "exhaustive",
+                listKind: "project",
+                excludeHint: "城管",
+            },
+        },
+    ],
+    userFactKey: null,
+    userFactLabel: null,
+    userFactValue: null,
+});
+const { decision: mixed } = await runIntakePipeline({
+    intakeRaw: mixedRaw,
+    userQuestion:
+        "城管平台用了那些技术？他除了城管还做了其他那些项目全部列出。",
+    intakeHistory: [],
+    session,
+});
+assert.equal(mixed.routeMode, "slots");
+assert.ok(mixed.compositeSlots.length >= 2, "mixed ≥2 slots");
+const execs = mixed.compositeSlots.map((s) => s.executor ?? "km_retrieve");
+assert.ok(execs.includes("km_retrieve"), "tech slot km");
+assert.ok(execs.includes("list_corpus"), "list slot list_corpus");
 
 const composed = composeEnumerationAnswer({
     hits: Array.from({ length: 20 }, (_, i) => ({
@@ -105,6 +176,8 @@ const continued = await resolveEnumerationContinuation({
 assert.ok(continued);
 assert.equal(continued!.listIntent, "continue");
 assert.equal(continued!.enumerationPage, 2);
+assert.equal(continued!.routeMode, "slots");
+assert.equal(continued!.compositeSlots[0]?.executor, "list_corpus");
 
 const corpusUserId = process.env.FAMBRAIN_CORPUS_USER_ID?.trim();
 if (corpusUserId) {
@@ -123,7 +196,9 @@ if (corpusUserId) {
             page: 2,
             pageSize: 20,
         });
-        assert.ok(page2.enumerationMeta?.hasMore === false || page2.hits.length > 0);
+        assert.ok(
+            page2.enumerationMeta?.hasMore === false || page2.hits.length > 0
+        );
     }
     console.log(`live corpus projects total=${page1.total}`);
 } else {
