@@ -52,6 +52,11 @@ export {
 } from "./list/list-corpus-entries";
 export { retrieveEnumerationPage } from "./list/retrieve-enumeration-page";
 export {
+    collectEntryYears,
+    entryOverlapsTimeWindow,
+    extractRoleFromExperienceBody,
+} from "./list/entry-time-window";
+export {
     assessConfidence,
     deriveCoverageFromTier,
     shouldCoalesceEmptyHits,

@@ -36,7 +36,10 @@ const useCompositeParallelAnalyze = (
     compositeSubResults: NonNullable<
         InformationAnalystInput["compositeSubResults"]
     >;
-} => (input.compositeSubResults?.length ?? 0) >= 2;
+} =>
+    (input.composeMode === "composite" ||
+        (input.compositeSubResults?.length ?? 0) >= 2) &&
+    (input.compositeSubResults?.length ?? 0) >= 2;
 
 const resolveSingleSlotCachedAnswer = (
     input: InformationAnalystInput

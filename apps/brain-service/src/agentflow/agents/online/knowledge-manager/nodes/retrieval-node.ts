@@ -12,7 +12,8 @@ import { upsertEnumerationListSession } from "@fambrain/infra";
 
 const fetchListSlot = async (
   slot: CompositeRetrievalSlot,
-  corpusUserId: string
+  corpusUserId: string,
+  asOfDate?: string | null
 ): Promise<CompositeSubRetrieval> => {
   const listKind =
     slot.enumerationControl?.listKind ??
@@ -21,6 +22,7 @@ const fetchListSlot = async (
       searchQuery: slot.searchQuery,
       topics: slot.topics,
       subTasks: slot.subTasks,
+      listKind: slot.enumerationControl?.listKind ?? null,
     });
   const page = slot.enumerationPage ?? 1;
   const pageSize = slot.enumerationPageSize ?? 20;
@@ -29,6 +31,8 @@ const fetchListSlot = async (
     listKind,
     page,
     pageSize,
+    timeWindowYears: slot.enumerationControl?.timeWindowYears ?? null,
+    asOfDate,
   });
   return {
     slot: slot.id,
@@ -151,12 +155,15 @@ export const runRetrievalNode = async (
         ReturnType<typeof resolveIncrementalCompositePlan>
       > | null = null;
 
-      if (kmSlots.length > 0) {
+      if (slots.length > 0) {
         incremental = await resolveIncrementalCompositePlan({
           session: sessionKey,
           userQuestion: state.userQuestion,
-          slots: kmSlots,
+          slots,
         });
+      }
+
+      if (kmSlots.length > 0 && incremental) {
         const kmFetched = await retrieveCompositeIncremental({
           corpusUserId: state.context.corpusUserId,
           plan: incremental,
@@ -167,7 +174,11 @@ export const runRetrievalNode = async (
 
       const listSubResults = await Promise.all(
         listSlots.map((slot) =>
-          fetchListSlot(slot, state.context.corpusUserId)
+          fetchListSlot(
+            slot,
+            state.context.corpusUserId,
+            state.asOfDate ?? null
+          )
         )
       );
 

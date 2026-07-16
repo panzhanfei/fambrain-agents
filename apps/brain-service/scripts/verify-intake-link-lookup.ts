@@ -161,6 +161,183 @@ await assertCase("泛化「开源两个项目 GitHub」→ 单槽简历对外链
     }
 });
 
+await assertCase(
+    "混合问（LLM 已标 external_link +「项目的…地址」label）→ canonical 含对外链接模板",
+    async () => {
+        const userQuestion =
+            "帮我列出 所有我做过的项目，并且告诉我 其中开源项目的githup地址跟线上地址";
+        const intakeRaw = JSON.stringify({
+            intent: "retrieve_and_answer",
+            searchQuery: "项目经历 全部项目 项目名称 职责 技术栈",
+            subTasks: [
+                "列举所有项目名称",
+                "开源项目的 GitHub 与线上地址",
+            ],
+            topics: ["project", "tech-stack"],
+            language: "zh",
+            confidence: 0.9,
+            queryType: "enumeration",
+            clarifyingQuestion: null,
+            briefReply: null,
+            retrievalPlan: [
+                {
+                    label: "列举所有项目名称",
+                    searchQuery: "项目经历 全部项目 项目名称",
+                    queryType: "enumeration",
+                    topics: ["project", "tech-stack"],
+                    enumerationControl: {
+                        action: "preview",
+                        listKind: "project",
+                    },
+                },
+                {
+                    label: "开源项目的 GitHub 与线上地址",
+                    searchQuery: "开源 GitHub 线上地址",
+                    queryType: "external_link",
+                    topics: ["personal", "resume", "project"],
+                },
+            ],
+            userFactKey: null,
+            userFactLabel: null,
+            userFactValue: null,
+        });
+        const { decision, earlyExit } = await runIntakePipeline({
+            intakeRaw,
+            userQuestion,
+            intakeHistory: [],
+        });
+        if (earlyExit) throw new Error("不应早退");
+        const slots = decision.compositeSlots ?? [];
+        if (slots.length < 2) {
+            throw new Error(`期望 ≥2 槽，实际 ${slots.length}`);
+        }
+        const linkSlot = slots.find((s) => s.queryType === "external_link");
+        if (!linkSlot) {
+            throw new Error(`应含 external_link 槽: ${slots.map((s) => s.queryType).join(",")}`);
+        }
+        if (!linkSlot.searchQuery.includes("对外链接")) {
+            throw new Error(
+                `external_link 应 canonical 到模板 searchQuery: ${linkSlot.searchQuery}`
+            );
+        }
+        if (!linkSlot.searchQuery.includes("开源")) {
+            throw new Error(
+                `external_link searchQuery 应保留开源语义: ${linkSlot.searchQuery}`
+            );
+        }
+        const enumSlot = slots.find((s) => s.queryType === "enumeration");
+        if (!enumSlot?.searchQuery.includes("全部项目")) {
+            throw new Error(
+                `enumeration 应 canonical 到 projects: ${enumSlot?.searchQuery}`
+            );
+        }
+    }
+);
+
+await assertCase(
+    "混合问：双 enumeration 无结构化 sibling → 不再口语纠偏（信 Intake / prompt）",
+    async () => {
+        const userQuestion =
+            "帮我列出 所有我做过的项目，并且告诉我 他开源项目的githup地址跟线上地址";
+        const intakeRaw = JSON.stringify({
+            intent: "retrieve_and_answer",
+            searchQuery: "所有项目 开源 GitHub 线上地址",
+            subTasks: ["列举所有项目名称", "提供每个项目的GitHub地址及线上地址"],
+            topics: ["project", "personal"],
+            language: "zh",
+            confidence: 0.86,
+            queryType: "enumeration",
+            clarifyingQuestion: null,
+            briefReply: null,
+            retrievalPlan: [
+                {
+                    label: "列举所有项目名称和简要描述",
+                    searchQuery: "所有项目名称 项目经历",
+                    queryType: "enumeration",
+                    topics: ["project"],
+                    enumerationControl: {
+                        action: "preview",
+                        listKind: "project",
+                    },
+                },
+                {
+                    label: "提供每个项目的GitHub地址及线上地址",
+                    searchQuery: "开源项目 GitHub 线上地址",
+                    queryType: "enumeration",
+                    topics: ["project"],
+                },
+            ],
+            userFactKey: null,
+            userFactLabel: null,
+            userFactValue: null,
+        });
+        const { decision, earlyExit } = await runIntakePipeline({
+            intakeRaw,
+            userQuestion,
+            intakeHistory: [],
+        });
+        if (earlyExit) throw new Error("不应早退");
+        if (decision.routeMode !== "slots") {
+            throw new Error(`期望 slots，实际 ${decision.routeMode}`);
+        }
+        const slots = decision.compositeSlots ?? [];
+        if (slots.length < 2) {
+            throw new Error(`期望 ≥2 槽，实际 ${slots.length}`);
+        }
+        const types = slots.map((s) => s.queryType);
+        if (!types.every((t) => t === "enumeration")) {
+            throw new Error(
+                `无 sibling external_link 时不应口语纠偏: ${types.join(",")}`
+            );
+        }
+        const ids = new Set(slots.map((s) => s.id));
+        if (ids.size !== slots.length) {
+            throw new Error(`槽 id 须唯一: ${[...ids].join(",")}`);
+        }
+    }
+);
+
+await assertCase(
+    "顶层 external_link + plan 项 topics 含 personal → 误标 enumeration 纠偏",
+    async () => {
+        const userQuestion = "简历里的 GitHub 链接给我";
+        const intakeRaw = JSON.stringify({
+            intent: "retrieve_and_answer",
+            searchQuery: "简历 GitHub",
+            subTasks: ["对外链接"],
+            topics: ["personal", "resume"],
+            language: "zh",
+            confidence: 0.9,
+            queryType: "external_link",
+            clarifyingQuestion: null,
+            briefReply: null,
+            retrievalPlan: [
+                {
+                    label: "对外链接",
+                    searchQuery: "GitHub 链接",
+                    queryType: "enumeration",
+                    topics: ["personal", "resume"],
+                },
+            ],
+            userFactKey: null,
+            userFactLabel: null,
+            userFactValue: null,
+        });
+        const { decision, earlyExit } = await runIntakePipeline({
+            intakeRaw,
+            userQuestion,
+            intakeHistory: [],
+        });
+        if (earlyExit) throw new Error("不应早退");
+        const slots = decision.compositeSlots ?? [];
+        if (!slots.some((s) => s.queryType === "external_link")) {
+            throw new Error(
+                `应纠偏为 external_link: ${slots.map((s) => s.queryType).join(",")}`
+            );
+        }
+    }
+);
+
 await assertCase("编号双问 GitHub → 2 槽 external_link（实体级 searchQuery）", async () => {
     const userQuestion =
         "他开源的两个项目的 GitHub 地址都给我\n1. 物联网模板归档项目GitHub地址\n2. 工具库草稿项目GitHub地址";

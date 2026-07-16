@@ -54,24 +54,32 @@ intake-coordinator/
 │   ├── intake-pipeline.ts # runIntakePipeline()
 │   └── parse-intake.ts    # parseIntakeDecision(), defaultIntakeDecision()
 │
-├── query-signals.ts       ← 问句结构工具（编号/并列/过期 plan；无意图词表）
+├── signals/               ← 问句结构工具（编号/并列/过期 plan；无意图词表）
+├── enumeration/           ← UI 列举按钮 prompt（exact-match）
 │
 ├── nodes/                 ← LangGraph 图节点（仅 intake）
 │   └── intake-node.ts     # runIntakeNode()
 │
-├── guards/                ← LLM 之后的规则兜底
+├── guards/                ← LLM 之后的规则兜底（不口语二次规划）
 │   ├── intake-continuation-guard.ts
 │   ├── intake-link-lookup-guard.ts
 │   ├── intake-chitchat-guard.ts
-│   ├── intake-retrieval-plan-guard.ts
+│   ├── intake-retrieval-plan-guard.ts  # schema 合法化 + facet 去重
 │   ├── composite-route-guard.ts
 │   └── enumeration-list-intent.ts
 │
 ├── composite/             ← 多问 / 分槽规划（routing、槽模板）
 │   ├── composite-routing.ts
 │   ├── composite-slot-queries.ts
+│   ├── identity-field-search.ts   # displayLabel + searchQuery（无口语 labels）
+│   ├── repair-retrieval-plan.ts   # normalize + dedupeByFacet
 │   └── enumeration-target.ts
+│
+├── path-plan/             ← PathPlan 四桶编译（P0-28）
 ```
+
+单元测试集中在仓库 `apps/brain-service/tests/intake-coordinator/`（见该目录 README）。
+
 
 用户自述记忆见同级目录 [`../user-fact/`](../user-fact/README.md)。
 
@@ -155,7 +163,7 @@ LLM 原始 JSON
     ▼ RoutedIntakeDecision → state.decision
 ```
 
-**列举分页（2026-07）：** 不再用口语 regex / 全局 `routeMode=list`。Intake LLM 在 **retrievalPlan 项** 填 `enumerationControl`；混合问（tech + 全部列出）拆多槽，retrieval 按槽执行 KM 或 list API。UI 按钮 prompt 见 `enumeration-action-prompts.ts`（exact-match 短路）。
+**列举分页（2026-07）：** 不再用口语 regex / 全局 `routeMode=list`。Intake LLM 在 **retrievalPlan 项** 填 `enumerationControl`；混合问（tech + 全部列出）拆多槽，retrieval 按槽执行 KM 或 list API。UI 按钮 prompt 见 `enumeration/action-prompts.ts`（exact-match 短路）。
 
 详见坑点 [§2.5.9 GitHub 对外链接](../../../../../../../docs/04-pitfalls.md#259-简历-github--对外链接问法-p0-25--2026-07)（P0-25）。
 
@@ -175,7 +183,7 @@ applyCompositeRouteGuard
 
 **为何合并：** 单问、多问原先在 KM / cache / Analyst 分叉（single vs composite），重复逻辑多；统一后 cache key、日志、verify 脚本只需看 `compositeSlots.length`。
 
-### 3.5 单问 ↔ 多问结构对齐（`query-signals.ts`）
+### 3.5 单问 ↔ 多问结构对齐（`signals/query-signals.ts`）
 
 LLM 的 `retrievalPlan` / `subTasks` 可能**与当前问句不一致**（尤其多轮会话 inherited plan）。guard 用**结构信号**对齐，**不用** github/开源 等意图词表：
 

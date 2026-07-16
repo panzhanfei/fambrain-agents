@@ -6,12 +6,15 @@
 import assert from "node:assert/strict";
 import {
     applyToolPlanGuard,
+    decisionSuggestsHybridDag,
     pickToolResultForSubQuestion,
-    resolveIdentityField,
+    resolveIdentityFieldFromPlan,
     resolvePostRetrievalToolRuns,
-    userQuestionSuggestsHybridDag,
 } from "../src/agentflow/agents/online/tool-orchestrator";
-import type { RoutedIntakeDecision } from "../src/agentflow/agents/online/intake-coordinator";
+import {
+    emptyPathPlan,
+    type RoutedIntakeDecision,
+} from "../src/agentflow/agents/online/intake-coordinator";
 import type { KnowledgeHit } from "../src/agentflow/agents/online/knowledge-manager";
 import type { PipelineGraphState } from "../src/agentflow/pipeline/graph/state";
 
@@ -33,12 +36,15 @@ const baseDecision = (): RoutedIntakeDecision => ({
             searchQuery: "年龄 出生日期",
             queryType: "identity",
             topics: ["personal"],
+            identityField: "age",
         },
     ],
     routeMode: "skip",
     compositeSlots: [],
-    routeReason: "single_default",
-    routePlanSource: "retrieval_plan",
+    pathPlan: emptyPathPlan(),
+    composeMode: "qa",
+    routeReason: "slots_default",
+    routePlanSource: "intake_retrieval_plan",
     userFactKey: null,
     userFactLabel: null,
     userFactValue: null,
@@ -54,17 +60,17 @@ const resumeHit = (excerpt: string): KnowledgeHit => ({
 console.log("verify-tool-orchestration\n— field-catalog —");
 
 {
-    const field = resolveIdentityField("我今年多大");
+    const field = resolveIdentityFieldFromPlan({ identityField: "age" });
     assert.equal(field?.id, "age");
     assert.equal(field?.toolId, "compute_age_from_hits");
-    ok("年龄口语 → compute_age_from_hits");
+    ok("identityField=age → compute_age_from_hits");
 }
 
 {
-    const field = resolveIdentityField("姓名");
+    const field = resolveIdentityFieldFromPlan({ identityField: "name" });
     assert.equal(field?.id, "name");
-    assert.equal(field?.toolId, null);
-    ok("姓名不走计算工具");
+    assert.equal(field?.toolId, "extract_identity_from_hits");
+    ok("identityField=name → extract_identity_from_hits");
 }
 
 console.log("\n— applyToolPlanGuard —");
@@ -87,12 +93,13 @@ console.log("\n— applyToolPlanGuard —");
             ...baseDecision(),
             searchQuery: "奥卡云 公司 最近怎么样",
             queryType: "default",
+            topics: ["external"],
             retrievalPlan: [
                 {
                     label: "公司动态",
                     searchQuery: "奥卡云 公司 最近",
                     queryType: "default",
-                    topics: [],
+                    topics: ["external"],
                 },
             ],
         },
@@ -100,7 +107,7 @@ console.log("\n— applyToolPlanGuard —");
     );
     assert.equal(routed.primaryDataSource, "web");
     assert.ok(routed.webQuery);
-    ok("外部事实问句 → primaryDataSource=web");
+    ok("topics=external → primaryDataSource=web");
 }
 
 console.log("\n— hybrid DAG intent —");
@@ -108,13 +115,38 @@ console.log("\n— hybrid DAG intent —");
 {
     const q =
         "根据我的简历和今年市场行情，评估我去奥卡云公司的机会";
-    assert.ok(userQuestionSuggestsHybridDag(q));
-    const routed = applyToolPlanGuard(baseDecision(), q);
+    assert.ok(
+        decisionSuggestsHybridDag({
+            topics: ["personal", "resume", "external"],
+        })
+    );
+    const routed = applyToolPlanGuard(
+        {
+            ...baseDecision(),
+            topics: ["personal", "resume", "external"],
+            searchQuery: "奥卡云 公司 机会 评估",
+            retrievalPlan: [
+                {
+                    label: "简历匹配",
+                    searchQuery: "个人简介 简历 技能",
+                    queryType: "identity",
+                    topics: ["personal", "resume"],
+                },
+                {
+                    label: "市场行情",
+                    searchQuery: "市场行情 招聘",
+                    queryType: "default",
+                    topics: ["external"],
+                },
+            ],
+        },
+        q
+    );
     assert.equal(routed.routeMode, "dag");
     assert.ok((routed.executionPlan?.length ?? 0) >= 3);
     const synth = routed.executionPlan?.find((n) => n.id === "synthesis");
     assert.ok(synth?.deps.includes("resume"));
-    ok("混合评估 → routeMode=dag + executionPlan");
+    ok("topics 含 external+corpus → routeMode=dag + executionPlan");
 }
 
 console.log("\n— resolvePostRetrievalToolRuns —");
@@ -148,6 +180,8 @@ console.log("\n— pickToolResultForSubQuestion —");
             coverage: "sufficient",
             notes: null,
             queryType: "identity",
+            identityField: "age",
+            facetKey: "id:age",
             toolResults: {
                 age: {
                     toolId: "compute_age_from_hits",

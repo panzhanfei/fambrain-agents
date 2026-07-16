@@ -7,15 +7,13 @@
  * 3. queryType 模板（identity/enumeration → 固定 canonical 槽）
  * 4. 无槽 → source=none，上层当 single
  *
- * 不依赖用户问句关键词词表决定槽位（尽量信 Intake plan）。
+ * 不依赖用户问句关键词词表；信 Intake queryType / topics / listKind / identityField。
  */
-import { inferQueryProfile } from "@/agentflow/agents/online/knowledge-manager";
 import type {
     IntakeRetrievalPlanItem,
     IntakeRoutingDecision,
 } from "@/agentflow/agents/online/intake-coordinator/contract";
 import type {
-    CompositeRetrievalSlot,
     CompositeRoutePlanSource,
     ResolvedCompositeRoute,
 } from "./interface";
@@ -27,6 +25,7 @@ import {
     EMPLOYERS_SLOT,
 } from "./composite-slot-queries";
 import { resolveEnumerationTarget } from "./enumeration-target";
+import { IDENTITY_FIELD_SEARCH } from "./identity-field-search";
 
 export type {
     CompositeRoutePlanSource,
@@ -62,40 +61,12 @@ const defaultTopicsForQueryType = (
 ): string[] => {
     if (queryType === "identity") return ["personal", "resume"];
     if (queryType === "external_link") return ["personal", "resume", "project"];
-    if (queryType === "enumeration") return ["project", "experience"];
+    if (queryType === "enumeration") return ["experience"];
     if (queryType === "tech") return ["project", "tech-stack"];
     return [];
 };
 
-const inferTopics = (
-    queryType: NonNullable<IntakeRoutingDecision["queryType"]>,
-    segment: string,
-    baseTopics: string[]
-): string[] => {
-    if (baseTopics.length > 0) return baseTopics;
-    if (queryType === "enumeration") {
-        return resolveEnumerationTarget({
-            label: segment,
-            searchQuery: segment,
-            topics: [],
-        }) === "project"
-            ? ["project"]
-            : ["experience"];
-    }
-    const profile = inferQueryProfile(segment, []);
-    if (profile === "enumeration") {
-        return resolveEnumerationTarget({
-            label: segment,
-            searchQuery: segment,
-            topics: [],
-        }) === "project"
-            ? ["project"]
-            : ["experience"];
-    }
-    return defaultTopicsForQueryType(queryType);
-};
-
-/** 把一段 label 扩成一条 retrievalPlan 项（searchQuery = label + 原查询上下文） */
+/** 把一段 label 扩成一条 retrievalPlan 项（多问兜底：勿继承顶层 enumeration） */
 const buildSegmentPlanItem = (
     label: string,
     decision: Pick<
@@ -103,20 +74,13 @@ const buildSegmentPlanItem = (
         "searchQuery" | "topics" | "queryType"
     >
 ): IntakeRetrievalPlanItem => {
-    const profile = inferQueryProfile(label, []);
-    const resolvedType =
-        profile !== "default"
-            ? profile
-            : decision.queryType && decision.queryType !== "default"
-              ? decision.queryType
-              : "default";
-    const base = decision.searchQuery.trim();
-    const searchQuery = base ? `${label} ${base}` : label;
+    // 多问 fallback 一律 default；类型由 Intake LLM 填写，代码不再口语重标
+    const searchQuery = label.trim() || decision.searchQuery.trim() || label;
     return {
         label,
         searchQuery,
-        queryType: resolvedType === "tech" ? "default" : resolvedType,
-        topics: inferTopics(resolvedType, label, decision.topics),
+        queryType: "default",
+        topics: [],
     };
 };
 
@@ -152,9 +116,18 @@ const normalizePlanItems = (
 
 export { normalizePlanItems };
 
-/** queryType 为 default/null 时，用问句推断 identity/enumeration/tech… */
+/**
+ * 曾用 labels 口语词表从 subTasks 展开 identity；已废除。
+ * 合并/拆分由 Intake LLM 负责；此处原样返回。
+ */
+export const expandIdentityPlanFromSubTasks = (
+    plan: IntakeRetrievalPlanItem[],
+    _subTasks: string[]
+): IntakeRetrievalPlanItem[] => plan;
+
+/** 信 Intake queryType；null/default → default（不调口语词表） */
 export const resolveEffectiveQueryType = (
-    userQuestion: string,
+    _userQuestion: string,
     decision: Pick<
         IntakeRoutingDecision,
         "queryType" | "subTasks" | "searchQuery"
@@ -163,24 +136,22 @@ export const resolveEffectiveQueryType = (
     if (decision.queryType && decision.queryType !== "default") {
         return decision.queryType;
     }
-    return inferQueryProfile(userQuestion, [
-        ...decision.subTasks,
-        decision.searchQuery,
-    ]);
+    return "default";
 };
 
-const topicHas = (topics: string[], re: RegExp): boolean =>
-    topics.some((t) => re.test(t));
-
 /**
- * 单问 identity/enumeration：按问句语义生成一条 plan（脚本/诊断用）。
+ * 单问 identity/enumeration：用结构化字段生成一条 plan（无口语正则）。
  * 主路径仍优先 retrievalPlan；此处是模板级兜底。
  */
 export const buildSingleQuestionPlanItem = (
     userQuestion: string,
     decision: Pick<
         IntakeRoutingDecision,
-        "queryType" | "topics" | "subTasks" | "searchQuery"
+        | "queryType"
+        | "topics"
+        | "subTasks"
+        | "searchQuery"
+        | "retrievalPlan"
     >
 ): IntakeRetrievalPlanItem | null => {
     const effectiveType = resolveEffectiveQueryType(userQuestion, decision);
@@ -188,55 +159,19 @@ export const buildSingleQuestionPlanItem = (
         return null;
     }
 
-    const q = userQuestion.trim();
-
     if (effectiveType === "identity") {
-        if (/姓名|叫什么|名字|全名|我叫什么|我是谁/.test(q)) {
+        const fromPlan = (decision.retrievalPlan ?? []).find(
+            (p) => p.queryType === "identity" && p.identityField
+        );
+        const field = fromPlan?.identityField ?? null;
+        if (field && IDENTITY_FIELD_SEARCH[field]) {
+            const spec = IDENTITY_FIELD_SEARCH[field];
             return {
-                label: "姓名",
-                searchQuery: "个人简介 简历 姓名 全名",
+                label: fromPlan?.label || spec.displayLabel,
+                searchQuery: spec.searchQuery,
                 queryType: "identity",
                 topics: ["personal", "resume"],
-            };
-        }
-        if (/年龄|多大|几岁|出生|周岁|哪年.*生/.test(q)) {
-            return {
-                label: "年龄",
-                searchQuery: "个人简介 简历 年龄 出生年份 出生日期",
-                queryType: "identity",
-                topics: ["personal", "resume"],
-            };
-        }
-        if (/学历|毕业|院校|专科|本科/.test(q)) {
-            return {
-                label: "学历",
-                searchQuery: "个人简介 简历 学历 毕业院校",
-                queryType: "identity",
-                topics: ["personal", "resume"],
-            };
-        }
-        if (/邮箱|邮件|email|e-mail/i.test(q)) {
-            return {
-                label: "邮箱",
-                searchQuery: "个人简介 简历 邮箱",
-                queryType: "identity",
-                topics: ["personal", "resume"],
-            };
-        }
-        if (/电话|手机|联系方式|qq|wechat|微信/.test(q)) {
-            return {
-                label: "电话",
-                searchQuery: "个人简介 简历 电话 手机",
-                queryType: "identity",
-                topics: ["personal", "resume"],
-            };
-        }
-        if (/行业|职业|从事|领域|方向/.test(q)) {
-            return {
-                label: "从事行业",
-                searchQuery: "个人简介 简历 行业 职业 领域",
-                queryType: "identity",
-                topics: ["personal", "resume"],
+                identityField: field,
             };
         }
         return {
@@ -244,18 +179,31 @@ export const buildSingleQuestionPlanItem = (
             searchQuery: IDENTITY_SLOT.searchQuery,
             queryType: "identity",
             topics: ["personal", "resume"],
+            identityField: null,
         };
     }
 
-    if (
-        topicHas(decision.topics, /^project|tech-stack$/) ||
-        /项目/.test(q)
-    ) {
+    const listKind =
+        (decision.retrievalPlan ?? []).find(
+            (p) => p.queryType === "enumeration"
+        )?.enumerationControl?.listKind ?? null;
+    const target = resolveEnumerationTarget({
+        label: userQuestion,
+        searchQuery: decision.searchQuery,
+        topics: decision.topics,
+        listKind,
+    });
+    if (target === "project") {
         return {
             label: "项目经历",
             searchQuery: PROJECTS_SLOT.searchQuery,
             queryType: "enumeration",
             topics: ["project"],
+            enumerationControl: {
+                action: "preview",
+                listKind: "project",
+                excludeHint: null,
+            },
         };
     }
     return {
@@ -263,6 +211,11 @@ export const buildSingleQuestionPlanItem = (
         searchQuery: EMPLOYERS_SLOT.searchQuery,
         queryType: "enumeration",
         topics: ["experience"],
+        enumerationControl: {
+            action: "preview",
+            listKind: "experience",
+            excludeHint: null,
+        },
     };
 };
 
@@ -322,15 +275,25 @@ export const resolveCompositeRoute = (
     }
 
     const effectiveType = resolveEffectiveQueryType(userQuestion, decision);
+    const enumTopics =
+        effectiveType === "enumeration"
+            ? resolveEnumerationTarget({
+                  label: userQuestion,
+                  searchQuery: decision.searchQuery,
+                  topics: decision.topics,
+              }) === "project"
+                ? ["project"]
+                : decision.topics.length > 0
+                  ? decision.topics
+                  : ["experience"]
+            : decision.topics;
     const inferredTemplate = facetTemplateForQueryType(
         effectiveType === "default" ? null : effectiveType,
-        effectiveType === "enumeration" && /项目/.test(userQuestion)
-            ? ["project"]
-            : decision.topics,
+        enumTopics,
         {
             label: userQuestion,
             searchQuery: decision.searchQuery,
-            topics: decision.topics,
+            topics: enumTopics,
         }
     );
     if (inferredTemplate) {
@@ -355,14 +318,9 @@ export const isCompositeProfileQuestion = (
 ): boolean => resolveCompositeRoute(decision, userQuestion).slots.length >= 2;
 
 /**
- * tech 单问检测（诊断/脚本用；路由统一为 slots + 1 槽，不再打回 skip）。
+ * tech 单问：仅信 Intake queryType（诊断/脚本用）。
  */
 export const isTechSingleQuestion = (
-    userQuestion: string,
+    _userQuestion: string,
     decision: Pick<IntakeRoutingDecision, "queryType" | "searchQuery">
-): boolean => {
-    if (decision.queryType === "tech") return true;
-    return /技术栈|用什么技术|用的什么|框架|数据库|架构/i.test(
-        `${userQuestion} ${decision.searchQuery}`
-    );
-};
+): boolean => decision.queryType === "tech";

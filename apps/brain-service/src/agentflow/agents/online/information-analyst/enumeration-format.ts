@@ -3,12 +3,28 @@
  */
 import type { KnowledgeHit } from "@/agentflow/agents/online/knowledge-manager";
 import { ENUMERATION_EXHAUSTIVE_PAGE_SIZE } from "@/agentflow/agents/online/knowledge-manager/list/list-corpus-entries";
+import {
+    ENUMERATION_ACTION_PROMPTS,
+    type EnumerationListKind,
+} from "@/agentflow/agents/online/intake-coordinator/enumeration";
 
 export const hitDisplayTitle = (hit: KnowledgeHit): string => {
     const title = hit.title?.trim();
     if (title) return title;
     const base = hit.path.split("/").pop() ?? hit.path;
     return base.replace(/\.md$/i, "");
+};
+
+/** 从 experience excerpt 解析职位（结构字段，非口语词表） */
+export const hitDisplayRole = (hit: KnowledgeHit): string | null => {
+    const fromExcerpt = hit.excerpt.match(
+        /(?:\*\*)?角色(?:\*\*)?\s*[：:]\s*([^*\n]+)/
+    );
+    if (fromExcerpt?.[1]?.trim()) {
+        return fromExcerpt[1].trim().replace(/\*\*/g, "");
+    }
+    const job = hit.excerpt.match(/(?:职位|岗位)\s*[：:]\s*([^\n·|]+)/);
+    return job?.[1]?.trim().replace(/\*\*/g, "") || null;
 };
 
 const shouldSkipEnumerationLine = (line: string): boolean => {
@@ -65,15 +81,22 @@ export const enumerationStartIndex = (input: {
     return (page - 1) * pageSize + 1;
 };
 
-/** 列举纯文本：仅序号 + 项目名 */
+/** 列举纯文本：序号 + 标题；employer 附职位 */
 export const formatHitsAsAnswerList = (
     hits: KnowledgeHit[],
     _language: "zh" | "en" | "mixed",
-    startIndex = 1
+    startIndex = 1,
+    listKind: "project" | "employer" = "project"
 ): string =>
     hits
         .map((h, i) => {
             const title = hitDisplayTitle(h);
+            if (listKind === "employer") {
+                const role = hitDisplayRole(h);
+                return role
+                    ? `${startIndex + i}. **${title}** — ${role}`
+                    : `${startIndex + i}. **${title}**`;
+            }
             return `${startIndex + i}. **${title}**`;
         })
         .join("\n");
@@ -119,12 +142,16 @@ export const formatEnumerationPaginationHint = (
         return `\n\n(${input.total} ${entity} in corpus · showing ${input.shown})`;
     }
 
-    const entity = input.listKind === "project" ? "项目" : "任职/公司";
+    const kind: EnumerationListKind =
+        input.listKind === "project" ? "project" : "experience";
+    const entity = kind === "project" ? "项目" : "任职/公司";
+    const exhaustivePrompt = ENUMERATION_ACTION_PROMPTS[kind].exhaustive;
+    const continuePrompt = ENUMERATION_ACTION_PROMPTS[kind].continue;
     if (!paginatedMode && input.hasMore) {
-        return `\n\n（语料共 ${input.total} 个${entity} · 本节预览 ${input.shown} 个，序号 ${input.startIndex}–${endIndex} · 发送「列出全部项目」可分页浏览完整列表，每页 ${ENUMERATION_EXHAUSTIVE_PAGE_SIZE} 条，共 ${fullListPages} 页）`;
+        return `\n\n（语料共 ${input.total} 个${entity} · 本节预览 ${input.shown} 个，序号 ${input.startIndex}–${endIndex} · 发送「${exhaustivePrompt}」可分页浏览完整列表，每页 ${ENUMERATION_EXHAUSTIVE_PAGE_SIZE} 条，共 ${fullListPages} 页）`;
     }
     if (paginatedMode && input.hasMore) {
-        return `\n\n（语料共 ${input.total} 个${entity} · 第 ${input.page}/${totalPages} 页 · 序号 ${input.startIndex}–${endIndex} · 发送「更多项目」查看下一页）`;
+        return `\n\n（语料共 ${input.total} 个${entity} · 第 ${input.page}/${totalPages} 页 · 序号 ${input.startIndex}–${endIndex} · 发送「${continuePrompt}」查看下一页）`;
     }
     if (paginatedMode) {
         return `\n\n（语料共 ${input.total} 个${entity} · 第 ${input.page}/${totalPages} 页 · 序号 ${input.startIndex}–${endIndex} · 已全部列出）`;

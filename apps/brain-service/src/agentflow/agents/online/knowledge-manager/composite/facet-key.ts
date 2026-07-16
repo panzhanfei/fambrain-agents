@@ -3,10 +3,11 @@
  *
  * 用途：
  * - composite 会话 facets[facetKey] 存 Analyst 终稿（槽答案缓存）
- * - 同问不同说法（「叫什么」/「姓名」）应对齐到同一 key（如 id:name）
+ * - 同问不同说法应对齐到同一 key（如 id:name）
  *
- * 键按 queryType 分桶：enum:* / id:* / tech:* / default:*
+ * 键按 queryType 分桶：enum:* / id:* / tech:* / link:* / default:*
  * 槽位模板仍来自 Intake（canonicalizePlanItem）；本文件只负责算 key。
+ * identity / enumeration 子类信 identityField / listKind / topics，不用口语正则。
  */
 import { normalizeSearchQuery } from "@fambrain/infra";
 import type { CompositeRetrievalSlot } from "@/agentflow/agents/online/intake-coordinator";
@@ -14,13 +15,20 @@ import {
     canonicalizePlanItem,
     resolveEnumerationTarget,
 } from "@/agentflow/agents/online/intake-coordinator";
-import type { IntakeRetrievalPlanItem } from "@/agentflow/agents/online/intake-coordinator/contract";
-import { inferQueryProfile } from "../profile/query-profile";
+import type {
+    IntakeIdentityField,
+    IntakeRetrievalPlanItem,
+} from "@/agentflow/agents/online/intake-coordinator/contract";
 
 type FacetSource =
     | Pick<
           IntakeRetrievalPlanItem,
-          "label" | "searchQuery" | "queryType" | "topics"
+          | "label"
+          | "searchQuery"
+          | "queryType"
+          | "topics"
+          | "enumerationControl"
+          | "identityField"
       >
     | CompositeRetrievalSlot;
 
@@ -33,10 +41,20 @@ export const detectCompositeRefreshIntent = (userQuestion: string): boolean =>
         userQuestion.trim()
     );
 
+const IDENTITY_FACET_KEY: Record<IntakeIdentityField, string> = {
+    name: "id:name",
+    age: "id:age",
+    email: "id:email",
+    phone: "id:phone",
+    education: "id:education",
+    career: "id:career",
+    tenure: "id:tenure",
+};
+
 /**
  * 从 plan/槽推导 facetKey。
- * - enumeration → enum:projects | enum:employers | enum:employers:roles
- * - identity → id:name | id:age | …
+ * - enumeration → enum:projects | enum:employers
+ * - identity → id:name | id:age | …（信 identityField）
  * - tech / default → 带 label 前缀的弱键
  */
 export const buildFacetKey = (source: FacetSource): string => {
@@ -47,6 +65,14 @@ export const buildFacetKey = (source: FacetSource): string => {
                   searchQuery: source.searchQuery,
                   queryType: source.queryType,
                   topics: source.topics,
+                  enumerationControl:
+                      "enumerationControl" in source
+                          ? source.enumerationControl
+                          : null,
+                  identityField:
+                      "identityField" in source
+                          ? source.identityField
+                          : null,
               }
             : source;
 
@@ -55,6 +81,8 @@ export const buildFacetKey = (source: FacetSource): string => {
         searchQuery: item.searchQuery,
         queryType: item.queryType,
         topics: item.topics,
+        enumerationControl: item.enumerationControl ?? null,
+        identityField: item.identityField ?? null,
     });
     const ln = labelNorm(item.label);
 
@@ -63,21 +91,17 @@ export const buildFacetKey = (source: FacetSource): string => {
             label: item.label,
             searchQuery: canonical.searchQuery,
             topics: canonical.topics,
+            listKind: item.enumerationControl?.listKind ?? null,
         });
         if (target === "project") return "enum:projects";
-        if (/职位|角色|担任|岗位|干什么/.test(ln)) {
-            return "enum:employers:roles";
-        }
         return "enum:employers";
     }
 
     if (canonical.queryType === "identity") {
-        if (/邮箱|邮件|email|e-mail/.test(ln)) return "id:email";
-        if (/电话|手机|联系方式|qq|wechat|微信/.test(ln)) return "id:phone";
-        if (/姓名|叫什么|名字|全名|我叫什么|我是谁/.test(ln)) return "id:name";
-        if (/年龄|多大|几岁|出生|周岁/.test(ln)) return "id:age";
-        if (/学历|毕业|院校|专科|本科/.test(ln)) return "id:education";
-        if (/行业|职业|从事|领域|方向/.test(ln)) return "id:career";
+        const field = canonical.identityField ?? item.identityField ?? null;
+        if (field && IDENTITY_FACET_KEY[field]) {
+            return IDENTITY_FACET_KEY[field];
+        }
         return `id:profile:${ln.slice(0, 24) || "general"}`;
     }
 
@@ -89,10 +113,6 @@ export const buildFacetKey = (source: FacetSource): string => {
         return `tech:${ln.slice(0, 32) || "general"}`;
     }
 
-    const inferred = inferQueryProfile(item.label, []);
-    if (inferred === "enumeration") {
-        return /项目/.test(ln) ? "enum:projects" : "enum:employers";
-    }
     return `default:${ln.slice(0, 32) || canonical.queryType}`;
 };
 

@@ -1,0 +1,85 @@
+---
+description: 禁止问句侧硬编码 / 场景分支；Intake LLM 主导合并拆分，代码只做 schema 与执行
+alwaysApply: true
+---
+
+# 禁止场景硬编码（Intake / PathPlan / DAG / 路由）
+
+适用于 `apps/brain-service`、`packages/*`、`apps/web` 等**生产代码**（`src/`）。  
+**允许例外**：`**/*.test.ts`、`**/scripts/verify-*.ts`、`**/scripts/diagnose-*.ts`、文档 few-shot 示例。
+
+## 原则
+
+1. **Intake LLM 负责合并/拆分**：语义相同的子问合并、独立意图拆槽；代码**不得**用口语词表「再规划」替代 LLM。
+2. **路由与执行只信结构化字段**：`queryType` / `identityField` / `topics` / `enumerationControl` / `toolId` / `executor`。
+3. **禁止**用用户问句口语词表、项目名、人名、仓库名、年份驱动分支。
+4. **回答顺序** = Intake `compositeSlots` / `retrievalPlan` 顺序；禁止编译层按 list→km→dag 重排展示。
+5. **DAG 是通用编排原语**（带 `deps` 的多步拓扑），不是「开源链接」等单场景 shortcut。
+
+## 硬编码分类
+
+| 类型 | 例子 | 生产路径 |
+|------|------|----------|
+| A. 问句口语词表 | `labels.includes("多大")`、`/开源\|GitHub/.test(q)`、`IDENTITY_FIELD_SEARCH.labels` 猜意图 | **禁止** |
+| B. 场景/人名/项目名分支 | `if (sentinel)` / named DAG `opensource_links` | **禁止** |
+| C. Schema → 执行映射 | `identityField: age` → `compute_age_from_hits`；`listKind: experience` → 扫 `experience/` | **允许** |
+| D. 语料结构抽取 | 表头 `\| 姓名 \|`、日期区间正则、URL | **允许**（对文档，不对用户口语） |
+
+## 禁止（生产路径）
+
+```ts
+// ❌ 为单场景新增 named DAG template
+if (hasEnum && hasExternalLink) {
+  dag.push({ template: "opensource_links", ... });
+}
+
+// ❌ 按项目名 / 用户名 / 年份分支
+if (label.includes("sentinel") || /潘展飞/.test(q) || year === 2017) { ... }
+
+// ❌ 用口语正则或 labels 词表猜意图（应信 Intake 结构化字段）
+if (/开源|GitHub/.test(userQuestion)) route = "external_link";
+if (IDENTITY_FIELD_SEARCH.age.labels.some((l) => q.includes(l))) { ... }
+
+// ❌ 代码按口语拆/补 retrievalPlan（二次 Intake）
+repairByOralLabels(userQuestion);
+
+// ❌ 编译 PathPlan 时打乱槽顺序再交给 Analyst
+slots = [...listSlots, ...kmSlots, ...dagAsSlots];
+
+// ❌ UI 写死 enumeration 表头为「项目名称」（须信 listKind）
+<th>项目名称</th>
+```
+
+## 允许
+
+```ts
+// ✅ schema → executor / 检索模板（类型系统，不是猜问句）
+IDENTITY_FIELD_BY_ID.age.toolId = "compute_age_from_hits";
+IDENTITY_FIELD_SEARCH.tenure.searchQuery = "…工作经历 时间线…"; // 无 labels 匹配
+
+// ✅ 按结构化 key 去重（非口语）
+dedupeKey = `${queryType}|${identityField}|${listKind}|${timeWindowYears ?? ""}`;
+
+// ✅ 通用多源 DAG（topics.external + corpus）
+if (decisionSuggestsHybridDag({ topics, planTopics })) {
+  dag.push({ template: "hybrid_multi_source", ... });
+}
+
+// ✅ 从 excerpt 通用抽取（URL、表头、日期段）
+extractExternalLinksFromHits(hits);
+computeTenureFromHits(hits);
+```
+
+## 代码兜底白名单（仅限）
+
+1. Zod/schema 合法化（非法 `queryType` → `default`，不整表丢弃）
+2. 按结构化 key 去重 / 合并重复槽
+3. 空 plan / 解析失败 → clarify 或单槽 default retrieve（**禁止**口语词表拆问）
+
+## 新增能力时的检查清单
+
+1. 能否只用 `queryType` / `identityField` / `topics` / `toolId` / `enumerationControl` 表达？能则**不要**新 template / 口语 if。
+2. 若需要多步依赖：用**通用** `ExecutionPlanNode[]` + `deps`，或扩展现有 `hybrid_multi_source`。
+3. 常量字符串仅用于：语料目录约定、UI 按钮 exact-match、空结果文案、schema 枚举、测试断言。
+4. 测试/diagnose 可断言语料事实；**生产路径**不可写死年份/公司/项目名。
+5. 改完后跑相关 `verify:*` / `test:unit`。

@@ -2,6 +2,7 @@
 import type { ConversationListItem } from "@fambrain/db";
 import type { PipelineLogEntry, PipelineStepName, PipelineTiming, AssistantMessageBlock, } from "@fambrain/brain-types";
 import { AssistantMessageContent } from "@/components/chat/assistant-message-content";
+import { LinkifiedText } from "@/components/chat/linkified-text";
 import { ConversationLogPanel } from "@/components/chat/conversation-log-panel";
 import {
   createTurnLog,
@@ -1586,7 +1587,7 @@ export const ChatShell = ({ initialConversations, viewer }: ChatShellProps) => {
                           onAction={(prompt) => void sendMessageWithContent(prompt)}
                         />
                       ) : (
-                        m.content
+                        <LinkifiedText text={m.content} />
                       )}
                       {m.role === "assistant" && m.timing ? (
                         <MessageTimingLine timing={m.timing} />

@@ -15,7 +15,10 @@ export type AgentLogName =
   | "Pipeline"
   | "Mem0"
   | "UserFact"
-  | "Learning";
+  | "Learning"
+  | "PlanExecutor"
+  | "ToolOrchestrator"
+  | "DagExecutor";
 
 export const AGENT_LOG_LABEL_IN = "进入";
 export const AGENT_LOG_LABEL_OUT = "出去";
@@ -36,6 +39,9 @@ const AGENT_EMOJI: Record<AgentLogName, string> = {
   Mem0: "💾",
   UserFact: "🪪",
   Learning: "📖",
+  PlanExecutor: "⚙️",
+  ToolOrchestrator: "🛠️",
+  DagExecutor: "🕸️",
 };
 
 const MAX_JSON_CHARS = 6000;

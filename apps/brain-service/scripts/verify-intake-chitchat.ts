@@ -7,8 +7,10 @@
 import type { DbChatTurn } from "@fambrain/brain-types";
 import {
     applyIntakeChitchatGuard,
+    applyPureSocialUtteranceGuard,
     completeIntakeCoordinator,
     DEFAULT_CHITCHAT_BRIEF_REPLY,
+    isPureSocialUtterance,
     runIntakePipeline,
     type IntakeRoutingDecision,
 } from "../src/agentflow/agents/online/intake-coordinator/index";
@@ -84,6 +86,31 @@ assertSync("guard：非 chitchat 不改动", () => {
     }
 });
 
+assertSync("guard：纯社交句覆盖 retrieve", () => {
+    const retrieve: IntakeRoutingDecision = {
+        ...chitchatStub(null),
+        intent: "retrieve_and_answer",
+        searchQuery: "你好",
+        queryType: "default",
+    };
+    const out = applyPureSocialUtteranceGuard(retrieve, "你好");
+    if (out.intent !== "chitchat") {
+        throw new Error(`期望 chitchat，实际 ${out.intent}`);
+    }
+    if (out.briefReply !== DEFAULT_CHITCHAT_BRIEF_REPLY) {
+        throw new Error(`期望模板，实际: ${out.briefReply}`);
+    }
+});
+
+assertSync("signals：纯社交句识别", () => {
+    if (!isPureSocialUtterance("你好")) throw new Error("「你好」应命中");
+    if (!isPureSocialUtterance("谢谢！")) throw new Error("「谢谢！」应命中");
+    if (!isPureSocialUtterance("hi")) throw new Error("「hi」应命中");
+    if (isPureSocialUtterance("你好，我叫什么")) {
+        throw new Error("带检索意图的不应命中");
+    }
+});
+
 await bootstrapBrainServiceRuntime();
 
 const runs = parseRuns();
@@ -106,8 +133,8 @@ for (let i = 1; i <= runs; i++) {
         if (!earlyExit) {
             throw new Error("chitchat 应 pipeline 早退");
         }
-        if (decision.intent === "chitchat") {
-            throw new Error("chitchat 不应走检索");
+        if (decision.routeMode !== "skip") {
+            throw new Error(`chitchat 应 routeMode=skip，实际 ${decision.routeMode}`);
         }
         if (reply !== DEFAULT_CHITCHAT_BRIEF_REPLY) {
             throw new Error(`期望固定模板，实际: ${reply}`);

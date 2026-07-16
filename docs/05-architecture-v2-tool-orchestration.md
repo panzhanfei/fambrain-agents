@@ -225,3 +225,123 @@ flowchart LR
 - Analyst **不**再内联列举 regex，只消费 `toolResults` + 整理后的 hits。
 
 **验证：** `verify:enumeration-pagination`（含混合 2 槽）、`verify:enumeration-compose`。
+
+---
+
+## 11. PathPlan 统一执行计划（2026-07）
+
+> **触发：** 混合问「列举全部项目 + 开源 GitHub 链接」在 UI 上只答出一段（或错段）；根因是 **routeMode / compositeSlots / toolPlan / dag** 四套「多槽」互斥，Intake 与执行层语义不一致。详见 [坑点 §2.8](./04-pitfalls.md#28-pathplan-统一编排-p0-28--2026-07)。
+
+### 11.1 问题：四套多槽各说各话
+
+| 旧层 | 表达什么 | 冲突点 |
+|------|----------|--------|
+| `routeMode` | 整句只能 list / slots / dag / skip 之一 | 无法同句「一槽列举 + 一槽 KM + 一槽 DAG 依赖链」 |
+| `compositeSlots` | KM / list 并行槽 | 与 `routeMode=list` 整句劫持冲突（P0-26） |
+| `executionPlan` | 混合 DAG | 与 slots 互斥；opensource 链接无法声明 **依赖 list** |
+| FactChecker | 整轮一次；composite≥2 **跳过** | 一段 FC 失败拖垮全答；跳 FC 又丢证据审查 |
+
+### 11.2 PathPlan 四桶 + Compose 一层
+
+Intake guard 末尾 **`compilePathPlan`** 产出：
+
+```typescript
+type PathPlan = {
+  km: KmStep[];      // hybrid / identity / tech …
+  list: ListStep[];  // enumeration + list_corpus
+  tool: ToolStep[];  // search_web / compute 后置
+  dag: DagRun[];     // 仅 hybrid_multi_source（多源汇合；禁止场景 named DAG）
+};
+type ComposeMode = "qa" | "summarize" | "composite";
+```
+
+| 桶 | 执行 | FC |
+|----|------|-----|
+| `km` | `retrieval-node` 按槽 | **per-step** |
+| `list` | `list_corpus` 分页 | **per-step** |
+| `tool` | `ToolOrchestrator` | 规则 / 工具输出 |
+| `dag` | `DagExecutor`（模板展开） | 节点级或整 DAG pass |
+
+**Compose 只做一次：** 全部 step 完成后，Analyst 按 `composeMode` 输出单答 / 多段 composite / 摘要；**不做**「每路径 LLM 混剪后再混剪」。
+
+### 11.3 列举 + 外链（无场景 DAG）
+
+用户问：「列出全部项目 + 开源 GitHub 地址」
+
+```mermaid
+flowchart LR
+  IC[Intake retrievalPlan<br/>enum + external_link] --> PP[compilePathPlan]
+  PP --> L[list / km 分桶<br/>保留 Intake 顺序]
+  L --> PE[PlanExecutor]
+  PE --> T[extract_external_links_from_hits]
+  PE --> FC[per-step FC]
+  FC --> CO[ContentOrganizer]
+  CO --> IA[Analyst composeMode=composite]
+```
+
+- `external_link` 进 **km** 槽 + 声明式 `toolId=extract_external_links_from_hits`；**禁止**再加 `opensource_links` 一类场景 named DAG。
+- 回答顺序 = Intake `compositeSlots` 顺序；searchQuery 用 **`EXTERNAL_LINK_SLOT`** canonical（P0-27）。
+
+### 11.4 新 Pipeline 拓扑
+
+```mermaid
+flowchart TD
+  IC[IntakeCoordinator<br/>guard ⑨ applyPathPlanGuard] --> R{routeAfterIntake}
+  R -->|retrieve| PE[PlanExecutor<br/>km/list/tool/dag + per-step FC]
+  R -->|早退| EARLY[respondEarly / userFact / summarizer]
+  PE --> CO[ContentOrganizer]
+  CO --> IA[InformationAnalyst<br/>composeMode]
+```
+
+**代码：** `intake-coordinator/path-plan/*` · `tool-orchestrator/plan-executor.ts` · `pipeline/graph/compile.ts`（单 `planExecutor` 节点）。
+
+**验证：**
+
+```bash
+pnpm --filter @fambrain/brain-service run verify:composite-route
+pnpm --filter @fambrain/brain-service run verify:composite-incremental
+pnpm --filter @fambrain/brain-service run verify:tool-orchestration
+pnpm --filter @fambrain/brain-service run verify:dag-hybrid
+```
+
+---
+
+## 12. Intake LLM 主导 + schema 兜底（2026-07 · 去问句硬编码）
+
+> **触发：** 超长复合问（从业年限 / 公司职位 / 近两年项目 / 年龄姓名 / 全量项目 / 开源链接）出现 **重复槽**、任职表头误标「项目名称」、年限只算近段、近两年未过滤；同时 `IDENTITY_FIELD_SEARCH.labels` 等口语词表变成「代码二次 Intake」。详见 [坑点 §2.9](./04-pitfalls.md#29-intake-去硬编码与复合履历-p0-30--2026-07)、规则 [`.cursor/rules/no-scene-hardcoding.mdc`](../.cursor/rules/no-scene-hardcoding.mdc)。
+
+### 12.1 分工
+
+| 层 | 职责 | 禁止 |
+|----|------|------|
+| **Intake LLM** | 合并语义相同子问、拆独立槽；填齐 `queryType` / `identityField` / `enumerationControl`（含 `timeWindowYears`） | — |
+| **代码兜底** | Zod 合法化（非法类型/别名）；按 facet key **去重**；空 plan → default 壳 | 口语 `labels.includes` / 问句 regex 猜意图 |
+| **执行层** | `identityField` → `toolId`；`listKind` → 目录扫描；语料结构抽取（日期/URL/表头） | 写死年份/公司/项目名 |
+
+### 12.2 关键能力
+
+| 能力 | 结构化字段 | 执行 |
+|------|------------|------|
+| 从业年限 | `identityField: tenure` | `compute_tenure_from_hits`（简历时间线最早起点） |
+| 近 N 年列举 | `enumerationControl.timeWindowYears` | `list_corpus` 扫盘后按 path/正文年份过滤 |
+| 公司+职位 | 单条 `listKind=experience` | 列举文案/UI 带职位；表头信 `listKind` |
+| 同 facet 去重 | `(queryType, identityField\|listKind, timeWindowYears)` | `repair-retrieval-plan` / `dedupePlanByFacet` |
+
+### 12.3 代码地图
+
+| 路径 | 说明 |
+|------|------|
+| `intake-coordinator/composite/identity-field-search.ts` | 仅 `displayLabel` + `searchQuery`（**无**口语 labels） |
+| `intake-coordinator/composite/repair-retrieval-plan.ts` | schema normalize + facet 去重 |
+| `intake-coordinator/path-plan/` | PathPlan 编译；禁止场景 named DAG |
+| `tools/lib/compute-tenure.ts` / `extract-*.ts` | 确定性工具 |
+| `knowledge-manager/list/entry-time-window.ts` | 时间窗 / 角色抽取 |
+| `apps/brain-service/tests/` | 单元测试集中目录（勿再写 `src/**/*.test.ts`） |
+
+### 12.4 验证
+
+```bash
+pnpm test:unit
+pnpm --filter @fambrain/brain-service exec tsx --env-file=../../.env scripts/diagnose-long-composite-career-query.ts
+pnpm --filter @fambrain/brain-service exec tsx --env-file=../../.env scripts/diagnose-mixed-projects-github-query.ts
+```

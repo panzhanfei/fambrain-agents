@@ -10,8 +10,9 @@ import type {
     IncrementalCompositePlan,
 } from "@/agentflow/agents/online/knowledge-manager";
 import type { PipelineToolResults } from "@/agentflow/agents/online/tool-orchestrator";
+import type { StepResult } from "@/agentflow/agents/online/intake-coordinator/path-plan";
 /**
- * LangGraph 编排共享状态（Intake → KM → FactChecker → ContentOrganizer → Analyst；摘要分支 Intake → KM → ContentSummarizer）。
+ * LangGraph 编排共享状态（Intake → planExecutor → Compose；摘要分支 composeMode=summarize）。
  * 初始值由 `runtime/initial-state.ts` 的 `buildInitialState()` 注入；prepareTurnStart 填充 memory 字段；节点只返回需要更新的字段。
  */
 export const PipelineGraphAnnotation = Annotation.Root({
@@ -21,7 +22,7 @@ export const PipelineGraphAnnotation = Annotation.Root({
     context: Annotation<AgentPipelineContext>,
     /** 用户最新一条问题（从 history 提取，供检索与分析） */
     userQuestion: Annotation<string>,
-    /** IntakeCoordinator 路由 JSON：intent、searchQuery、routeMode 等 */
+    /** IntakeCoordinator 路由 JSON：pathPlan、composeMode、compositeSlots 等 */
     decision: Annotation<RoutedIntakeDecision | null>,
     /** KnowledgeManager 检索命中的文档片段，交给 InformationAnalyst */
     hits: Annotation<InformationAnalystInput["hits"]>,
@@ -67,5 +68,7 @@ export const PipelineGraphAnnotation = Annotation.Root({
     asOfDate: Annotation<string>,
     /** ToolOrchestrator / DagExecutor 产出，Analyst 优先消费 */
     toolResults: Annotation<PipelineToolResults | null>,
+    /** planExecutor 每 step 结果（含 per-step FC） */
+    stepResults: Annotation<StepResult[] | null>,
 });
 export type PipelineGraphState = typeof PipelineGraphAnnotation.State;

@@ -89,7 +89,6 @@ const summarizePipelineOut = (
   answerPreview: answer.length > 400 ? `${answer.slice(0, 400)}…` : answer,
   exitEarly: state.exitEarly,
   intent: state.decision?.intent ?? null,
-  intent: state.decision?.intent ?? null,
   requiresKmRetrieval:
     state.decision && intakeRequiresKmRetrieval(state.decision)
       ? true
@@ -105,6 +104,16 @@ const summarizePipelineOut = (
   retrievalCacheHit: state.retrievalCacheHit,
   retrievalCacheSlotHits: state.retrievalCacheSlotHits,
   routeMode: state.decision?.routeMode ?? null,
+  composeMode: state.decision?.composeMode ?? null,
+  pathPlanCounts: state.decision?.pathPlan
+    ? {
+        km: state.decision.pathPlan.km.length,
+        list: state.decision.pathPlan.list.length,
+        tool: state.decision.pathPlan.tool.length,
+        dag: state.decision.pathPlan.dag.length,
+      }
+    : null,
+  stepResultCount: state.stepResults?.length ?? 0,
   routeReason: state.decision?.routeReason ?? null,
   routePlanSource: state.decision?.routePlanSource ?? null,
   retrievalPlanGuardReason:
@@ -297,9 +306,14 @@ async function* runPipelineStreamInner(
         yield* startStep("user_fact");
       } else if (
         finalState.decision &&
-        intakeRequiresKmRetrieval(finalState.decision)
+        (intakeRequiresKmRetrieval(finalState.decision) ||
+          (finalState.decision.pathPlan &&
+            finalState.decision.pathPlan.km.length +
+              finalState.decision.pathPlan.list.length +
+              finalState.decision.pathPlan.dag.length >
+              0))
       ) {
-        yield* startStep("retrieval");
+        yield* startStep("plan_executor");
       } else if (finalState.decision?.intent === "summarize_content") {
         yield* startStep("content_summarizer");
       }
@@ -315,6 +329,25 @@ async function* runPipelineStreamInner(
         yield { type: "error", message: finalState.error };
       }
       yield* startStep("persist_turn_end");
+      continue;
+    }
+    if (nodeName === "planExecutor") {
+      yield* finishStep("plan_executor");
+      yield {
+        type: "retrieval_meta",
+        cacheHit: Boolean(finalState.retrievalCacheHit),
+      };
+      if (
+        finalState.decision?.composeMode === "summarize" ||
+        finalState.decision?.intent === "summarize_content"
+      ) {
+        yield* startStep("content_summarizer");
+      } else {
+        yield* startStep("content_organizer");
+      }
+      if (finalState.error) {
+        yield { type: "error", message: finalState.error };
+      }
       continue;
     }
     if (nodeName === "retrieval") {

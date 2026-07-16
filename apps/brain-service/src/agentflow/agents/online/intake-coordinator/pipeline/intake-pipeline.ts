@@ -9,6 +9,7 @@ import {
   applyEnumerationSlotGuard,
   applyIntakeContinuationGuard,
   applyIntakeLinkLookupGuard,
+  applyPureSocialUtteranceGuard,
   type RoutedIntakeDecision,
 } from "@/agentflow/agents/online/intake-coordinator/guards";
 import {
@@ -17,6 +18,11 @@ import {
 } from "./parse-intake";
 import { applyToolPlanGuard } from "@/agentflow/agents/online/tool-orchestrator";
 import type { IntakeRoutingDecision } from "@/agentflow/agents/online/intake-coordinator/contract";
+import {
+    applyPathPlanGuard,
+    defaultComposeMode,
+    emptyPathPlan,
+} from "@/agentflow/agents/online/intake-coordinator/path-plan";
 import { isUserFactIntent } from "@/agentflow/agents/online/user-fact";
 import { logAgentOut } from "@fambrain/brain-shared/agent-log";
 import type { DbChatTurn } from "@fambrain/brain-types";
@@ -65,6 +71,8 @@ export const buildEarlyExitRoutedDecision = (
   ...decision,
   routeMode: "skip",
   compositeSlots: [],
+  pathPlan: emptyPathPlan(),
+  composeMode: defaultComposeMode(),
   routeReason: "skip_non_retrieve",
   routePlanSource: "none",
 });
@@ -139,6 +147,19 @@ export const runIntakePipeline = async (
       : {}),
     ...summarizeDecision(decision),
   });
+
+  /** ①b 纯问候/感谢：覆盖 LLM 误判 retrieve（入口未短路时的兜底） */
+  const afterPureSocial = applyPureSocialUtteranceGuard(
+    decision,
+    input.userQuestion
+  );
+  if (afterPureSocial.intent !== decision.intent) {
+    logAgentOut("IntakeCoordinator", "guard_纯社交短路", {
+      fromIntent: decision.intent,
+      toIntent: afterPureSocial.intent,
+    });
+  }
+  decision = afterPureSocial;
 
   /** ②a 续问/指代：省略主语或误 clarify → retrieve（在 clarify 早退之前） */
   const afterContinuation = applyIntakeContinuationGuard(
@@ -281,7 +302,7 @@ export const runIntakePipeline = async (
     });
   }
 
-  /** ⑧ 工具计划：dataSource / toolId / executionPlan（四类架构） */
+  /** ⑧ 工具计划：dataSource / toolId（不再整轮互斥切 dag） */
   const withToolPlan = applyToolPlanGuard(withListIntent, input.userQuestion);
   if (
     withToolPlan.routeMode === "dag" ||
@@ -298,7 +319,27 @@ export const runIntakePipeline = async (
     });
   }
 
-  /** ⑨ 出口：decision 写入 state，由 compile.ts routeAfterIntake 决定去 retrieval / dag / respondEarly 等 */
-  logAgentOut("IntakeCoordinator", "最终路由", summarizeDecision(withToolPlan));
-  return { decision: withToolPlan, parseUsedFallback, earlyExit: false };
+  /** ⑨ PathPlan：编译四桶 + composeMode */
+  const withPathPlan = applyPathPlanGuard(withToolPlan, input.userQuestion);
+  logAgentOut("IntakeCoordinator", "guard_PathPlan", {
+    composeMode: withPathPlan.composeMode,
+    km: withPathPlan.pathPlan.km.length,
+    list: withPathPlan.pathPlan.list.length,
+    tool: withPathPlan.pathPlan.tool.length,
+    dag: withPathPlan.pathPlan.dag.map((d) => d.template),
+    routeMode: withPathPlan.routeMode,
+  });
+
+  /** ⑩ 出口：decision 写入 state，由 routeAfterIntake → planExecutor */
+  logAgentOut("IntakeCoordinator", "最终路由", {
+    ...summarizeDecision(withPathPlan),
+    composeMode: withPathPlan.composeMode,
+    pathPlanCounts: {
+      km: withPathPlan.pathPlan.km.length,
+      list: withPathPlan.pathPlan.list.length,
+      tool: withPathPlan.pathPlan.tool.length,
+      dag: withPathPlan.pathPlan.dag.length,
+    },
+  });
+  return { decision: withPathPlan, parseUsedFallback, earlyExit: false };
 };

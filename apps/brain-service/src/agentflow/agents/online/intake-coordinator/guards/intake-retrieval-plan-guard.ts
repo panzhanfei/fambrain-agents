@@ -4,9 +4,11 @@
  */
 import {
     buildFallbackRetrievalPlan,
+    expandIdentityPlanFromSubTasks,
     looksLikeMultiPartQuestion,
     normalizePlanItems,
     canonicalizePlanItem,
+    repairRetrievalPlanItems,
 } from "@/agentflow/agents/online/intake-coordinator/composite";
 import type { IntakeRoutingDecision } from "@/agentflow/agents/online/intake-coordinator/contract";
 import type { IntakeRetrievalPlanGuardReason } from "./interface";
@@ -15,7 +17,8 @@ export type { IntakeRetrievalPlanGuardReason } from "./interface";
 
 /**
  * 1. 多问但 Intake 未给足 retrievalPlan → 结构/subTasks 兜底补 plan
- * 2. 各 plan 项 searchQuery 对齐 canonical 模板 → 检索 hits 缓存 可复用
+ * 2. 过粗 default/enumeration / 合并子问 → repair 按目录重标
+ * 3. 各 plan 项 searchQuery 对齐 canonical 模板 → 检索 hits 缓存 可复用
  */
 export const applyIntakeRetrievalPlanGuard = (
     decision: IntakeRoutingDecision,
@@ -43,6 +46,35 @@ export const applyIntakeRetrievalPlanGuard = (
         if (fallback.length >= 2) {
             plan = fallback;
             reason = "filled_fallback";
+        }
+    }
+
+    if (multipart && plan.length >= 1) {
+        const expanded = expandIdentityPlanFromSubTasks(plan, decision.subTasks);
+        if (expanded.length > plan.length) {
+            plan = expanded;
+            reason = reason === "noop" ? "expanded_identity" : reason;
+        }
+    }
+
+    if (multipart && plan.length >= 1) {
+        const repaired = repairRetrievalPlanItems(
+            plan,
+            decision.subTasks,
+            userQuestion
+        );
+        if (
+            repaired.length !== plan.length ||
+            repaired.some(
+                (item, i) =>
+                    item.queryType !== plan[i]?.queryType ||
+                    item.identityField !== plan[i]?.identityField
+            )
+        ) {
+            plan = repaired;
+            reason = reason === "noop" ? "repaired_plan" : reason;
+        } else {
+            plan = repaired;
         }
     }
 

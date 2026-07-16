@@ -9,13 +9,14 @@ import type {
 import type { KnowledgeHit } from "@/agentflow/agents/online/knowledge-manager";
 import type { EnumerationMeta } from "@/agentflow/agents/online/knowledge-manager";
 import { isProjectEnumeration } from "@/agentflow/agents/online/intake-coordinator";
-import { enumerationActionPrompt } from "@/agentflow/agents/online/intake-coordinator/enumeration-action-prompts";
+import { enumerationActionPrompt } from "@/agentflow/agents/online/intake-coordinator/enumeration";
 import { formatSubQuestionSection } from "./analyze-helpers";
 import {
     enumerationStartIndex,
     formatEnumerationPaginationHint,
     formatEnumerationPaginationLine,
     formatHitsAsAnswerList,
+    hitDisplayRole,
     hitDisplayTitle,
 } from "./enumeration-format";
 import type { InformationAnalystResult } from "./prompt";
@@ -30,9 +31,14 @@ export type ComposeEnumerationInput = {
     listIntent?: "preview" | "continue" | "exhaustive" | null;
 };
 
-const hitToListItem = (hit: KnowledgeHit): EnumerationListItem => ({
+const hitToListItem = (
+    hit: KnowledgeHit,
+    listKind: "project" | "employer"
+): EnumerationListItem => ({
     id: hit.path,
     title: hitDisplayTitle(hit),
+    subtitle:
+        listKind === "employer" ? hitDisplayRole(hit) ?? undefined : undefined,
     path: hit.path,
 });
 
@@ -74,7 +80,8 @@ export const buildEnumerationFooter = (
     const page = meta?.page ?? 1;
     const pageSize = meta?.pageSize ?? shown;
     const startIndex = enumerationStartIndex({ page, pageSize });
-    const hasMore = meta?.hasMore ?? total > shown;
+    // 以实际覆盖序号为准，避免 hits 被截断后仍显示「已全部列出」
+    const hasMore = startIndex + shown - 1 < total;
     return formatEnumerationPaginationHint({
         language: input.language,
         listKind,
@@ -108,8 +115,8 @@ export const buildEnumerationBlock = (
     const shown = hitsForList.length;
     const page = meta?.page ?? 1;
     const pageSize = meta?.pageSize ?? shown;
-    const hasMore = meta?.hasMore ?? total > shown;
     const startIndex = enumerationStartIndex({ page, pageSize });
+    const hasMore = startIndex + shown - 1 < total;
     const paginationHint = formatEnumerationPaginationLine({
         language: input.language,
         listKind,
@@ -124,7 +131,7 @@ export const buildEnumerationBlock = (
     return {
         type: "enumeration",
         listKind,
-        items: hitsForList.map(hitToListItem),
+        items: hitsForList.map((h) => hitToListItem(h, listKind)),
         total,
         shown,
         page,
@@ -188,7 +195,7 @@ export const composeEnumerationAnswer = (
                   pageSize: enumerationBlock.pageSize,
               }))
             : 1;
-    const answer = `${formatHitsAsAnswerList(hitsForAnswer, input.language, startIndex)}${footer}`;
+    const answer = `${formatHitsAsAnswerList(hitsForAnswer, input.language, startIndex, listKind)}${footer}`;
     const blocks: AssistantMessageBlock[] = [enumerationBlock];
     const actions = buildEnumerationActionsBlock(
         listKind,

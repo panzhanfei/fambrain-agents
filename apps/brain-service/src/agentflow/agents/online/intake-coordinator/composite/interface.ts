@@ -8,7 +8,8 @@ import type {
 import type {
     EnumerationControl,
     SlotExecutor,
-} from "../enumeration-action-prompts";
+} from "../enumeration";
+import type { IntakeIdentityField } from "@/agentflow/agents/online/intake-coordinator/contract";
 
 export type CompositeFacetId =
     | "identity"
@@ -30,6 +31,7 @@ export type CompositeRetrievalSlot = {
     /** 默认 km_retrieve；continue/exhaustive 列举 → list_corpus */
     executor?: SlotExecutor;
     enumerationControl?: EnumerationControl | null;
+    identityField?: IntakeIdentityField | null;
     enumerationPage?: number;
     enumerationPageSize?: number;
 };
@@ -53,4 +55,6 @@ export type EnumerationTargetInput = Pick<
     "label" | "searchQuery" | "topics"
 > & {
     subTasks?: string[];
+    /** 优先于 topics：来自 enumerationControl.listKind */
+    listKind?: "project" | "experience" | null;
 };

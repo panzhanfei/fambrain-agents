@@ -21,8 +21,9 @@ import {
   applyFactCheckGuards,
   buildRuleBasedFactCheck,
   normalizeFactCheckerResult,
+  shouldFastPassEnumerationCheck,
 } from "./check-helpers";
-import { hasExperienceCorpusHits, hasPersonalCorpusHits } from "./refined-search-query";
+import { hasPersonalCorpusHits } from "./refined-search-query";
 import {
   prompt,
   type FactCheckerInput,
@@ -120,11 +121,7 @@ export const completeFactCheck = async (
 
   if (
     input.retryCount === 0 &&
-    input.hits.length >= 3 &&
-    input.coverage === "sufficient" &&
-    hasExperienceCorpusHits(input.hits) &&
-    (input.queryType === "enumeration" ||
-      /哪几|哪些|列举|公司|任职/.test(input.userQuestion))
+    shouldFastPassEnumerationCheck(input)
   ) {
     const result = buildRuleBasedFactCheck(input);
     logAgentOut("FactChecker", "出去", summarizeFactCheckOut(result, {

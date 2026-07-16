@@ -33,24 +33,14 @@ export const routeAfterPrepareMemory = (
 };
 
 /**
- * Intake 之后的 LangGraph 条件边。
- *
- * 优先级（自上而下，命中即返回）：
- *   1. 异常 / 空 decision → respondEarly
- *   2. userFact（remember/recall，不经 KM）
- *   3. 短答早退（clarify / chitchat / direct_answer + briefReply）
- *   4. KM 检索（retrieve_and_answer；或 summarize 且 searchQuery 非空）
- *   5. 纯摘要（summarize 且无需先查库）
- *   6. 兜底 → factChecker（如 direct_answer 无 briefReply，hits 常空）
+ * Intake 之后：early / userFact 短路；其余进 planExecutor（含 summarize 需先查库）。
  */
 export const routeAfterIntake = (
   state: PipelineGraphState
 ):
   | "respondEarly"
   | "userFact"
-  | "retrieval"
-  | "dagExecutor"
-  | "factChecker"
+  | "planExecutor"
   | "contentSummarizer" => {
   if (state.exitEarly || state.error) return "respondEarly";
 
@@ -61,33 +51,58 @@ export const routeAfterIntake = (
 
   if (shouldRespondEarlyFromIntake(decision)) return "respondEarly";
 
-  if (decision.routeMode === "dag" && (decision.executionPlan?.length ?? 0) > 0)
-    return "dagExecutor";
+  const pathPlan = decision.pathPlan;
+  const hasPathSteps =
+    (pathPlan?.km.length ?? 0) +
+      (pathPlan?.list.length ?? 0) +
+      (pathPlan?.tool.length ?? 0) +
+      (pathPlan?.dag.length ?? 0) >
+    0;
 
-  if (intakeRequiresKmRetrieval(decision)) return "retrieval";
+  if (
+    decision.composeMode === "summarize" &&
+    !hasPathSteps &&
+    !intakeRequiresKmRetrieval(decision)
+  ) {
+    return "contentSummarizer";
+  }
+
+  if (
+    hasPathSteps ||
+    intakeRequiresKmRetrieval(decision) ||
+    decision.routeMode === "dag" ||
+    decision.routeMode === "slots" ||
+    decision.routeMode === "list"
+  ) {
+    return "planExecutor";
+  }
 
   if (decision.intent === "summarize_content") return "contentSummarizer";
 
-  // 兜底：其余 intent 若 LLM 仍给了 briefReply，直接早退
   if (decision.briefReply) return "respondEarly";
 
-  return "factChecker";
+  // 兜底：仍进 planExecutor（空 plan 会报错，优于静默 factChecker）
+  return "planExecutor";
 };
 
-export const routeAfterRetrieval = (
+/** planExecutor 之后按 composeMode 分流 */
+export const routeAfterPlanExecutor = (
   state: PipelineGraphState
-): "factChecker" | "contentSummarizer" => {
-  if (state.decision?.intent === "summarize_content") {
+): "contentSummarizer" | "contentOrganizer" | "respondEarly" => {
+  if (state.error) return "respondEarly";
+  if (
+    state.decision?.composeMode === "summarize" ||
+    state.decision?.intent === "summarize_content"
+  ) {
     return "contentSummarizer";
-  }
-  return "factChecker";
-};
-
-export const routeAfterFactChecker = (
-  state: PipelineGraphState
-): "retrieval" | "contentOrganizer" => {
-  if (!state.checkerPassed && state.retryCount < 1) {
-    return "retrieval";
   }
   return "contentOrganizer";
 };
+
+/** @deprecated 保留导出名供旧脚本；图已不再使用 */
+export const routeAfterRetrieval = routeAfterPlanExecutor;
+
+/** @deprecated 图已内嵌 per-step FC */
+export const routeAfterFactChecker = (
+  _state: PipelineGraphState
+): "contentOrganizer" => "contentOrganizer";

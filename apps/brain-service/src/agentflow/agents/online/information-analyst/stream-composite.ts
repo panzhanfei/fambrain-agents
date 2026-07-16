@@ -39,11 +39,20 @@ const buildSubInput = (
         plan.subTasks,
         plan.queryType
     );
+    // list_corpus 分页页已按 pageSize 取满；禁止再用 profile maxHits=8 截断
+    const pageSize = sub.enumerationMeta?.pageSize;
+    const maxHitsOverride =
+        queryType === "enumeration"
+            ? (pageSize && pageSize > 0
+                  ? pageSize
+                  : Math.max(sub.hits.length, 1))
+            : undefined;
     const organized = organizeKnowledge({
         hits: sub.hits,
         coverage: sub.coverage,
         notes: sub.notes ?? null,
         queryProfile: queryType,
+        maxHitsOverride,
     });
     return {
         userQuestion: plan.label,
@@ -57,15 +66,19 @@ const buildSubInput = (
         listIntent: input.listIntent ?? null,
         asOfDate: input.asOfDate ?? new Date().toISOString().slice(0, 10),
         slotId: plan.id,
+        facetKey: plan.facetKey,
+        identityField: plan.identityField ?? null,
         toolResults: input.toolResults,
     };
 };
 
 const findSubResult = (
     input: InformationAnalystInput,
-    plan: CompositeSlotPlan,
-    order: number
-) => input.compositeSubResults?.[order];
+    plan: CompositeSlotPlan
+) =>
+    input.compositeSubResults?.find(
+        (s) => String(s.slot) === String(plan.id)
+    );
 
 const emitSectionBlocks = function* (
     sectionNo: number,
@@ -110,7 +123,7 @@ export async function* streamCompositeAnalyze(
 
     for (let order = 0; order < plans.length; order++) {
         const plan = plans[order]!;
-        const sub = findSubResult(input, plan, order) ?? subs[order];
+        const sub = findSubResult(input, plan) ?? subs[order];
         if (!sub) continue;
 
         const sectionNo = order + 1;

@@ -42,5 +42,6 @@ export const buildInitialState = (
         compositeFacetCacheHits: null,
         asOfDate: new Date().toISOString().slice(0, 10),
         toolResults: null,
+        stepResults: null,
     };
 };

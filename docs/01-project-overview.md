@@ -103,8 +103,8 @@ pnpm run dev
 | `pnpm run experiment:bind-tools -- "问法"` | LangChain **bindTools** ReAct 实验（不进主链） |
 | `cd apps/brain-service && pnpm run verify:content-summarizer` | 摘要师 Zod 单测 |
 | `cd apps/brain-service && pnpm run verify:vault-list` | vault 列举单测 |
-| `pnpm test:all` | **全仓库**：依赖树校验 + Vitest 单元测试（25+ 用例） |
-| `pnpm test:unit` | Vitest 单元测试（`apps/brain-service` + `packages/*` 纯逻辑） |
+| `pnpm test:all` | **全仓库**：依赖树校验 + Vitest 单元测试（50+ 用例） |
+| `pnpm test:unit` | Vitest 单元测试（`apps/brain-service/tests/**` 集中目录 + `packages/*` 纯逻辑） |
 | `pnpm check:deps` / `pnpm fambrain-check-deps` | 校验 workspace `exports` / `scripts` 入口文件是否存在 |
 | `pnpm check:deps -- --scan-imports` | 额外扫描脚本入口内的相对 import 断链 |
 | `pnpm check:deps -- --package @fambrain/brain-service` | 仅检查指定包 |
@@ -186,7 +186,7 @@ pnpm run dev
 
 **约定：** `@fambrain/brain-service` 不直接访问数据库；编排层不把中间 Agent 输出写入 `messages`。
 
-**架构演进（2026-07）：** 原 `agentflow/brain-service/` 重命名为 **`agents/`**（避免与应用包同名）；`tool-orchestration/` 移入 **`agents/online/tool-orchestrator/`**（与文档 Agent 角色对齐）。列举执行从整句 `routeMode=list` 改为 **per-slot** `enumerationControl`（P0-26）。详见 [架构 v2](./05-architecture-v2-tool-orchestration.md#9-代码布局演进2026-07)、[坑点 §2.5.10](./04-pitfalls.md#2510-列举执行-per-slot-架构升级-p0-26--2026-07)。
+**架构演进（2026-07）：** 原 `agentflow/brain-service/` 重命名为 **`agents/`**；`tool-orchestration/` 移入 **`agents/online/tool-orchestrator/`**；列举执行从整句 `routeMode=list` 改为 **per-slot** `enumerationControl`（P0-26）；**PathPlan + PlanExecutor** 统一 km/list/tool/dag 四桶执行与 per-step FC（P0-28）。详见 [架构 v2 §11 PathPlan](./05-architecture-v2-tool-orchestration.md#11-pathplan-统一执行计划-2026-07)、[坑点 §2.8](./04-pitfalls.md#28-pathplan-统一编排-p0-28--2026-07)。
 
 ## P0 已落地能力（代码索引）
 
@@ -230,7 +230,9 @@ pnpm run dev
 | `verify:composite-incremental` | `apps/brain-service/scripts/` | P0-15：槽答案缓存 + composite 增量 单测 |
 | `verify:user-fact` | `apps/brain-service/scripts/` | P0-16：Intake schema + Mem0 跨会话 QQ remember/recall |
 | `resolveEnumerationTarget` | `intake-coordinator/composite/enumeration-target.ts` | plan label/topics → project \| experience 列举分流（P0-21） |
-| `query-signals.ts` | `intake-coordinator/query-signals.ts` | 问句结构工具：编号/并列/stale multipart 对齐（P0-25） |
+| `query-signals.ts` | `intake-coordinator/signals/` | 问句结构工具：编号/并列/stale multipart 对齐（P0-25） |
+| `ENUMERATION_ACTION_PROMPTS` | `intake-coordinator/enumeration/` | 列举 UI 按钮 exact-match prompt（P0-26/27） |
+| `harmonizeRetrievalPlanQueryTypes` | `intake-coordinator/guards/intake-link-lookup-guard.ts` | 混合问 enum+link 纠偏（P0-27） |
 | `maxAnalystHitsForProfile` | `information-analyst/analyst-recall-limits.ts` | Analyst hits 上限与 KM profile 对齐（P0-20） |
 | `clear-pipeline-cache.ts` | `apps/brain-service/scripts/` | 清空 检索 hits 缓存 / 槽答案缓存 Redis + 进程 memory；见 `.env.example` 三层 cache 开关 |
 | `diagnose-age-query.ts` | `apps/brain-service/scripts/` | 年龄单问：路由 + KM 检索 + 语料字段诊断（需 Chroma） |
@@ -238,7 +240,13 @@ pnpm run dev
 | `verify:learning-extract` | `apps/brain-service/scripts/` | 自主学习候选抽取（Phase A 前置） |
 | `verify-test-env.ts` | `apps/brain-service/scripts/` | verify 脚本内覆盖 `.env` cache 开关；**勿**在生产入口引用 |
 | `createFambrainTools` | `agentflow/tools/` | LangChain **StructuredTool**：`retrieve_corpus` / `remember_user_fact` / `recall_user_fact` / `list_vault_files` / `summarize_text` |
-| `applyToolPlanGuard` / `runToolOrchestratorNode` | `agentflow/agents/online/tool-orchestrator/` | P0-24 四类数据源编排；P0-26 列举 compose |
+| `applyToolPlanGuard` / `runPlanExecutorNode` | `agentflow/agents/online/tool-orchestrator/` | P0-24 四类数据源编排；**P0-28 PathPlan 单节点执行** + per-step FC |
+| `compilePathPlan` / `applyPathPlanGuard` | `intake-coordinator/path-plan/` | Intake → PathPlan 四桶 + composeMode |
+| `repairRetrievalPlanItems` / `IDENTITY_FIELD_SEARCH` | `intake-coordinator/composite/` | P0-30：schema 合法化 + facet 去重（无口语 labels） |
+| `compute_tenure_from_hits` | `tools/lib/compute-tenure.ts` | P0-30：从业年限（简历时间线最早起点） |
+| `diagnose-long-composite-career-query` | `apps/brain-service/scripts/` | P0-30：超长复合履历回归 |
+| brain-service 单元测试 | `apps/brain-service/tests/` | 勿再写 `src/**/*.test.ts` |
+| `isPureSocialUtterance` / `applyPureSocialUtteranceGuard` | `intake-coordinator/signals/`、`guards/intake-chitchat-guard.ts` | P0-29：纯问候/感谢跳过或覆盖 LLM |
 | `applyEnumerationSlotGuard` | `intake-coordinator/guards/enumeration-list-intent.ts` | P0-26 per-slot 列举 executor |
 | `configureLangSmithTracing` | `packages/brain-config/langsmith.ts` | 启动时启用 tracing；`stream.ts` 附加 conversationId 等 metadata |
 | `verify:langchain-tools` | `apps/brain-service/scripts/` | Tool 注册 + retrieve / Mem0 / vault invoke 冒烟 |

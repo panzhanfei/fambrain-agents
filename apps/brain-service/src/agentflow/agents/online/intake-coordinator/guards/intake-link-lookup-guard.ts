@@ -1,6 +1,7 @@
 /**
- * 对外链接 guard：仅当 Intake LLM 已声明 external_link 时规范化路由；
- * 结构上过期的多槽 plan 收束为单槽；编号多问拆 entity 槽。
+ * 对外链接 guard：规范化 external_link 路由；
+ * 保留 enumeration + external_link 混合 plan；过期多槽收束；编号多问拆实体槽。
+ * 纠偏仅用结构化信号（sibling queryType / 顶层 queryType + topics），不调口语词表。
  */
 import type {
     IntakeRetrievalPlanItem,
@@ -12,13 +13,15 @@ import {
     extractNumberedPlanUnits,
     hasExplicitMultipartStructure,
     hasStaleMultipartFromDecision,
-} from "../query-signals";
+} from "../signals";
 
 export type IntakeLinkLookupGuardReason =
     | "noop"
     | "single_external_link"
     | "aggregate_external_link"
     | "multipart_external_link"
+    | "preserve_mixed_plan"
+    | "harmonize_plan_query_types"
     | "harmonize_query_type";
 
 const buildEntityExternalLinkQuery = (label: string): string => {
@@ -39,6 +42,60 @@ const buildExternalLinkPlan = (
     }));
 };
 
+const planHasMixedQueryTypes = (
+    plan: IntakeRetrievalPlanItem[]
+): boolean => {
+    const types = new Set(plan.map((p) => p.queryType));
+    return types.size >= 2;
+};
+
+const planHasEnumerationAndLink = (
+    plan: IntakeRetrievalPlanItem[]
+): boolean => {
+    const types = new Set(plan.map((p) => p.queryType));
+    return types.has("enumeration") && types.has("external_link");
+};
+
+const topicsSuggestPersonalResume = (topics: string[]): boolean =>
+    topics.includes("personal") || topics.includes("resume");
+
+/**
+ * 结构化纠偏：顶层已声明 external_link，且 plan 项误标 enumeration、
+ * topics 含 personal/resume 时改回 external_link。
+ * 已有 enumeration+external_link 混合 plan 时不改（保留列举槽）。
+ */
+export const harmonizeRetrievalPlanQueryTypes = (
+    plan: IntakeRetrievalPlanItem[],
+    topQueryType?: IntakeRoutingDecision["queryType"]
+): { plan: IntakeRetrievalPlanItem[]; changed: boolean } => {
+    if (topQueryType !== "external_link") {
+        return { plan, changed: false };
+    }
+    if (planHasEnumerationAndLink(plan)) {
+        return { plan, changed: false };
+    }
+
+    let changed = false;
+    const next = plan.map((item) => {
+        if (item.queryType !== "enumeration") return item;
+        if (!topicsSuggestPersonalResume(item.topics)) return item;
+        changed = true;
+        return {
+            ...item,
+            queryType: "external_link" as const,
+            topics:
+                item.topics.length > 0
+                    ? item.topics
+                    : [...EXTERNAL_LINK_SLOT.topics],
+            enumerationControl: null,
+            searchQuery: item.searchQuery.trim()
+                ? `${item.searchQuery.trim()} ${EXTERNAL_LINK_SLOT.searchQuery}`
+                : EXTERNAL_LINK_SLOT.searchQuery,
+        };
+    });
+    return { plan: next, changed };
+};
+
 export const applyIntakeLinkLookupGuard = (
     decision: IntakeRoutingDecision,
     userQuestion: string
@@ -47,13 +104,46 @@ export const applyIntakeLinkLookupGuard = (
         return { ...decision, linkLookupGuardReason: "noop" };
     }
 
-    if (!decisionRequestsExternalLink(decision)) {
-        return { ...decision, linkLookupGuardReason: "noop" };
+    const rawPlan = decision.retrievalPlan ?? [];
+    const { plan: harmonizedPlan, changed: planHarmonized } =
+        harmonizeRetrievalPlanQueryTypes(rawPlan, decision.queryType);
+    let working: IntakeRoutingDecision = planHarmonized
+        ? {
+              ...decision,
+              retrievalPlan: harmonizedPlan,
+              queryType: planHasEnumerationAndLink(harmonizedPlan)
+                  ? decision.queryType
+                  : harmonizedPlan.some((p) => p.queryType === "external_link")
+                    ? "external_link"
+                    : decision.queryType,
+          }
+        : decision;
+
+    if (!decisionRequestsExternalLink(working)) {
+        return {
+            ...working,
+            linkLookupGuardReason: planHarmonized
+                ? "harmonize_plan_query_types"
+                : "noop",
+        };
     }
 
-    if (hasStaleMultipartFromDecision(decision, userQuestion)) {
+    const plan = working.retrievalPlan ?? [];
+
+    /** 列举 + 对外链接混合：保留多槽，禁止收成单槽 aggregate */
+    if (plan.length >= 2 && planHasMixedQueryTypes(plan)) {
         return {
-            ...decision,
+            ...working,
+            retrievalPlan: plan,
+            linkLookupGuardReason: planHarmonized
+                ? "harmonize_plan_query_types"
+                : "preserve_mixed_plan",
+        };
+    }
+
+    if (hasStaleMultipartFromDecision(working, userQuestion)) {
+        return {
+            ...working,
             queryType: "external_link",
             searchQuery: EXTERNAL_LINK_SLOT.searchQuery,
             topics: [...EXTERNAL_LINK_SLOT.topics],
@@ -64,47 +154,52 @@ export const applyIntakeLinkLookupGuard = (
     }
 
     if (hasExplicitMultipartStructure(userQuestion)) {
-        const plan = buildExternalLinkPlan(userQuestion);
-        if (plan.length >= 2) {
+        const numberedPlan = buildExternalLinkPlan(userQuestion);
+        if (numberedPlan.length >= 2) {
             return {
-                ...decision,
+                ...working,
                 queryType: "external_link",
-                searchQuery: plan[0]!.searchQuery,
+                searchQuery: numberedPlan[0]!.searchQuery,
                 topics: [...EXTERNAL_LINK_SLOT.topics],
-                subTasks: plan.map((p) => p.label),
-                retrievalPlan: plan,
+                subTasks: numberedPlan.map((p) => p.label),
+                retrievalPlan: numberedPlan,
                 linkLookupGuardReason: "multipart_external_link",
             };
         }
     }
 
-    if (decision.queryType !== "external_link") {
+    if (working.queryType !== "external_link") {
         return {
-            ...decision,
+            ...working,
             queryType: "external_link",
             searchQuery:
-                decision.searchQuery.trim() || EXTERNAL_LINK_SLOT.searchQuery,
+                working.searchQuery.trim() || EXTERNAL_LINK_SLOT.searchQuery,
             topics:
-                decision.topics.length > 0
-                    ? decision.topics
+                working.topics.length > 0
+                    ? working.topics
                     : [...EXTERNAL_LINK_SLOT.topics],
             subTasks:
-                decision.subTasks.length > 0
-                    ? decision.subTasks
+                working.subTasks.length > 0
+                    ? working.subTasks
                     : [EXTERNAL_LINK_SLOT.label],
-            retrievalPlan: decision.retrievalPlan ?? [],
+            retrievalPlan: working.retrievalPlan ?? [],
             linkLookupGuardReason: "harmonize_query_type",
         };
     }
 
-    if (!decision.searchQuery.trim()) {
+    if (!working.searchQuery.trim()) {
         return {
-            ...decision,
+            ...working,
             searchQuery: EXTERNAL_LINK_SLOT.searchQuery,
             topics: [...EXTERNAL_LINK_SLOT.topics],
             linkLookupGuardReason: "single_external_link",
         };
     }
 
-    return { ...decision, linkLookupGuardReason: "noop" };
+    return {
+        ...working,
+        linkLookupGuardReason: planHarmonized
+            ? "harmonize_plan_query_types"
+            : "noop",
+    };
 };

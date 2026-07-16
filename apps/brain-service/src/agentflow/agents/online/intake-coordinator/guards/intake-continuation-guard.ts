@@ -11,7 +11,7 @@ import {
     historySupportsContinuation,
     isShortContinuationUtterance,
     lastSubstantiveUserQuestion,
-} from "../query-signals";
+} from "../signals";
 
 export type IntakeContinuationGuardReason =
     | "noop"

@@ -67,7 +67,52 @@ assert.equal(enumBlock.hasMore, true);
 assert.match(composed.answer, /语料共 36 个/);
 assert.match(composed.answer, /本节预览 8 个/);
 assert.match(composed.answer, /共 2 页/);
+assert.match(composed.answer, /列出全部项目名称/, "pagination hint uses exact UI prompt");
 assert.match(composed.answer, /^1\. \*\*project-1\*\*$/m, "title-only numbered list");
 assert.doesNotMatch(composed.answer, /—/, "no excerpt suffix");
+const actionBlock = composed.blocks!.find((b) => b.type === "actions");
+assert.ok(actionBlock && actionBlock.type === "actions", "preview has actions button");
+assert.equal(actionBlock.actions[0]?.prompt, "列出全部项目名称");
+
+// 分页第 2 页：hits 被截断时不得谎称「已全部列出」
+{
+    const page2Hits = Array.from({ length: 8 }, (_, i) => mkHit(i + 21));
+    const truncated = composeEnumerationAnswer({
+        hits: page2Hits,
+        language: "zh",
+        topics: PROJECTS_SLOT.topics,
+        enumerationMeta: {
+            listKind: "project",
+            totalExpected: 36,
+            shown: 8,
+            page: 2,
+            pageSize: 20,
+            hasMore: false,
+        },
+        notes: "列举分页 2：8/36 个项目",
+        listIntent: "continue",
+    });
+    assert.match(truncated.answer, /序号 21–28/);
+    assert.match(truncated.answer, /更多项目/, "truncated page must offer continue");
+    assert.doesNotMatch(truncated.answer, /已全部列出/);
+    const fullPage = composeEnumerationAnswer({
+        hits: Array.from({ length: 16 }, (_, i) => mkHit(i + 21)),
+        language: "zh",
+        topics: PROJECTS_SLOT.topics,
+        enumerationMeta: {
+            listKind: "project",
+            totalExpected: 36,
+            shown: 16,
+            page: 2,
+            pageSize: 20,
+            hasMore: false,
+        },
+        notes: "列举分页 2：16/36 个项目",
+        listIntent: "continue",
+    });
+    assert.match(fullPage.answer, /序号 21–36/);
+    assert.match(fullPage.answer, /已全部列出/);
+    assert.equal(fullPage.blocks?.find((b) => b.type === "enumeration")?.items.length, 16);
+}
 
 console.log("OK");

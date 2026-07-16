@@ -7,8 +7,8 @@ import type { QueryProfile } from "@/agentflow/agents/online/knowledge-manager";
 import {
   resolveAnalystQueryProfile,
 } from "./analyst-recall-limits";
-import { isProjectEnumeration } from "@/agentflow/agents/online/intake-coordinator";
 import { memoryBlockHasStructuredUserFacts } from "@/agentflow/agents/online/user-fact";
+import type { IntakeIdentityField } from "@/agentflow/agents/online/intake-coordinator/contract";
 import {
   resolveOrchestratedTool,
   runOrchestratedSubQuestion,
@@ -51,6 +51,10 @@ export type SubQuestionAnalyzeInput = {
   asOfDate?: string;
   /** composite 槽位 id（toolResults 键 slot_<id>） */
   slotId?: string;
+  /** 槽答案缓存键（如 id:age），供空结果文案分型 */
+  facetKey?: string;
+  /** Intake identityField（优先于 facetKey） */
+  identityField?: IntakeIdentityField | null;
   /** ToolOrchestrator 预计算结果（优先于 Analyst 内联编排） */
   toolResults?: PipelineToolResults | null;
 };
@@ -103,11 +107,27 @@ export const mergeSubQuestionAnswers = (
   };
 };
 
+const resolveIdentityEmptyKind = (input: {
+  queryType?: QueryProfile;
+  identityField?: IntakeIdentityField | null;
+  facetKey?: string;
+}): "age" | "name" | null => {
+  if (input.queryType && input.queryType !== "identity") return null;
+  if (input.identityField === "age" || input.facetKey === "id:age") return "age";
+  if (input.identityField === "name" || input.facetKey === "id:name") {
+    return "name";
+  }
+  return null;
+};
+
 const buildEmptyHitsFallback = (
   input: Pick<
     InformationAnalystInput,
     "userQuestion" | "language" | "subTasks" | "queryType"
-  >
+  > & {
+    identityField?: IntakeIdentityField | null;
+    facetKey?: string;
+  }
 ): InformationAnalystResult => {
   const { userQuestion, language, subTasks, queryType } = input;
   const profile = resolveAnalystQueryProfile({
@@ -115,9 +135,13 @@ const buildEmptyHitsFallback = (
     subTasks,
     queryType,
   });
-  const context = [...subTasks, userQuestion].join(" ");
+  const kind = resolveIdentityEmptyKind({
+    queryType: profile,
+    identityField: input.identityField,
+    facetKey: input.facetKey,
+  });
 
-  if (profile === "identity" && /年龄|出生|多大|几岁|周岁/.test(context)) {
+  if (kind === "age") {
     return {
       answer:
         language === "en"
@@ -128,7 +152,7 @@ const buildEmptyHitsFallback = (
       insufficientEvidence: true,
     };
   }
-  if (profile === "identity" && /姓名|叫什么|名字|我叫什么|我是谁/.test(context)) {
+  if (kind === "name") {
     return {
       answer:
         language === "en"
@@ -166,6 +190,8 @@ export const buildSubQuestionFallbackAnswer = (
       language,
       subTasks: [userQuestion],
       queryType,
+      identityField: input.identityField,
+      facetKey: input.facetKey,
     });
     return {
       ...empty,

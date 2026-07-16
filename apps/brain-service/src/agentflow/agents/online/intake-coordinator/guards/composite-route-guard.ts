@@ -19,6 +19,10 @@ import {
     type CompositeRoutePlanSource,
 } from "@/agentflow/agents/online/intake-coordinator/composite";
 import type { IntakeRoutingDecision } from "@/agentflow/agents/online/intake-coordinator/contract";
+import {
+    defaultComposeMode,
+    emptyPathPlan,
+} from "@/agentflow/agents/online/intake-coordinator/path-plan";
 import type {
     CompositeRouteReason,
     RoutedIntakeDecision,
@@ -87,6 +91,8 @@ const applySlotsDecision = (
         intent: "retrieve_and_answer",
         routeMode: "slots",
         compositeSlots: slots,
+        pathPlan: emptyPathPlan(),
+        composeMode: slots.length >= 2 ? "composite" : "qa",
         routeReason,
         routePlanSource,
         searchQuery: primary.searchQuery,
@@ -113,6 +119,8 @@ export const applyCompositeRouteGuard = (
             ...decision,
             routeMode: "skip",
             compositeSlots: [],
+            pathPlan: emptyPathPlan(),
+            composeMode: defaultComposeMode(),
             routeReason: "skip_non_retrieve",
             routePlanSource: "none",
         };

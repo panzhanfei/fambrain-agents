@@ -28,6 +28,7 @@ export type PipelineStepName =
     | "intake"
     | "user_fact"
     | "retrieval"
+    | "plan_executor"
     | "fact_checker"
     | "content_summarizer"
     | "content_organizer"

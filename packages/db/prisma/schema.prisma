@@ -103,6 +103,7 @@ model RetrievalFeedback {
   signal         Int
   query          String?
   createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 
   @@index([corpusUserId, repoPath])
   @@index([userId, messageId])

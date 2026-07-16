@@ -36,13 +36,35 @@ export const pickToolResultForSubQuestion = (
         return toolResults.enumeration;
     }
 
-    const ageField = resolveIdentityField(input.userQuestion);
+    const identitySpec = resolveIdentityField(
+        input.userQuestion,
+        input.identityField
+    );
     if (
         profile === "identity" &&
-        ageField?.toolId === "compute_age_from_hits" &&
+        identitySpec?.toolId === "extract_identity_from_hits"
+    ) {
+        const slotRun = input.slotId
+            ? toolResults[`slot_${input.slotId}`]
+            : null;
+        if (slotRun?.toolId === "extract_identity_from_hits") return slotRun;
+    }
+
+    if (
+        profile === "identity" &&
+        (input.identityField === "age" ||
+            input.facetKey === "id:age" ||
+            identitySpec?.toolId === "compute_age_from_hits") &&
         toolResults.age
     ) {
         return toolResults.age;
+    }
+
+    if (profile === "external_link" && input.slotId) {
+        const slotRun = toolResults[`slot_${input.slotId}`];
+        if (slotRun?.toolId === "extract_external_links_from_hits") {
+            return slotRun;
+        }
     }
 
     if (toolResults.web) return toolResults.web;

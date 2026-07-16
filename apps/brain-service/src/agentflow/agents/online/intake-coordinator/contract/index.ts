@@ -1,6 +1,7 @@
 /** Intake contract 聚合导出 */
 export {
     prompt,
+    type IntakeIdentityField,
     type IntakeRetrievalPlanItem,
     type IntakeRoutingDecision,
 } from "./prompt";

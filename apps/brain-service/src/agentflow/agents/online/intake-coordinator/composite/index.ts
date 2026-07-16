@@ -12,6 +12,7 @@ export type {
 export {
     buildFallbackRetrievalPlan,
     buildSingleQuestionPlanItem,
+    expandIdentityPlanFromSubTasks,
     isTechSingleQuestion,
     looksLikeMultiPartQuestion,
     normalizePlanItems,
@@ -33,6 +34,17 @@ export {
     getCompositeSlot,
     planItemToSlot,
 } from "./composite-slot-queries";
+export {
+    IDENTITY_FIELD_SEARCH,
+    type IdentityFieldSearchSpec,
+} from "./identity-field-search";
+export {
+    annotatePlanItem,
+    dedupePlanByFacet,
+    normalizePlanItemFromSchema,
+    planFacetKey,
+    repairRetrievalPlanItems,
+} from "./repair-retrieval-plan";
 export {
     isExperienceEnumeration,
     isProjectEnumeration,

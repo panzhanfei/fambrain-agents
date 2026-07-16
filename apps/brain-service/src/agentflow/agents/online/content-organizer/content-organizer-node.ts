@@ -1,4 +1,5 @@
 import { resolveQueryProfile } from "@/agentflow/agents/online/knowledge-manager";
+import { ENUMERATION_EXHAUSTIVE_PAGE_SIZE } from "@/agentflow/agents/online/knowledge-manager/list/list-corpus-entries";
 import { organizeKnowledge } from "./organize-knowledge";
 import type { PipelineGraphState } from "@/agentflow/pipeline/graph/state";
 
@@ -14,11 +15,17 @@ export const runContentOrganizerNode = async (
               decision.queryType
           )
         : undefined;
-    const maxHitsOverride =
+    const paginatedList =
         decision?.listIntent === "exhaustive" ||
-        decision?.listIntent === "continue"
-            ? decision.enumerationPageSize
-            : undefined;
+        decision?.listIntent === "continue";
+    const pageFromMeta = state.enumerationMeta?.pageSize;
+    const maxHitsOverride = paginatedList
+        ? decision.enumerationPageSize ??
+          pageFromMeta ??
+          ENUMERATION_EXHAUSTIVE_PAGE_SIZE
+        : queryProfile === "enumeration" && pageFromMeta
+          ? pageFromMeta
+          : undefined;
     const organized = organizeKnowledge({
         hits: state.hits,
         coverage: state.coverage,

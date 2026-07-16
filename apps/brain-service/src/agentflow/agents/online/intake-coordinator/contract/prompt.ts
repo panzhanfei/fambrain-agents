@@ -4,9 +4,19 @@
  *
  * 期望输出形状见 {@link IntakeRoutingDecision}（由服务端解析，勿在 JSON 外加说明文字）。
  */
-import type { EnumerationControl } from "../enumeration-action-prompts";
+import type { EnumerationControl } from "../enumeration";
 
 export type { EnumerationControl };
+
+/** identity 子字段（服务端工具 / facetKey；勿用问句正则猜） */
+export type IntakeIdentityField =
+    | "name"
+    | "age"
+    | "email"
+    | "phone"
+    | "education"
+    | "career"
+    | "tenure";
 
 /** 多问 / 综合档案：每项对应一次独立检索或列举（编排器主路由信号） */
 export type IntakeRetrievalPlanItem = {
@@ -22,6 +32,11 @@ export type IntakeRetrievalPlanItem = {
      * 混合问时只给「列出全部」那一项填此字段，勿整句套用。
      */
     enumerationControl?: EnumerationControl | null;
+    /**
+     * identity 子字段（仅 queryType=identity 时填写）：
+     * name/age/email/phone/education/career；供工具编排与 facet 缓存键，服务端不再用 label 正则猜。
+     */
+    identityField?: IntakeIdentityField | null;
 };
 
 export type IntakeRoutingDecision = {
@@ -112,17 +127,24 @@ export const prompt = `你是 FamBrain 系统中的「入口接线员」（Intak
 
 ## retrievalPlan（多问 / 综合档案 · 必读）
 - 用户一条消息含 **≥2 个独立子问题**（如「叫什么？多大？做过什么项目？」）→ retrievalPlan **至少 2 项**，每项对应一次检索。
+- **先合并再拆分（必读）**：语义相同的子问必须合并为 **1 项**（如「哪几家公司上过班」+「职位是什么」→ **一条** experience enumeration，label 含公司与职位）；真正独立的意图才拆开（从业年限 identity/tenure ≠ 公司列表；近两年项目 ≠ 全部项目）。
+- **禁止重复 facet**：同一 \`identityField\` 或同一 \`listKind\`（且相同 timeWindowYears）不得出现两条；「工作经历」与「任职公司及职位」不得拆成两条 experience。
 - 每项 **searchQuery** 须针对该子问题写关键词（含目录词如「个人简介」「简历」「项目经历」），**不要**把整句用户口语原样复制 5 遍。
-- **queryType 按子问题选**：姓名/年龄/学历/行业 → identity；列举全部项目/公司 → enumeration；技术栈 → tech；**GitHub/仓库/对外链接/URL** → external_link（**禁止**用 enumeration）。
+- **queryType 仅允许**：\`identity\` | \`enumeration\` | \`tech\` | \`external_link\` | \`default\`（**禁止**自造 time_duration/history/tech_stack 等）。
+- **queryType 按子问题选**：姓名/年龄/学历/行业/从业年限 → identity（并填 identityField）；列举全部项目/公司 → enumeration；技术栈 → tech；**GitHub/仓库/对外链接/URL** → external_link（**禁止**用 enumeration）。
+- **多问混合**时顶层 queryType 用占比最高的一类或 null；**禁止**整轮标成 enumeration 却把年龄/姓名/年限也塞进项目列举。
 - 单问、单点事实：retrievalPlan 为 **[]**（空数组），仅用顶层 searchQuery + queryType。
 
 ## enumerationControl（列举分页 · 按子问题填写）
-- 仅当该子问 **queryType=enumeration** 且用户要 **翻页/穷举目录** 时填写；普通「有哪些项目」可省略或 action=preview。
-- 字段：\`{ "action": "preview"|"continue"|"exhaustive", "listKind": "project"|"experience", "excludeHint": string|null }\`
+- 仅当该子问 **queryType=enumeration** 时填写。
+- 字段：\`{ "action": "preview"|"continue"|"exhaustive", "listKind": "project"|"experience", "excludeHint": string|null, "timeWindowYears": number|null }\`
   - **exhaustive**：列出全部 / 完整列表 / 都列出来 → 目录扫盘（非向量 Top-K）
   - **continue**：更多项目 / 下一页 / 更多经历 → 列举续页（结合上文）
   - **preview**：预览若干条（默认语义检索）
+  - **timeWindowYears**：用户说「近两年 / 这两年 / 最近 N 年」时填 \`2\`（或 N）；服务端按语料日期过滤。全部项目则 \`null\`。
+- **近两年项目 vs 全部项目**：若用户两者都问 → **最多 2 条** project enumeration（一条 \`timeWindowYears: 2\`，一条无时间窗）；**禁止**再额外复制一条「项目经历」全量槽。
 - **混合问**：如「城管用了什么技术？其它项目全部列出」→ retrievalPlan **2 项**：一项 tech（无 enumerationControl），一项 enumeration + enumerationControl.exhaustive；**禁止**整句只走 enumeration。
+- **列举 + 开源链接**：如「列出所有项目，并告诉我开源项目的 GitHub/线上地址」→ retrievalPlan **2 项**：① enumeration（项目列表）；② **external_link**（开源仓库/线上 URL，topics 含 personal/resume/project）。服务端按槽并行/分桶执行（external_link → km + extract 工具），**禁止**把第 2 项标成 enumeration，也**禁止**写成「每个项目的 GitHub」（须保留「开源」限定）。
 - excludeHint：用户说「除了城管」时可填「城管」。
 
 ## 意图（intent）选用规则
@@ -178,13 +200,30 @@ export const prompt = `你是 FamBrain 系统中的「入口接线员」（Intak
 - 不要包含「请帮我」「你知道吗」等礼貌用语。
 
 ## topics 示例（可多选）
-resume, experience, project, tech-stack, architecture, team-lead, interview, open-source, aky, sentinel, e-hr, urban-governance
+resume, experience, project, tech-stack, architecture, team-lead, interview, open-source, aky, sentinel, e-hr, urban-governance, external
+
+- **external**：子问需要外界/行情/招聘等语料外信息（web）时加入；服务端据此标 dataSource=web 或升级 hybrid DAG，**不要**靠问句关键词硬猜。
+
+## identityField（仅 queryType=identity 的 plan 项）
+| identityField | 何时使用 |
+|---------------|----------|
+| name | 姓名、叫什么 |
+| age | 年龄、多大、出生年份 |
+| email | 邮箱 |
+| phone | 电话/手机 |
+| education | 学历、院校 |
+| career | 行业、职业、从事领域（非年限） |
+| tenure | 从业年限、干了多少年、工龄（须查工作经历时间线） |
+| null/省略 | 综合个人档案、近况等未落到单一字段 |
+
+**禁止**把「干了多少年 / 从业年限」标成 enumeration 或与「全部项目」共用一个 plan 项。
 
 ## queryType（检索问法；retrieve / 需查库的 summarize 时必填；否则 null）
 | queryType | 何时使用 |
 |-----------|----------|
 | identity | 姓名、年龄、职业、个人简历、联系方式等个人档案 |
-| enumeration | 哪几家公司、全部经历、有哪些项目（穷举/列举） |
+| enumeration | 哪几家公司、全部经历、有哪些项目（穷举/列举名称） |
+| external_link | GitHub/仓库/对外 URL/线上预览地址（**禁止**用 enumeration） |
 | tech | 技术栈、框架、数据库、用什么技术 |
 | default | 其他需查库的单点事实（公司/项目/职责等） |
 
@@ -212,7 +251,8 @@ resume, experience, project, tech-stack, architecture, team-lead, interview, ope
       "searchQuery": string,
       "queryType": "identity | enumeration | tech | external_link | default",
       "topics": string[],
-      "enumerationControl": { "action": "preview | continue | exhaustive", "listKind": "project | experience", "excludeHint": string | null } | null
+      "enumerationControl": { "action": "preview | continue | exhaustive", "listKind": "project | experience", "excludeHint": string | null, "timeWindowYears": number | null } | null,
+      "identityField": "name | age | email | phone | education | career | tenure | null"
     }
   ],
   "userFactKey": string | null,
@@ -272,12 +312,12 @@ resume, experience, project, tech-stack, architecture, team-lead, interview, ope
 ## 示例 8（多问并列 · retrievalPlan）
 用户：我叫什么？ 今年多大？ 做过那些项目？ 从事什么行业？什么学历？
 输出：
-{"intent":"retrieve_and_answer","searchQuery":"个人简介 简历 姓名 年龄 学历 行业 项目经历","subTasks":["姓名","年龄","项目经历列举","从事行业","学历"],"topics":["personal","resume","project","experience"],"language":"zh","confidence":0.9,"queryType":"identity","clarifyingQuestion":null,"briefReply":null,"retrievalPlan":[{"label":"姓名","searchQuery":"个人简介 简历 姓名 全名","queryType":"identity","topics":["personal","resume"]},{"label":"年龄","searchQuery":"个人简介 简历 年龄 出生年份","queryType":"identity","topics":["personal","resume"]},{"label":"项目经历","searchQuery":"项目经历 全部项目 项目名称 职责","queryType":"enumeration","topics":["project"]},{"label":"从事行业","searchQuery":"个人简介 简历 行业 职业 领域","queryType":"identity","topics":["personal","resume"]},{"label":"学历","searchQuery":"个人简介 简历 学历 毕业院校","queryType":"identity","topics":["personal","resume"]}]}
+{"intent":"retrieve_and_answer","searchQuery":"个人简介 简历 姓名 年龄 学历 行业 项目经历","subTasks":["姓名","年龄","项目经历列举","从事行业","学历"],"topics":["personal","resume","project","experience"],"language":"zh","confidence":0.9,"queryType":"identity","clarifyingQuestion":null,"briefReply":null,"retrievalPlan":[{"label":"姓名","searchQuery":"个人简介 简历 姓名 全名","queryType":"identity","topics":["personal","resume"],"identityField":"name"},{"label":"年龄","searchQuery":"个人简介 简历 年龄 出生年份","queryType":"identity","topics":["personal","resume"],"identityField":"age"},{"label":"项目经历","searchQuery":"项目经历 全部项目 项目名称 职责","queryType":"enumeration","topics":["project"],"enumerationControl":{"action":"preview","listKind":"project","excludeHint":null}},{"label":"从事行业","searchQuery":"个人简介 简历 行业 职业 领域","queryType":"identity","topics":["personal","resume"],"identityField":"career"},{"label":"学历","searchQuery":"个人简介 简历 学历 毕业院校","queryType":"identity","topics":["personal","resume"],"identityField":"education"}]}
 
 ## 示例 9（单问年龄 · 禁止 clarify）
 用户：我今年多大了
 输出：
-{"intent":"retrieve_and_answer","searchQuery":"个人简介 简历 年龄 出生年份 出生日期","subTasks":["从简历提取出生日期或年龄"],"topics":["personal","resume"],"language":"zh","confidence":0.9,"queryType":"identity","clarifyingQuestion":null,"briefReply":null,"retrievalPlan":[{"label":"年龄","searchQuery":"个人简介 简历 年龄 出生年份 出生日期","queryType":"identity","topics":["personal","resume"]}]}
+{"intent":"retrieve_and_answer","searchQuery":"个人简介 简历 年龄 出生年份 出生日期","subTasks":["从简历提取出生日期或年龄"],"topics":["personal","resume"],"language":"zh","confidence":0.9,"queryType":"identity","clarifyingQuestion":null,"briefReply":null,"retrievalPlan":[{"label":"年龄","searchQuery":"个人简介 简历 年龄 出生年份 出生日期","queryType":"identity","topics":["personal","resume"],"identityField":"age"}]}
 
 ## 示例 10（记住自述联系方式）
 用户：我的qq是734858469，请帮我记住
@@ -308,4 +348,16 @@ resume, experience, project, tech-stack, architecture, team-lead, interview, ope
 ## 示例 15（单问穷举列举）
 用户：列出全部项目名称
 输出：
-{"intent":"retrieve_and_answer","searchQuery":"项目经历 全部项目 项目名称","subTasks":["项目经历"],"topics":["project"],"language":"zh","confidence":0.93,"queryType":"enumeration","clarifyingQuestion":null,"briefReply":null,"retrievalPlan":[{"label":"项目经历","searchQuery":"项目经历 全部项目 项目名称","queryType":"enumeration","topics":["project"],"enumerationControl":{"action":"exhaustive","listKind":"project","excludeHint":null}}]}`;
+{"intent":"retrieve_and_answer","searchQuery":"项目经历 全部项目 项目名称","subTasks":["项目经历"],"topics":["project"],"language":"zh","confidence":0.93,"queryType":"enumeration","clarifyingQuestion":null,"briefReply":null,"retrievalPlan":[{"label":"项目经历","searchQuery":"项目经历 全部项目 项目名称","queryType":"enumeration","topics":["project"],"enumerationControl":{"action":"exhaustive","listKind":"project","excludeHint":null}}]}
+
+## 示例 16（混合问 · 列举全部项目 + 开源 GitHub/线上地址 · 禁止第 2 项 enumeration）
+用户：帮我列出所有我做过的项目，并且告诉我他开源项目的 GitHub 地址跟线上地址
+输出：
+{"intent":"retrieve_and_answer","searchQuery":"项目经历 开源 GitHub 线上地址","subTasks":["列举所有项目","开源项目的 GitHub 与线上地址"],"topics":["project","personal"],"language":"zh","confidence":0.9,"queryType":"enumeration","clarifyingQuestion":null,"briefReply":null,"retrievalPlan":[{"label":"列举所有项目名称","searchQuery":"项目经历 全部项目 项目名称","queryType":"enumeration","topics":["project"],"enumerationControl":{"action":"preview","listKind":"project","excludeHint":null}},{"label":"开源项目的 GitHub 与线上地址","searchQuery":"个人简介 简历 开源 对外链接 仓库地址 线上预览 URL GitHub","queryType":"external_link","topics":["personal","resume","project"],"enumerationControl":null}]}
+
+## 示例 17（超长复合 · 先合并再拆分 · tenure + 公司职位一条 + 近两年项目带 timeWindowYears）
+用户：你在IT行业干了多少年了？都在哪几家公司上过班，职位是什么？做过哪些项目（近两年）？我今年多大了？叫什么？帮我列出所有我做过的项目，并告诉我开源项目的 github 与线上地址
+输出：
+{"intent":"retrieve_and_answer","searchQuery":"个人简介 简历 工作经历 时间线 公司 职位 近两年项目 姓名 年龄 开源 GitHub","subTasks":["从业年限","工作经历与职位","近两年项目","年龄","姓名","全部项目","开源链接"],"topics":["personal","resume","experience","project"],"language":"zh","confidence":0.92,"queryType":null,"clarifyingQuestion":null,"briefReply":null,"retrievalPlan":[{"label":"从业年限","searchQuery":"个人简介 简历 工作经历 时间线 任职 时间段","queryType":"identity","topics":["personal","resume","experience"],"identityField":"tenure","enumerationControl":null},{"label":"工作经历与职位","searchQuery":"工作经历 公司 职位 任职","queryType":"enumeration","topics":["experience"],"enumerationControl":{"action":"exhaustive","listKind":"experience","excludeHint":null,"timeWindowYears":null},"identityField":null},{"label":"近两年项目","searchQuery":"项目经历 近两年 项目名称","queryType":"enumeration","topics":["project"],"enumerationControl":{"action":"preview","listKind":"project","excludeHint":null,"timeWindowYears":2},"identityField":null},{"label":"年龄","searchQuery":"个人简介 简历 年龄 出生年份","queryType":"identity","topics":["personal","resume"],"identityField":"age","enumerationControl":null},{"label":"姓名","searchQuery":"个人简介 简历 姓名 全名","queryType":"identity","topics":["personal","resume"],"identityField":"name","enumerationControl":null},{"label":"全部项目","searchQuery":"项目经历 全部项目 项目名称","queryType":"enumeration","topics":["project"],"enumerationControl":{"action":"exhaustive","listKind":"project","excludeHint":null,"timeWindowYears":null},"identityField":null},{"label":"开源链接","searchQuery":"个人简介 简历 开源 对外链接 GitHub URL","queryType":"external_link","topics":["personal","resume","project"],"enumerationControl":null,"identityField":null}]}
+
+**禁止**自造 queryType（timeline/role/mixed）或 identityField（careerDuration）；年限只用 tenure；公司列表 listKind 只用 experience（不要 company）。`;

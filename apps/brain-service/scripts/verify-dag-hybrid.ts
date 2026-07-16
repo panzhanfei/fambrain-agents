@@ -9,7 +9,10 @@ import {
     invokeSynthesizeMerge,
     type ToolRunResult,
 } from "../src/agentflow/agents/online/tool-orchestrator";
-import type { RoutedIntakeDecision } from "../src/agentflow/agents/online/intake-coordinator";
+import {
+    emptyPathPlan,
+    type RoutedIntakeDecision,
+} from "../src/agentflow/agents/online/intake-coordinator";
 
 const ok = (msg: string) => console.log(`  ✓ ${msg}`);
 
@@ -26,8 +29,20 @@ const decision = (): RoutedIntakeDecision => ({
     retrievalPlan: [],
     routeMode: "dag",
     compositeSlots: [],
-    routeReason: "single_default",
-    routePlanSource: "retrieval_plan",
+    pathPlan: {
+        ...emptyPathPlan(),
+        dag: [
+            {
+                id: "dag-hybrid",
+                pathKind: "dag",
+                label: "综合评估",
+                template: "hybrid_multi_source",
+            },
+        ],
+    },
+    composeMode: "qa",
+    routeReason: "slots_default",
+    routePlanSource: "intake_retrieval_plan",
     userFactKey: null,
     userFactLabel: null,
     userFactValue: null,

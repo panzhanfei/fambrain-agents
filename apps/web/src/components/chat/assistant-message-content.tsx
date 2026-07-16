@@ -1,6 +1,7 @@
 "use client";
 
 import type { AssistantMessageBlock } from "@fambrain/brain-types";
+import { LinkifiedText } from "@/components/chat/linkified-text";
 
 type EnumerationBlockProps = {
   block: Extract<AssistantMessageBlock, { type: "enumeration" }>;
@@ -19,7 +20,12 @@ export const EnumerationBlockView = ({
           <thead className="bg-[#f9fafb] text-[#6b7280]">
             <tr>
               <th className="w-10 px-2 py-2 font-medium text-center">#</th>
-              <th className="px-3 py-2 font-medium">项目名称</th>
+              <th className="px-3 py-2 font-medium">
+                {block.listKind === "employer" ? "公司 / 任职" : "项目名称"}
+              </th>
+              {block.listKind === "employer" ? (
+                <th className="px-3 py-2 font-medium">职位</th>
+              ) : null}
             </tr>
           </thead>
           <tbody>
@@ -34,6 +40,11 @@ export const EnumerationBlockView = ({
                 <td className="px-3 py-2 font-medium text-[#111827]">
                   {item.title}
                 </td>
+                {block.listKind === "employer" ? (
+                  <td className="px-3 py-2 text-[#4b5563]">
+                    {item.subtitle?.trim() || "—"}
+                  </td>
+                ) : null}
               </tr>
             ))}
           </tbody>
@@ -60,7 +71,9 @@ export const AssistantMessageContent = ({
   onAction,
 }: AssistantMessageContentProps) => {
   if (!blocks?.length) {
-    return <>{content}</>;
+    return (
+      <LinkifiedText text={content} className="whitespace-pre-wrap" />
+    );
   }
 
   return (
@@ -81,7 +94,7 @@ export const AssistantMessageContent = ({
         if (block.type === "text") {
           return (
             <p key={`t-${i}`} className="whitespace-pre-wrap text-[15px]">
-              {block.markdown}
+              <LinkifiedText text={block.markdown} />
             </p>
           );
         }

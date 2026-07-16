@@ -11,6 +11,7 @@ import {
   EMPLOYERS_SLOT,
   isCompositeProfileQuestion,
   looksLikeMultiPartQuestion,
+  EXTERNAL_LINK_SLOT,
   PROJECTS_SLOT,
   resolveCompositeRoute,
   splitQuestionUnits,
@@ -76,7 +77,7 @@ assertSync("retrievalPlan ≥2 → slots×2", () => {
   }
 });
 
-assertSync("P0-15 五连问（无 plan）→ 结构兜底 slots", () => {
+assertSync("P0-15 五连问（有 plan）→ Intake retrievalPlan slots", () => {
   const q =
     "我叫什么？ 今年多大？ 做过那些项目？ 从事什么行业？什么学历？";
   if (!looksLikeMultiPartQuestion(q)) {
@@ -86,17 +87,64 @@ assertSync("P0-15 五连问（无 plan）→ 结构兜底 slots", () => {
   if (units.length < 5) {
     throw new Error(`分句不足: ${units.length} ${units.join("|")}`);
   }
-  const out = applyCompositeRouteGuard(retrieveStub, q);
+  const out = applyCompositeRouteGuard(
+    {
+      ...retrieveStub,
+      retrievalPlan: [
+        {
+          label: "姓名",
+          searchQuery: "个人简介 简历 姓名 全名",
+          queryType: "identity",
+          topics: ["personal", "resume"],
+          identityField: "name",
+        },
+        {
+          label: "年龄",
+          searchQuery: "个人简介 简历 年龄 出生年份",
+          queryType: "identity",
+          topics: ["personal", "resume"],
+          identityField: "age",
+        },
+        {
+          label: "项目经历",
+          searchQuery: "项目经历 全部项目 项目名称 职责",
+          queryType: "enumeration",
+          topics: ["project"],
+          enumerationControl: {
+            action: "preview",
+            listKind: "project",
+            excludeHint: null,
+          },
+        },
+        {
+          label: "从事行业",
+          searchQuery: "个人简介 简历 行业 职业 领域",
+          queryType: "identity",
+          topics: ["personal", "resume"],
+          identityField: "career",
+        },
+        {
+          label: "学历",
+          searchQuery: "个人简介 简历 学历 毕业院校",
+          queryType: "identity",
+          topics: ["personal", "resume"],
+          identityField: "education",
+        },
+      ],
+      subTasks: ["姓名", "年龄", "项目经历", "从事行业", "学历"],
+    },
+    q
+  );
   if (out.routeMode !== "slots" || out.compositeSlots.length < 5) {
     throw new Error(
       `期望 slots≥5槽，实际 ${out.routeMode}/${out.compositeSlots.length}`
     );
   }
-  if (out.routeReason !== "structural_multipart_fallback") {
+  if (out.routeReason !== "intake_retrieval_plan") {
     throw new Error(`routeReason=${out.routeReason}`);
   }
   const projectsSlot = out.compositeSlots.find((s) =>
-    /项目/.test(s.label)
+    s.label.includes("项目")
   );
   if (!projectsSlot || projectsSlot.queryType !== "enumeration") {
     throw new Error("项目子问应为 enumeration 检索");
@@ -106,12 +154,17 @@ assertSync("P0-15 五连问（无 plan）→ 结构兜底 slots", () => {
   }
 });
 
-assertSync("plan label「具体项目名称」→ canonical 为 projects 槽", () => {
+assertSync("plan topics/listKind=project → canonical 为 projects 槽", () => {
   const item = canonicalizePlanItem({
     label: "具体项目名称",
     searchQuery: "用户口语",
     queryType: "enumeration",
-    topics: ["experience"],
+    topics: ["project"],
+    enumerationControl: {
+      action: "preview",
+      listKind: "project",
+      excludeHint: null,
+    },
   });
   if (item.searchQuery !== PROJECTS_SLOT.searchQuery) {
     throw new Error(`应 canonical 到 projects searchQuery，实际 ${item.searchQuery}`);
@@ -123,6 +176,30 @@ assertSync("plan label「具体项目名称」→ canonical 为 projects 槽", (
     throw new Error("不应 canonical 到 employers");
   }
 });
+
+assertSync(
+  "external_link「开源项目的 GitHub 与线上地址」→ canonical 模板（勿因 label 正则跳过）",
+  () => {
+    const item = canonicalizePlanItem({
+      label: "开源项目的 GitHub 与线上地址",
+      searchQuery: "开源 GitHub 线上地址",
+      queryType: "external_link",
+      topics: ["project"],
+    });
+    if (item.queryType !== "external_link") {
+      throw new Error(`queryType 应为 external_link，实际 ${item.queryType}`);
+    }
+    if (!item.searchQuery.includes(EXTERNAL_LINK_SLOT.searchQuery)) {
+      throw new Error(`searchQuery 应含 canonical 模板: ${item.searchQuery}`);
+    }
+    if (!item.searchQuery.includes("开源")) {
+      throw new Error(`searchQuery 应保留 label 语义: ${item.searchQuery}`);
+    }
+    if (!item.topics.includes("personal")) {
+      throw new Error(`topics 应含 personal/resume: ${item.topics.join(",")}`);
+    }
+  }
+);
 
 assertSync("单问列举 → slots×1 employers + canonical", () => {
   const out = applyCompositeRouteGuard(

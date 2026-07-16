@@ -10,15 +10,18 @@
 |--------|--------|------|
 | **`TurnStart`** | **轮次开始** | LangGraph **START 后首节点**（非 LLM）：挂 ALS 记事本、同问短路、Mem0/LangMem 注入 |
 | **`TurnEnd`** | **轮次结束** | LangGraph **END 前末节点**（非 LLM）：Mem0/LangMem 写入、Learning 候选 |
-| `IntakeCoordinator` | 入口接线员 | 接收输入、理解意图、拆分任务、产出路由 JSON |
+| `IntakeCoordinator` | 入口接线员 | 接收输入、理解意图、拆分任务、产出路由 JSON + **PathPlan** |
 | `KnowledgeManager` | 知识管理员 | 检索知识库，返回 `hits` / `coverage` / `notes` |
-| `FactChecker` | 事实核查员 | **检索后、生成前**审查证据包；不足时打回再检索（最多 1 次） |
+| **`PlanExecutor`** | **计划执行器** | 按 **PathPlan** 四桶（km / list / tool / dag）调度检索与工具；**内嵌 per-step FC** |
+| `FactChecker` | 事实核查员 | （独立节点已并入 PlanExecutor）审查单步证据；不足时局部打回再检索 |
 | `ContentOrganizer` | 内容整理师 | **核查通过后**对 `hits` 做 Zod 规范化与 path 去重，再交给分析师 |
-| **`ToolOrchestrator`** | **工具编排器** | KM 之后执行确定性工具（年龄计算、列举合成、联网搜索）；产出 `toolResults` |
-| **`DagExecutor`** | **DAG 执行器** | 混合问句（`routeMode=dag`）并行语料+联网，汇合后交给 Analyst |
-| `InformationAnalyst` | 信息分析师 | 消费 `toolResults` + 整理后的 `hits` 写终稿；无证据时 `insufficientEvidence` |
+| **`ToolOrchestrator`** | **工具编排器** | PlanExecutor 内调用：年龄计算、列举合成、联网搜索 |
+| **`DagExecutor`** | **DAG 执行器** | PlanExecutor 内调用：多源汇合（语料+联网+synthesize）；单场景不走 named DAG |
+| `InformationAnalyst` | 信息分析师 | 消费 `stepResults` + `toolResults` + 整理后的 `hits` 写终稿；`composeMode` 决定 QA / composite / summarize |
 
-**链路：** 用户提问 → **轮次开始** → 意图识别 → 检索 → **证据核查** → **内容整理** → 分析 → 回答 → **轮次结束**。跨轮 **两层 cache**（同问短路 + 检索结果 cache）见 [坑点 §2.2](./04-pitfalls.md)。
+**链路：** 用户提问 → **轮次开始** → 意图识别 → **PathPlan 执行**（km / list / tool / dag + per-step FC）→ **内容整理** → **Compose**（qa / composite / summarize）→ 回答 → **轮次结束**。跨轮 **两层 cache**（同问短路 + 检索结果 cache）见 [坑点 §2.2](./04-pitfalls.md)。
+
+**PathPlan 四桶（2026-07）：** Intake guard 链末尾 `compilePathPlan` 产出 `pathPlan` + `composeMode`；LangGraph **`planExecutor`** 单节点替代原 `retrieval` / `factChecker` / `toolOrchestrator` / `dagExecutor` 互斥分支。详见 [架构 v2 §11](./05-architecture-v2-tool-orchestration.md#11-pathplan-统一执行计划-2026-07)、[坑点 §2.8](./04-pitfalls.md#28-pathplan-统一编排-p0-28--2026-07)。
 
 **架构双线（2026-06，目录 2026-07 对齐）：**
 
@@ -58,21 +61,22 @@ flowchart TB
     PT --> REP{同问短路<br/>repeat guard}
     REP -->|history 命中| OUT[assistant 流式输出]
     REP -->|miss| MEM["preparePipelineMemory<br/>Mem0 + LangMem"]
-    MEM --> IC[IntakeCoordinator<br/>入口接线员]
-    IC --> P{parseIntakeDecision<br/>LangGraph 路由}
-    P -->|remember/recall user_fact| UF[userFact 节点<br/>Mem0 显式读写]
-    P -->|clarify / chitchat| R1[briefReply / 澄清]
-    P -->|    KM --> FC[FactChecker<br/>事实核查员]
-    FC -->|passed 或已重试| CO[ContentOrganizer<br/>内容整理师]
-    FC -->|未通过且 retry&lt;1| KM
-    CO --> IA[InformationAnalyst<br/>信息分析师]
-    P -->|direct_answer 等| FC2[FactChecker 可选] --> CO2[ContentOrganizer] --> IA
+    MEM --> IC[IntakeCoordinator<br/>纯社交短路 / LLM / guard 链]
+    IC --> P{routeAfterIntake}
+    P -->|remember/recall user_fact| UF[userFact 节点]
+    P -->|clarify / chitchat| R1[respondEarly]
+    P -->|summarize_content| SUM[ContentSummarizer]
+    P -->|retrieve_and_answer| PE[PlanExecutor<br/>km/list/tool/dag + per-step FC]
+    PE --> CO[ContentOrganizer]
+    CO --> IA[InformationAnalyst<br/>composeMode]
     IA --> OUT[assistant 入库]
     UF --> OUT
+    R1 --> OUT
+    SUM --> OUT
   end
 
-  CH -.->|向量 hits| KM
-  MD -.->|关键词 fallback| KM
+  CH -.->|向量 hits| PE
+  MD -.->|关键词 fallback| PE
 ```
 
 ## 在线编排流程
@@ -111,21 +115,20 @@ flowchart TD
   A[用户消息] --> PT[TurnStart<br/>ALS + 同问短路 + Mem0]
   PT -->|同问命中| D0[respondEarly]
   PT -->|miss| B[IntakeCoordinator]
-  B --> C{parseIntakeDecision}
+  B --> C{routeAfterIntake}
 
-  C -->|clarify / chitchat + briefReply| D[respondEarly]
+  C -->|clarify / chitchat| D[respondEarly]
   C -->|remember_user_fact / recall_user_fact| UF[userFact → Mem0]
-  C -->|  C -->|其它需下游| FC0[FactChecker]
-
-  F --> FC[FactChecker]
-  FC -->|checkerPassed 或 retryCount ≥ 1| CO[ContentOrganizer]
-  FC -->|!checkerPassed 且 retryCount = 0| F
+  C -->|summarize_content| CS[ContentSummarizer → respondEarly]
+  C -->|retrieve_and_answer| PE[PlanExecutor<br/>PathPlan 四桶 + per-step FC]
+  PE -->|composeMode=summarize| CS
+  PE -->|qa / composite| CO[ContentOrganizer]
   CO --> G[InformationAnalyst]
-  FC0 --> CO0[ContentOrganizer] --> G
   G --> PST[TurnEnd]
   D --> PST
   UF --> PST
   D0 --> PST
+  CS --> PST
   PST --> END_NODE[END]
 ```
 
@@ -222,7 +225,9 @@ flowchart TD
 | 5 | Guard 链 | parse 后依次 guard（见下） | `pipeline/intake-pipeline.ts` | `runIntakePipeline()` |
 | 6 | 编排 | LangGraph 条件边 | `pipeline/graph/routes.ts` + `compile.ts` | `routeAfterIntake()` 等 |
 
-**Guard 链（`runIntakePipeline`，compile intake 节点内）：** **UI 列举按钮 exact-match**（`ENUMERATION_ACTION_PROMPTS` → 跳过 LLM · P0-26）→ LLM 路由 → **`applyIntakeContinuationGuard`**（省略续问 / 历史含 URL → retrieve，**在 clarify 早退之前** · P0-25）→ **LLM 指代/澄清**（clarify 可早退）→ chitchat → userFact 早退 → **`applyIntakeLinkLookupGuard`**（`queryType=external_link` 时纠正 stale multipart / 分槽 · P0-25）→ **retrievalPlan guard** → **`applyCompositeRouteGuard`**（P0-15）→ **`applyEnumerationSlotGuard`**（per-slot `enumerationControl` + `executor` · P0-26）。详见 [坑点 §2.5.6](./04-pitfalls.md#256-综合问项目列举--分页-p0-22--2026-07)、[§2.5.10 列举 per-slot](./04-pitfalls.md#2510-列举执行-per-slot-架构升级-p0-26--2026-07)、[§2.5.9 GitHub 对外链接](./04-pitfalls.md#259-简历-github--对外链接问法-p0-25--2026-07)。
+**Guard 链（`runIntakePipeline`，compile intake 节点内）：** **纯社交短路**（`你好` / `谢谢` / `hi` → 跳过 LLM · **P0-29**）→ **UI 列举按钮 exact-match**（`ENUMERATION_ACTION_PROMPTS` → 跳过 LLM · P0-26）→ LLM 路由 → **`applyPureSocialUtteranceGuard`**（LLM 误判 retrieve 时覆盖 · P0-29）→ **`applyIntakeContinuationGuard`**（省略续问 / 历史含 URL → retrieve，**在 clarify 早退之前** · P0-25）→ **LLM 指代/澄清**（clarify 可早退）→ chitchat → userFact 早退 → **`applyIntakeLinkLookupGuard`**（`queryType=external_link` 时纠正 stale multipart / 分槽 · P0-25）→ **retrievalPlan guard**（schema 合法化 + **facet 去重**，**不**口语二次拆槽 · **P0-30**）→ **`applyCompositeRouteGuard`**（P0-15）→ **`applyEnumerationSlotGuard`**（per-slot `enumerationControl` + `executor` · P0-26）→ **`applyToolPlanGuard`** → **`applyPathPlanGuard`**（编译 **PathPlan** + `composeMode` · P0-28）。详见 [坑点 §2.8](./04-pitfalls.md#28-pathplan-统一编排-p0-28) · [§2.9](./04-pitfalls.md#29-intake-去硬编码与复合履历-p0-30--2026-07) · [架构 v2 §12](./05-architecture-v2-tool-orchestration.md#12-intake-llm-主导--schema-兜底2026-07--去问句硬编码)。
+
+**P0-30 补充字段：** `identityField` 含 **`tenure`**（从业年限 → `compute_tenure_from_hits`）；`enumerationControl.timeWindowYears`（近 N 年列举过滤）。合并/拆分以 Intake LLM 为准；规则见 `.cursor/rules/no-scene-hardcoding.mdc`。
 
 **queryType 扩展：** 除 identity / enumeration / tech / default 外，Intake 产出 **`external_link`**（GitHub、仓库、对外 URL）；与 KM `queryProfile` 同名，**不走** enumeration projects fill。见 [km-retrieval-design §六](./km-retrieval-design.md#六queryprofile-参数表)。
 

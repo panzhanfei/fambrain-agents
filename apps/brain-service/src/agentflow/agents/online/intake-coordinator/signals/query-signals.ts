@@ -4,7 +4,10 @@
  */
 import type { DbChatTurn } from "@fambrain/brain-types";
 import type { IntakeRoutingDecision } from "@/agentflow/agents/online/intake-coordinator/contract";
-import { looksLikeMultiPartQuestion } from "@/agentflow/agents/online/intake-coordinator/composite";
+import {
+    looksLikeMultiPartQuestion,
+    splitQuestionUnits,
+} from "@/agentflow/agents/online/intake-coordinator/composite";
 
 /** Intake decision 是否已声明 external_link（信 LLM，不在 guard 里猜意图） */
 export const decisionRequestsExternalLink = (
@@ -68,15 +71,18 @@ export const extractNumberedPlanUnits = (userQuestion: string): string[] => {
     );
 };
 
-/** 当前问句是否带显式多问结构（编号或多问号/并列，与 composite 一致） */
+/**
+ * 当前问句是否带显式多问结构（编号 / 多问号 / 并列分句）。
+ * 「列出全部…，并且告诉我…」等逗号/并且切分 ≥2 段也算，避免误判为 stale plan。
+ */
 export const hasExplicitMultipartStructure = (userQuestion: string): boolean => {
     const q = userQuestion.trim();
     if (!q) return false;
     if (countNumberedLines(q) >= 2) return true;
-    if (looksLikeMultiPartQuestion(q) && extractNumberedPlanUnits(q).length >= 2) {
-        return true;
-    }
-    return looksLikeMultiPartQuestion(q) && (q.match(/[？?]/g)?.length ?? 0) >= 2;
+    if (extractNumberedPlanUnits(q).length >= 2) return true;
+    if (!looksLikeMultiPartQuestion(q)) return false;
+    if (splitQuestionUnits(q).length >= 2) return true;
+    return (q.match(/[？?]/g)?.length ?? 0) >= 2;
 };
 
 /** 极短续问（结构：短句、无编号多问） */

@@ -64,12 +64,16 @@ export async function* streamAgentPipeline(history: DbChatTurn[], context: Agent
         if (msg.event === "pipeline_done") {
             const payload = JSON.parse(msg.data) as {
                 answer?: string;
+                blocks?: AgentPipelineResult["blocks"];
                 retrievalCacheHit?: boolean;
+                retrievalPaths?: AgentPipelineResult["retrievalPaths"];
                 timing?: AgentPipelineResult["timing"];
             };
             return {
                 answer: payload.answer ?? "",
+                blocks: payload.blocks,
                 retrievalCacheHit: payload.retrievalCacheHit,
+                retrievalPaths: payload.retrievalPaths,
                 timing: payload.timing,
             };
         }

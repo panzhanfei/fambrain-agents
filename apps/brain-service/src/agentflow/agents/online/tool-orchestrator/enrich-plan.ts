@@ -3,32 +3,36 @@ import type { CompositeRetrievalSlot } from "@/agentflow/agents/online/intake-co
 import type { RoutedIntakeDecision } from "@/agentflow/agents/online/intake-coordinator";
 import type { QueryProfile } from "@/agentflow/agents/online/knowledge-manager";
 import {
+    decisionSuggestsHybridDag,
     extractCompanyHint,
-    labelSuggestsWebSource,
-    resolveIdentityField,
-    userQuestionSuggestsHybridDag,
+    resolveIdentityFieldFromPlan,
+    topicsSuggestWebSource,
 } from "./field-catalog";
 import type { DataSource, EnrichedPlanItem, ExecutionPlanNode, ToolRunId } from "./types";
 
 const enrichItem = (
     item: Pick<
         IntakeRetrievalPlanItem,
-        "label" | "searchQuery" | "queryType" | "topics"
+        "label" | "searchQuery" | "queryType" | "topics" | "identityField"
     >
 ): EnrichedPlanItem => {
-    const fieldSpec = resolveIdentityField(item.label);
+    const fieldSpec = resolveIdentityFieldFromPlan({
+        identityField: item.identityField,
+    });
     let dataSource: DataSource = "corpus";
     let toolId: ToolRunId | null = null;
 
-    if (labelSuggestsWebSource(item.label, item.searchQuery)) {
+    if (topicsSuggestWebSource(item.topics)) {
         dataSource = "web";
         toolId = "search_web";
     } else if (item.queryType === "enumeration") {
         // list 取数在 retrieval 按槽执行；工具层负责 compose 成稿
         toolId = "compose_enumeration";
-    } else if (fieldSpec?.requiresCompute && fieldSpec.toolId) {
-        dataSource = "compute";
+    } else if (fieldSpec?.toolId) {
+        dataSource = fieldSpec.requiresCompute ? "compute" : "corpus";
         toolId = fieldSpec.toolId;
+    } else if (item.queryType === "external_link") {
+        toolId = "extract_external_links_from_hits";
     }
 
     return {
@@ -107,25 +111,33 @@ export const applyToolPlanGuard = (
     const enrichedPlan = enrichRetrievalPlan(decision.retrievalPlan ?? []);
     const enrichedSlots = enrichCompositeSlots(decision.compositeSlots ?? []);
 
-    if (userQuestionSuggestsHybridDag(userQuestion)) {
+    const planTopics = (decision.retrievalPlan ?? []).map((p) => p.topics);
+    if (
+        decisionSuggestsHybridDag({
+            topics: decision.topics,
+            planTopics,
+        })
+    ) {
         return {
             ...decision,
             routeMode: "dag",
             compositeSlots: enrichedSlots,
-            retrievalPlan: enrichedPlan.map(({ label, searchQuery, queryType, topics }) => ({
-                label,
-                searchQuery,
-                queryType: queryType as QueryProfile,
-                topics,
-            })),
+            retrievalPlan: enrichedPlan.map(
+                ({ label, searchQuery, queryType, topics }) => ({
+                    label,
+                    searchQuery,
+                    queryType: queryType as QueryProfile,
+                    topics,
+                })
+            ),
             executionPlan: buildHybridExecutionPlan(userQuestion, decision),
-            routeReason: decision.routeReason ?? "single_default",
+            routeReason: decision.routeReason ?? "slots_default",
         };
     }
 
     const primaryWeb =
         enrichedPlan.find((p) => p.dataSource === "web") ??
-        (labelSuggestsWebSource(userQuestion, decision.searchQuery)
+        (topicsSuggestWebSource(decision.topics)
             ? {
                   label: userQuestion,
                   searchQuery: decision.searchQuery,

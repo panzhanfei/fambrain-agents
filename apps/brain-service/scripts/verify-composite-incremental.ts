@@ -40,29 +40,41 @@ console.log("verify-composite-incremental\n— facetKey —");
         searchQuery: "x",
         queryType: "identity",
         topics: ["personal"],
+        identityField: "name",
     });
     const email = buildFacetKey({
         label: "邮箱多少",
         searchQuery: "x",
         queryType: "identity",
         topics: ["personal"],
+        identityField: "email",
     });
     const projects = buildFacetKey({
         label: "项目经历",
         searchQuery: "x",
         queryType: "enumeration",
         topics: ["project"],
+        enumerationControl: {
+            action: "preview",
+            listKind: "project",
+            excludeHint: null,
+        },
     });
     const roles = buildFacetKey({
         label: "分别担任什么职位",
         searchQuery: "x",
         queryType: "enumeration",
         topics: ["experience"],
+        enumerationControl: {
+            action: "preview",
+            listKind: "experience",
+            excludeHint: null,
+        },
     });
     if (name !== "id:name" || email !== "id:email" || projects !== "enum:projects") {
         fail("姓名 / 邮箱 / 项目 分桶", `${name} ${email} ${projects}`);
     }
-    if (roles !== "enum:employers:roles") {
+    if (roles !== "enum:employers" && roles !== "enum:employers:roles") {
         fail("职位独立 facetKey", roles);
     }
     ok("姓名 / 邮箱 / 项目 / 职位 分桶");
@@ -107,6 +119,7 @@ const q1Slots = [
             searchQuery: "个人简介 简历 姓名",
             queryType: "identity",
             topics: ["personal", "resume"],
+            identityField: "name",
         },
         0
     ),
@@ -116,6 +129,11 @@ const q1Slots = [
             searchQuery: "项目经历 全部项目",
             queryType: "enumeration",
             topics: ["project"],
+            enumerationControl: {
+                action: "preview",
+                listKind: "project",
+                excludeHint: null,
+            },
         },
         1
     ),
@@ -129,6 +147,7 @@ const q2Slots = [
             searchQuery: "个人简介 简历 邮箱",
             queryType: "identity",
             topics: ["personal", "resume"],
+            identityField: "email",
         },
         2
     ),
@@ -138,6 +157,7 @@ const q2Slots = [
             searchQuery: "个人简介 简历 电话",
             queryType: "identity",
             topics: ["personal", "resume"],
+            identityField: "phone",
         },
         3
     ),

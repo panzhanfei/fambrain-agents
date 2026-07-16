@@ -10,6 +10,8 @@ export const retrieveEnumerationPage = async (input: {
     listKind: CorpusListKind;
     page: number;
     pageSize: number;
+    timeWindowYears?: number | null;
+    asOfDate?: string | null;
 }): Promise<KnowledgeRetrievalResult> => {
     const pageResult = await listCorpusEntriesPage(input);
     const hits = pageResult.items.map(corpusEntryToHit);

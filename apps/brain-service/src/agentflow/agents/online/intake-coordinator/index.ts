@@ -2,6 +2,8 @@
 
 export {
   prompt,
+  parseIntakeRoutingDecision,
+  type IntakeIdentityField,
   type IntakeRetrievalPlanItem,
   type IntakeRoutingDecision,
 } from "./contract";
@@ -13,7 +15,14 @@ export {
   type EnumerationControl,
   type EnumerationListKind,
   type SlotExecutor,
-} from "./enumeration-action-prompts";
+} from "./enumeration";
+
+export {
+  decisionRequestsExternalLink,
+  hasExplicitMultipartStructure,
+  hasStaleMultipartFromDecision,
+  isPureSocialUtterance,
+} from "./signals";
 
 export { completeIntakeCoordinator } from "./llm";
 
@@ -40,6 +49,8 @@ export { findRepeatAnswerInHistory } from "../repeat-question-guard";
 
 export {
   applyIntakeChitchatGuard,
+  applyPureSocialUtteranceGuard,
+  buildPureChitchatDecision,
   DEFAULT_CHITCHAT_BRIEF_REPLY,
   applyIntakeRetrievalPlanGuard,
   applyEnumerationSlotGuard,
@@ -69,12 +80,17 @@ export {
   COMPOSITE_FACET_IDS,
   COMPOSITE_PROFILE_SLOTS,
   EMPLOYERS_SLOT,
+  EXTERNAL_LINK_SLOT,
   IDENTITY_SLOT,
   PROJECTS_SLOT,
   canonicalizePlanItem,
   facetTemplateForQueryType,
   getCompositeSlot,
   planItemToSlot,
+  dedupePlanByFacet,
+  normalizePlanItemFromSchema,
+  planFacetKey,
+  repairRetrievalPlanItems,
   isExperienceEnumeration,
   isProjectEnumeration,
   resolveEnumerationTarget,
@@ -85,3 +101,17 @@ export {
   type ResolvedCompositeRoute,
   type EnumerationTarget,
 } from "./composite";
+
+export {
+  applyPathPlanGuard,
+  compilePathPlan,
+  pathPlanToCompositeSlots,
+  emptyPathPlan,
+  defaultComposeMode,
+  expandDagTemplate,
+  type ComposeMode,
+  type PathPlan,
+  type PathKind,
+  type StepResult,
+  type DagTemplateId,
+} from "./path-plan";

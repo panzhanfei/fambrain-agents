@@ -12,6 +12,7 @@ import type {
     IntakeRoutingDecision,
 } from "@/agentflow/agents/online/intake-coordinator/contract";
 import { isProjectEnumeration } from "./enumeration-target";
+import { IDENTITY_FIELD_SEARCH } from "./identity-field-search";
 import type {
     CompositeFacetId,
     CompositeRetrievalSlot,
@@ -38,7 +39,7 @@ export const IDENTITY_SLOT: CompositeRetrievalSlot = {
 export const PROJECTS_SLOT: CompositeRetrievalSlot = {
     id: "projects",
     label: "项目经历",
-    searchQuery: "项目经历 全部项目 项目名称 职责 技术栈",
+    searchQuery: "项目经历 全部项目 所有项目 项目名称 职责 技术栈",
     queryType: "enumeration",
     topics: ["project", "tech-stack"],
     subTasks: [],
@@ -58,7 +59,7 @@ export const EMPLOYERS_SLOT: CompositeRetrievalSlot = {
 export const EXTERNAL_LINK_SLOT: CompositeRetrievalSlot = {
     id: "external_link",
     label: "对外链接",
-    searchQuery: "个人简介 简历 对外链接 仓库地址 线上预览 URL",
+    searchQuery: "个人简介 简历 对外链接 仓库地址 线上预览 线上地址 URL GitHub",
     queryType: "external_link",
     topics: ["personal", "resume", "project"],
     subTasks: [],
@@ -93,26 +94,42 @@ export const getCompositeSlot = (
 /**
  * queryType + topics → 取 canonical 模板。
  * tech / default → null（不强制模板，保留 Intake 原 query）。
+ * external_link / enumeration / identity → 信 Intake queryType，不在 label 上做意图 regex。
  */
 export const facetTemplateForQueryType = (
     queryType: IntakeRoutingDecision["queryType"],
     topics: string[],
     planItem?: Pick<
         IntakeRetrievalPlanItem,
-        "label" | "searchQuery" | "topics"
+        | "label"
+        | "searchQuery"
+        | "topics"
+        | "enumerationControl"
+        | "identityField"
     >
 ): CompositeRetrievalSlot | null => {
     if (!queryType || queryType === "tech") return null;
-    if (queryType === "identity") return { ...IDENTITY_SLOT };
+    if (queryType === "identity") {
+        const field = planItem?.identityField ?? null;
+        const fieldSpec = field ? IDENTITY_FIELD_SEARCH[field] : null;
+        return {
+            ...IDENTITY_SLOT,
+            searchQuery: fieldSpec?.searchQuery ?? IDENTITY_SLOT.searchQuery,
+            topics:
+                field === "tenure"
+                    ? ["personal", "resume", "experience"]
+                    : [...IDENTITY_SLOT.topics],
+            identityField: field,
+        };
+    }
     if (queryType === "external_link") {
         const label = planItem?.label?.trim() ?? "";
-        if (
-            /对外链接|仓库|链接|github|url/i.test(label) &&
-            !/项目.*地址|模板|工具库|草稿|归档/i.test(label)
-        ) {
-            return { ...EXTERNAL_LINK_SLOT };
-        }
-        return null;
+        return {
+            ...EXTERNAL_LINK_SLOT,
+            searchQuery: label
+                ? `${label} ${EXTERNAL_LINK_SLOT.searchQuery}`
+                : EXTERNAL_LINK_SLOT.searchQuery,
+        };
     }
     if (queryType === "enumeration") {
         const targetInput = planItem ?? { label: "", searchQuery: "", topics };
@@ -120,6 +137,7 @@ export const facetTemplateForQueryType = (
             isProjectEnumeration({
                 ...targetInput,
                 topics: planItem?.topics ?? topics,
+                listKind: planItem?.enumerationControl?.listKind ?? null,
             })
         ) {
             return { ...PROJECTS_SLOT };
@@ -145,6 +163,7 @@ export const canonicalizePlanItem = (
         return {
             ...item,
             enumerationControl: item.enumerationControl ?? null,
+            identityField: item.identityField ?? null,
         };
     }
     return {
@@ -154,6 +173,7 @@ export const canonicalizePlanItem = (
         queryType: template.queryType,
         topics: [...template.topics],
         enumerationControl: item.enumerationControl ?? null,
+        identityField: item.identityField ?? template.identityField ?? null,
     };
 };
 
@@ -169,16 +189,22 @@ export const planItemToSlot = (
         canonical
     );
     const control = canonical.enumerationControl ?? null;
-    const listAction =
-        control?.action === "continue" || control?.action === "exhaustive";
+    const needsListScan =
+        control?.action === "continue" ||
+        control?.action === "exhaustive" ||
+        // 时间窗须目录扫盘后再过滤；preview+KM 无法保证近 N 年覆盖
+        (control?.timeWindowYears != null && control.timeWindowYears > 0);
+    /** 多槽时 id 必须唯一（同 template 如 projects 不可撞 slot_projects） */
+    const baseId = template?.id ?? "plan";
     return {
-        id: template?.id ?? `plan-${index}`,
+        id: `${baseId}-${index}`,
         label: canonical.label,
         searchQuery: canonical.searchQuery,
         queryType: canonical.queryType,
         topics: [...canonical.topics],
         subTasks: [canonical.label],
         enumerationControl: control,
-        executor: listAction ? "list_corpus" : "km_retrieve",
+        identityField: canonical.identityField ?? null,
+        executor: needsListScan ? "list_corpus" : "km_retrieve",
     };
 };

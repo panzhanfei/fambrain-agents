@@ -17,7 +17,8 @@ import {
     matchUiEnumerationPrompt,
     type EnumerationControl,
     type EnumerationListKind,
-} from "../enumeration-action-prompts";
+} from "../enumeration";
+import { emptyPathPlan } from "@/agentflow/agents/online/intake-coordinator/path-plan";
 import type {
     EnumerationListIntent,
     RoutedIntakeDecision,
@@ -90,6 +91,8 @@ export const buildEnumerationListDecision = (input: {
         userFactValue: null,
         routeMode: "slots",
         compositeSlots: [slot],
+        pathPlan: emptyPathPlan(),
+        composeMode: "qa",
         routeReason: "query_type_template",
         routePlanSource: "query_type_template",
         listIntent: input.listIntent === "preview" ? "exhaustive" : input.listIntent,
@@ -121,6 +124,14 @@ const enrichSlotExecutor = async (
     slot: CompositeRetrievalSlot,
     session: CompositeSessionKey
 ): Promise<CompositeRetrievalSlot> => {
+    if (slot.queryType !== "enumeration") {
+        return {
+            ...slot,
+            executor: "km_retrieve",
+            enumerationControl: null,
+        };
+    }
+
     const control = slot.enumerationControl;
     if (!control || !isListAction(control.action)) {
         return {
@@ -188,11 +199,15 @@ export const applyEnumerationSlotGuard = async (
         });
     }
 
-    // 从 plan 同步 enumerationControl 到尚无 control 的槽（按 index）
+    // 从 plan 同步 enumerationControl → 仅 enumeration 槽，按 label 对齐（非 index）
     if (retrievalPlan.length > 0 && slots.length > 0) {
-        slots = slots.map((slot, i) => {
-            const planCtrl = retrievalPlan[i]?.enumerationControl;
-            if (slot.enumerationControl || !planCtrl) return slot;
+        slots = slots.map((slot) => {
+            if (slot.queryType !== "enumeration" || slot.enumerationControl) {
+                return slot;
+            }
+            const planItem = retrievalPlan.find((p) => p.label === slot.label);
+            const planCtrl = planItem?.enumerationControl;
+            if (!planCtrl || planItem?.queryType !== "enumeration") return slot;
             return { ...slot, enumerationControl: planCtrl };
         });
     }
@@ -257,7 +272,10 @@ export const applyEnumerationListIntentGuard = (
             return decision;
         }
         const slots = (decision.compositeSlots ?? []).map((slot) => {
-            if (isListAction(slot.enumerationControl?.action)) {
+            if (
+                slot.queryType === "enumeration" &&
+                isListAction(slot.enumerationControl?.action)
+            ) {
                 return {
                     ...slot,
                     executor: "list_corpus" as const,
@@ -267,7 +285,14 @@ export const applyEnumerationListIntentGuard = (
                         ENUMERATION_EXHAUSTIVE_PAGE_SIZE,
                 };
             }
-            return { ...slot, executor: slot.executor ?? ("km_retrieve" as const) };
+            return {
+                ...slot,
+                executor: "km_retrieve" as const,
+                enumerationControl:
+                    slot.queryType === "enumeration"
+                        ? slot.enumerationControl
+                        : null,
+            };
         });
         const firstList = slots.find((s) => s.executor === "list_corpus");
         return {

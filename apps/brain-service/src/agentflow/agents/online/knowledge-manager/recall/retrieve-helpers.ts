@@ -197,7 +197,7 @@ export const rankCandidates = (
         })
         .sort((a, b) => b.relevance - a.relevance);
 
-/** identity 问法优先摘的表格字段（KM-10） */
+/** identity 语料表列名常量（非用户问句词表；KM-10） */
 export const IDENTITY_TABLE_LABELS = [
     "姓名",
     "名字",
@@ -239,7 +239,7 @@ export const pickTableExcerpt = (
     body: string,
     tokens: string[],
     maxLen = EXCERPT_MAX,
-    preferIdentityFields = false
+    preferFields: string[] = []
 ): string | null => {
     const rows: string[] = [];
     for (const line of body.split("\n")) {
@@ -250,10 +250,7 @@ export const pickTableExcerpt = (
     }
     if (rows.length === 0) return null;
 
-    const labelTokens = [
-        ...tokens,
-        ...(preferIdentityFields ? IDENTITY_TABLE_LABELS : []),
-    ];
+    const labelTokens = [...tokens, ...preferFields];
 
     const scored = rows
         .map((row) => {
@@ -270,8 +267,14 @@ export const pickTableExcerpt = (
     const pickRows =
         scored.length > 0
             ? scored.map((x) => x.row)
-            : preferIdentityFields
-              ? rows.filter((r) => /姓名|名字/.test(r))
+            : preferFields.length > 0
+              ? rows.filter((r) =>
+                    preferFields.some(
+                        (f) =>
+                            f.length >= 2 &&
+                            r.toLowerCase().includes(f.toLowerCase())
+                    )
+                )
               : [];
 
     if (pickRows.length === 0) return null;
@@ -287,13 +290,11 @@ export const pickTableExcerpt = (
     return picked.length > 0 ? picked.join("\n") : null;
 };
 
-/** 优先截取含 URL / 对外链接 的段落（external_link profile） */
+/** 优先截取含 URL / 已知 host 的段落（external_link profile；结构信号） */
 const pickLinkExcerpt = (body: string, maxLen: number): string | null => {
     const lines = body.split("\n").map((l) => l.trim()).filter(Boolean);
     const linkLines = lines.filter((l) =>
-        /https?:\/\/|github\.com|gitlab\.com|gitee\.com|对外链接|线上预览/i.test(
-            l
-        )
+        /https?:\/\/|github\.com|gitlab\.com|gitee\.com/i.test(l)
     );
     if (linkLines.length === 0) return null;
     let picked = "";
@@ -303,6 +304,39 @@ const pickLinkExcerpt = (body: string, maxLen: number): string | null => {
         picked += (picked ? "\n" : "") + line;
     }
     return picked || linkLines[0]!.slice(0, maxLen);
+};
+
+/** 工作经历时间线表：含 YYYY 与区间符的行（供 tenure / 任职推算） */
+const pickTimelineTableExcerpt = (
+    body: string,
+    maxLen: number
+): string | null => {
+    const rows: string[] = [];
+    for (const line of body.split("\n")) {
+        const trimmed = line.trim();
+        if (!trimmed.startsWith("|") || !trimmed.endsWith("|")) continue;
+        if (TABLE_SEP_RE.test(trimmed)) continue;
+        if (!/\d{4}/.test(trimmed) || !/[-–—~至到]/.test(trimmed)) continue;
+        rows.push(trimmed);
+    }
+    if (rows.length === 0) return null;
+    const picked: string[] = [];
+    let len = 0;
+    for (const row of rows) {
+        const add = (picked.length ? 1 : 0) + row.length;
+        if (len + add > maxLen) break;
+        picked.push(row);
+        len += add;
+    }
+    return picked.length > 0 ? picked.join("\n") : null;
+};
+
+/** tenure 检索模板词：命中时优先摘时间线表，避免基本信息表占满 excerpt */
+const TENURE_EXCERPT_SIGNALS = ["工作经历", "时间线", "时间段", "任职"];
+
+const tokensWantTimeline = (tokens: string[]): boolean => {
+    const hay = tokens.join(" ").toLowerCase();
+    return TENURE_EXCERPT_SIGNALS.some((s) => hay.includes(s.toLowerCase()));
 };
 
 /** KM-10：表格行优先，否则线性截断 */
@@ -315,9 +349,20 @@ export const pickExcerpt = (
         const link = pickLinkExcerpt(body, EXCERPT_MAX);
         if (link) return link;
     }
-    const preferIdentity = queryProfile === "identity";
-    const table = pickTableExcerpt(body, tokens, EXCERPT_MAX, preferIdentity);
+    const preferFields =
+        queryProfile === "identity" ? IDENTITY_TABLE_LABELS : [];
+    const tableBudget =
+        queryProfile === "identity" ? EXCERPT_MAX * 3 : EXCERPT_MAX;
+    if (queryProfile === "identity" && tokensWantTimeline(tokens)) {
+        const timeline = pickTimelineTableExcerpt(body, tableBudget);
+        if (timeline) return timeline;
+    }
+    const table = pickTableExcerpt(body, tokens, tableBudget, preferFields);
     if (table) return table;
+    if (queryProfile === "identity") {
+        const timeline = pickTimelineTableExcerpt(body, tableBudget);
+        if (timeline) return timeline;
+    }
     return pickLinearExcerpt(body, tokens, EXCERPT_MAX);
 };
 

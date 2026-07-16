@@ -115,7 +115,7 @@ export const resolveIncrementalCompositePlan = async (input: {
             cachedAnswer: useCachedAnswer ? cached : null,
         };
         slots.push(plan);
-        if (!useCachedAnswer) {
+        if (!useCachedAnswer && slot.executor !== "list_corpus") {
             activeRetrievalSlots.push(slot);
         }
     }

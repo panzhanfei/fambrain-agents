@@ -111,6 +111,15 @@ const hitsLookRelevant = (input: FactCheckerInput): boolean => {
   return Math.max(...scores) >= RELEVANCE_THRESHOLD;
 }
 
+/** enumeration + experience 语料充分 → 跳过 LLM / 快速放行（信 queryType，无口语词表） */
+export const shouldFastPassEnumerationCheck = (
+  input: FactCheckerInput
+): boolean =>
+  input.hits.length >= 3 &&
+  input.coverage === "sufficient" &&
+  hasExperienceCorpusHits(input.hits) &&
+  input.queryType === "enumeration";
+
 /**
  * 规则兜底：不调用 LLM，纯确定性分支产出 FactCheckerResult。
  *
@@ -188,14 +197,8 @@ export const buildRuleBasedFactCheck = (
     return result;
   }
 
-  // ── 分支 C2：列举问法 + experience 命中且 coverage 充分 → 不重检 KM ──
-  if (
-    hits.length >= 3 &&
-    coverage === "sufficient" &&
-    hasExperienceCorpusHits(hits) &&
-    (input.queryType === "enumeration" ||
-      /哪几|哪些|列举|公司|任职/.test(input.userQuestion))
-  ) {
+  // ── 分支 C2：enumeration + experience 命中且 coverage 充分 → 不重检 KM ──
+  if (shouldFastPassEnumerationCheck(input)) {
     const topRelevance = Math.max(...hits.map((h) => h.relevance), 0);
     return {
       passed: true,

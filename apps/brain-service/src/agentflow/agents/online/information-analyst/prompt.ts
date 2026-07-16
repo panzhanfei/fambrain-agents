@@ -51,6 +51,8 @@ export type InformationAnalystInput = {
   memoryBlock: string | null;
   /** skip / slots / list / dag */
   routeMode?: IntakeRouteMode;
+  /** qa | summarize | composite */
+  composeMode?: import("@/agentflow/agents/online/intake-coordinator/path-plan").ComposeMode;
   /** 分槽检索结果；slots 路由时有值（length ≥ 1） */
   compositeSubResults?: Array<{
     slot: CompositeSlotId;

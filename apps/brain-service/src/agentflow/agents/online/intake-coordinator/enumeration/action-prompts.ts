@@ -11,6 +11,11 @@ export type EnumerationControl = {
     listKind: EnumerationListKind;
     /** 可选：排除某实体（如「除城管外」） */
     excludeHint?: string | null;
+    /**
+     * 可选：近 N 年时间窗（相对 asOfDate）。
+     * 由 Intake LLM 填写；服务端按语料日期过滤，禁止只靠 label 文案。
+     */
+    timeWindowYears?: number | null;
 };
 
 /** 槽执行器：语义检索 vs 目录扫盘分页 */

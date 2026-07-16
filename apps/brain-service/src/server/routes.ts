@@ -65,6 +65,7 @@ export const handlePipelineStream = async (req: IncomingMessage, res: ServerResp
             answer: string;
             blocks?: import("@fambrain/brain-types").AssistantMessageBlock[];
             retrievalCacheHit?: boolean;
+            retrievalPaths?: string[];
             timing?: import("@fambrain/brain-types").PipelineTiming;
         } | undefined;
         while (true) {
@@ -79,6 +80,7 @@ export const handlePipelineStream = async (req: IncomingMessage, res: ServerResp
             answer: pipelineResult?.answer ?? "",
             blocks: pipelineResult?.blocks,
             retrievalCacheHit: pipelineResult?.retrievalCacheHit,
+            retrievalPaths: pipelineResult?.retrievalPaths,
             timing: pipelineResult?.timing,
         });
     }

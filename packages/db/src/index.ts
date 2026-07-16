@@ -19,6 +19,7 @@ export {
 } from "./repos/pending-memory-facts";
 export {
     upsertRetrievalFeedback,
+    getMessageRetrievalFeedbackSignal,
     aggregateFeedbackByPath,
 } from "./repos/retrieval-feedback";
 export { ChatRole, UserRole, UserStatus, PendingMemoryFactStatus, MemoryCandidateTarget, } from "./generated/prisma/client";

@@ -51,6 +51,21 @@
 
 > P0 条目来自 **2026-05 初版联调**；**§2.1** 来自 **2026-05-22**（LangChain 向量检索接入 + Golden 回归）。对策以 **prompt + 编排兜底** 为主。
 
+### 踩坑分类索引
+
+同类问题合并查阅；详细案例仍保留在下表与各 § 小节。
+
+| 类别 | 典型现象 | 代表 ID | 详解 |
+|------|----------|---------|------|
+| **Intake / 意图路由** | 问候走检索、clarify 误触、续问被澄清 | P0-1、P0-13、**P0-29**、P0-25 | §2.5.1、§2.5.9、**§2.8.1** |
+| **多槽 / PathPlan 编排** | 混合问丢段、列举+链接只出一段、routeMode 互斥 | P0-15、P0-26、P0-27、**P0-28** | §2.5.3、§2.5.10、**§2.8** |
+| **KM / 检索召回** | hits 空、枚举不全、chunk 边界 | P0-3、P0-4、R6-1、D3-2 | §2.3、§2.1.1 |
+| **FactChecker / 编排** | meta refined 打回、force_pass 后空 hits | P0-12、P0-17、D5-* | §2.2、§2.2.1、§2.2.2 |
+| **Analyst / 终稿** | 幻觉、列举压缩、项目/公司槽混淆 | P0-19～21、P0-12 | §2.5.5 |
+| **Cache / 跨轮** | 同句再问全链路、答案降级 | P0-11、D5-2、R6-3 | §2.2、§2.7 |
+| **Mem0 / 用户事实** | corpus 与 memory 矛盾、跨会话遗忘 | P0-14、P0-16 | §2.5.2、§2.6 |
+| **工具 / 确定性编排** | 年龄不计算、列举 blocks、联网 | P0-23、P0-24、P0-22 | §2.5.6、§2.5.7、[架构 v2 §11](./05-architecture-v2-tool-orchestration.md#11-pathplan-统一执行计划-2026-07) |
+
 ### Agent 职责边界（合同）
 
 | Agent | 只负责 | 禁止 |
@@ -91,8 +106,116 @@
 | P0-23 | Analyst | 单问「今年多大」→ excerpt 有 `1993.03` 却只复述「出生日期…可推算」，**不给岁数** | P0-15/18 prompt **禁止 LLM 推算年龄**；pipeline 未注入 asOfDate；无服务端 age tool | **`compute_age_from_hits`**（P0-23 Analyst 内联）→ **P0-24 上移到 ToolOrchestrator** | ✅ **已解决**（2026-07）← §2.5.7 · [架构 v2](./05-architecture-v2-tool-orchestration.md) |
 | P0-25 | Intake / KM / Analyst | 问「开源项目 **GitHub 链接**」→ 答 **aky 内部路径**；应 **2 条 URL** 只给 release-bot；「不止这一个」→ **clarify**；点名物联网/工具库 → 一未覆盖、一错绑 release-bot | Intake 误标 **enumeration** → KM **projects fill** 扫 offline 文档；会话 **stale subTasks** 继承；省略续问误 clarify；Analyst 跨槽借 URL | **`queryType=external_link`** + **`applyIntakeContinuationGuard`** + **`applyIntakeLinkLookupGuard`** + KM **`applyExternalLinkGuard`** + Analyst external_link 规则 | ✅ **已解决**（2026-07）← §2.5.9 |
 | P0-26 | Intake / KM / 编排 | **混合问**「React 经验 + **列出全部项目**」→ 整句走 list、tech 段丢失；续问「更多项目」靠 **口语 regex** 误判 | P0-22 用 **整句 `routeMode=list`** 表达穷举；`enumeration-list-intent` 堆 regex，与 per-slot composite 冲突；KM 无 **按槽 executor** | **per-slot** `enumerationControl` + `executor=km_retrieve\|list_corpus`；`applyEnumerationSlotGuard`；UI **`ENUMERATION_ACTION_PROMPTS`** exact-match；`retrieval-node` 按槽执行 | ✅ **已解决**（2026-07）← §2.5.10 · [架构 v2 §10](./05-architecture-v2-tool-orchestration.md#10-列举执行-per-slot-演进-2026-07) |
+| P0-27 | Intake / Web | 「列出全部项目 + **开源** GitHub/线上地址」→ 第 2 段变成「**每个**项目的 GitHub」且无 URL；前端无分页按钮 | LLM 双槽皆标 enumeration；link guard 误 aggregate；槽 id 撞车；Web BFF `pipeline_done` **丢 blocks** | Intake 示例 16 + `harmonizeRetrievalPlanQueryTypes`（`inferQueryProfile`）+ 保留混合 plan；`planItemToSlot` 唯一 id；BFF 透传 blocks；分页文案对齐 `ENUMERATION_ACTION_PROMPTS` | ✅ **已解决**（2026-07）← §2.5.10 · diagnose-mixed-projects-github-query |
+| **P0-28** | Intake / KM / FC / 编排 | **混合问**「列举项目 + 开源 GitHub 链接」→ composite 只答 **一段**（或 external_link 槽被 label regex 漏掉）；FC 对 composite≥2 **整轮跳过** | `routeMode` / `compositeSlots` / `executionPlan` / toolPlan **四套多槽互斥**；opensource 与 enumeration **并行 KM** 而非依赖链；FC 一次失败拖垮全答 | **PathPlan** 四桶 + **`planExecutor`**；external_link 作 km 槽 + extract 工具（无场景 DAG）；**per-step FC**；`composeMode` 一次 composite | ✅ **已解决**（2026-07）← **§2.8** · [架构 v2 §11](./05-architecture-v2-tool-orchestration.md#11-pathplan-统一执行计划-2026-07) |
+| **P0-29** | Intake | `verify:intake-chitchat` 偶发「你好」→ **`retrieve_and_answer`**；脚本断言逻辑反了 | 小模型对极短句非确定性；prompt 检索示例偏多；parse 失败 → `defaultIntakeDecision`；测试在 intent=chitchat 时误 throw | **`isPureSocialUtterance`** 入口跳过 LLM + **`applyPureSocialUtteranceGuard`** 覆盖误判；chitchat briefReply 仍走 P0-13 模板 | ✅ **已解决**（2026-07）← **§2.8.1** · `verify:intake-chitchat` |
+| **P0-30** | Intake / KM / Analyst / Web | 超长复合履历问：重复「工作经历/任职」、表头误「项目名称」、年限只算近段、近两年未过滤；`labels` 口语二次规划 | Intake 过拆 + repair 口语注入；canonicalize 盖掉 tenure 检索词；UI 写死表头；list 无时间窗 | **LLM 主导合并拆分**；schema 合法化 + facet 去重；`tenure` + `timeWindowYears`；职位/链接 UI；单测迁 `tests/` | ✅ **已解决**（2026-07）← **§2.9** · [架构 v2 §12](./05-architecture-v2-tool-orchestration.md#12-intake-llm-主导--schema-兜底2026-07--去问句硬编码) |
 | P0-20 | Analyst / KM / composite | **综合问**公司段只列 2 家；子问「2～8 句」压缩；Organizer 固定 cap **5** | `MAX_SUB_QUESTION_HITS=4`；子问 prompt 句数限制；CO 未跟 profile | **`maxAnalystHitsForProfile`** + CO **`queryProfile` maxHits**；enumeration 子问 prompt「须列全 hits」 | ✅ **已解决**（2026-06）← §2.5.5 |
 | P0-21 | Intake / KM / Analyst | composite 槽 label「**具体项目名称**」→ 答 **云联智慧/友谊时光** 等公司 | 所有 enumeration 共用 **experience fill**；Intake 误标 `topics:experience` → canonical 到 employers | **`resolveEnumerationTarget`**（label 优先）+ KM **projects/** 专扫 + Analyst project prompt | ✅ **已解决**（2026-06）← §2.5.5 |
+
+### 2.8 PathPlan 统一编排（✅ P0-28 · 2026-07）
+
+> **背景：** 用户问「列出全部项目 + 各开源项目的 GitHub 地址」。Intake 已正确产出 2 槽（enumeration + external_link），但终稿常只出现 **一段**（如仅 aky 内部路径段），或 FC 对 composite 整轮 skip 导致证据未审。
+
+#### 现象摘要（案例）
+
+| 用户问 | 预期 | 实际（改前） |
+|--------|------|--------------|
+| 列举全部项目 + 开源 GitHub 链接 | 两段：项目列表 + 简历中 2 条公开 URL | 常只答一段；或 external_link 槽被 **label 正则** 漏配 |
+| React 经验 + 列出全部项目（混合） | 同轮 tech KM + list 分页 | 整句 `routeMode=list` 劫持，tech 段丢失（P0-26 同类） |
+| composite ≥2 槽 | 每段独立 FC，一段失败可局部重试 | 旧 FC **整轮 skip**；或一次打回拖垮全答 |
+
+#### 根因（架构层）
+
+| 层 | 问题 | 说明 |
+|----|------|------|
+| **路由模型** | `routeMode` 整句互斥 | 同句无法「list + km + dag 依赖链」并存 |
+| **多槽实现分裂** | compositeSlots / toolPlan / executionPlan 各维护一套 | Intake 与 PlanExecutor 语义不一致，guard 顺序敏感 |
+| **opensource 链接** | external_link 与 enumeration **并行 KM** | 应 **先 list 实体 → 再抽 URL**（有 deps 的子图） |
+| **FactChecker** | 单次、composite≥2 跳过 | 不符合「每路径审证据」；一段 hallucination 污染 composite |
+| **硬编码** | label 口语猜 external_link 槽 | 与 P0-25「只信 queryType」原则冲突 |
+
+#### 对策（已实现）
+
+| 模块 | 改动 |
+|------|------|
+| `path-plan/interface.ts` | `PathPlan` 四桶：`km` / `list` / `tool` / `dag`；`ComposeMode` |
+| `path-plan/compile-path-plan.ts` | `retrievalPlan` → PathPlan 分桶；保留 Intake 槽顺序；external_link → km |
+| `path-plan/dag-templates.ts` | 仅 `hybrid_multi_source`（多源汇合） |
+| `tool-orchestrator/plan-executor.ts` | LangGraph **单节点**：调度四桶 + **per-step FC** + 后置 tool |
+| `pipeline/graph/compile.ts` | 移除 retrieval/factChecker/dag/tool 互斥边 → **`planExecutor`** |
+| `composite-slot-queries.ts` | `EXTERNAL_LINK_SLOT` canonical searchQuery |
+| `information-analyst/stream.ts` | `composeMode=composite` 走 parallel composite 流 |
+
+**链路（通俗）：** Intake 把子任务分进四个桶并标依赖 → PlanExecutor 按桶取数、**每段各自核查** → 整理师规范化 → Analyst **只混剪一次** 出终稿。
+
+**验证：**
+
+```bash
+pnpm --filter @fambrain/brain-service run verify:composite-route
+pnpm --filter @fambrain/brain-service run verify:composite-incremental
+pnpm --filter @fambrain/brain-service run verify:tool-orchestration
+pnpm --filter @fambrain/brain-service run verify:dag-hybrid
+pnpm --filter @fambrain/brain-service exec tsx --env-file=../../.env scripts/diagnose-mixed-projects-github-query.ts
+```
+
+详见 [架构 v2 §11 PathPlan](./05-architecture-v2-tool-orchestration.md#11-pathplan-统一执行计划-2026-07)、[Agent 流程图](./02-agent-flows.md)。
+
+#### 2.8.1 纯社交短路 — 「你好」误判 retrieve（✅ P0-29 · 2026-07）
+
+> **与 P0-13 关系：** P0-13 解决 chitchat **briefReply 乱称呼**（服务端模板）；P0-29 解决 **intent 本身** 被小模型判成 `retrieve_and_answer`。
+
+**现象：** `verify:intake-chitchat` 连跑「你好」，偶发 intent=`retrieve_and_answer` → 走全链路或「知识库未覆盖」。
+
+**根因：**
+
+| 层 | 说明 |
+|----|------|
+| LLM 非确定性 | 极短句语义空，小模型偏向 prompt 里大量的 retrieve 示例 |
+| parse 兜底 | JSON 失败时 `defaultIntakeDecision` → retrieve |
+| 测试脚本 | 曾在 `intent===chitchat` 时误 throw「不应走检索」 |
+
+**对策：**
+
+| 优先级 | 对策 | 文件 |
+|--------|------|------|
+| P0 | **入口短路**：`isPureSocialUtterance`（你好/hi/谢谢等）→ **跳过 LLM**，直接 chitchat 早退 | `signals/pure-social-utterance.ts`、`nodes/intake-node.ts` |
+| P0 | **pipeline 覆盖**：LLM 仍被调用时，`applyPureSocialUtteranceGuard` 强制 intent=chitchat | `guards/intake-chitchat-guard.ts`、`intake-pipeline.ts` |
+| +1 | briefReply 仍走 P0-13 **`DEFAULT_CHITCHAT_BRIEF_REPLY`** | `applyIntakeChitchatGuard` |
+
+**验证：**
+
+```bash
+pnpm --filter @fambrain/brain-service run verify:intake-chitchat   # CHITCHAT_RUNS=10
+```
+
+**注意：** 仅匹配 **纯** 问候/感谢（≤24 字、无并列问句）；「你好，我叫什么」仍走 LLM 检索。
+
+### 2.9 Intake 去硬编码与复合履历（✅ P0-30 · 2026-07）
+
+> **背景：** 超长复合问（IT 干了多少年 / 哪几家公司职位 / 近两年项目 / 年龄姓名 / 全部项目 / 开源链接）答案碎、重复、表头错、年限只算奥卡云段。
+
+#### 现象
+
+| 现象 | 改前 |
+|------|------|
+| 工作经历后又来「任职公司及职位」 | repair / LLM 过拆两条 experience |
+| 任职表头「项目名称」、无职位 | Web 写死表头；列举只输出 title |
+| 「近两年项目」像全库 | 无 `timeWindowYears` 执行过滤 |
+| 「项目经历」vs「所有项目」重复 | 同 `listKind=project` 未按 facet 去重 |
+| 从业年限 ≈3 年 | tenure 检索被 identity 通用模板盖掉；excerpt 只剩基本信息表 |
+
+#### 对策
+
+| 层 | 改动 |
+|----|------|
+| 原则 | Intake **LLM 合并/拆分**；代码只 schema 合法化 + facet 去重（删口语 labels） |
+| 年限 | `identityField=tenure` → `compute_tenure_from_hits`；时间线 excerpt 优先 |
+| 近两年 | `enumerationControl.timeWindowYears` + list 过滤；有时间窗强制 `list_corpus` |
+| UI | enumeration 表头信 `listKind`；反馈按钮单次置灰持久化；URL 新开页 |
+| 测试 | 单测集中 `apps/brain-service/tests/` |
+
+**验证：** `pnpm test:unit` · `scripts/diagnose-long-composite-career-query.ts`。详见 [架构 v2 §12](./05-architecture-v2-tool-orchestration.md#12-intake-llm-主导--schema-兜底2026-07--去问句硬编码)。
 
 ### 2.3 工作经历枚举不完整 / 同问不同答（✅ 2026-06 · `verify:r6-no-cache`）
 
@@ -948,6 +1071,8 @@ pnpm run verify:fact-checker
 | P0-12 / D5-5 | #9 信息捏造（路径 B：force_pass 后 hits 空，Analyst 仍编造 — 待验证） |
 | P0-17 / D5-6 | #4 计划漂移（FC 坏 refined 导致 Corrective RAG 二次检索跑偏） |
 | P0-13 | #1 意图误判（chitchat briefReply 风格漂移） | ✅ `verify:intake-chitchat` |
+| **P0-29** | #1 意图误判（纯问候 → retrieve） | ✅ §2.8.1 |
+| **P0-28** | #2 任务拆分不合理；#4 计划漂移（多槽互斥） | ✅ §2.8 · 架构 v2 §11 |
 | P0-14 | #9 信息捏造；#16 Mem0 vs corpus 同句矛盾 | ✅ KM 优化 |
 | P0-15 | #9 信息捏造；#15 信息不对称 |
 | P0-16 | #16 关键信息遗忘（跨 conversationId；用户自述 fact） |

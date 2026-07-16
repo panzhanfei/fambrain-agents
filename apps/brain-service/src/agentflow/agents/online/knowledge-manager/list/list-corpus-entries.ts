@@ -15,6 +15,10 @@ import {
     pickExcerpt,
 } from "../recall/retrieve-helpers";
 import type { KnowledgeHit } from "../contract/types";
+import {
+    entryOverlapsTimeWindow,
+    extractRoleFromExperienceBody,
+} from "./entry-time-window";
 
 export const ENUMERATION_PREVIEW_PAGE_SIZE = 8;
 export const ENUMERATION_EXHAUSTIVE_PAGE_SIZE = 20;
@@ -25,6 +29,8 @@ export type CorpusEntryRow = {
     path: string;
     title: string;
     body: string;
+    /** experience：职位/角色 */
+    role?: string | null;
 };
 
 const titleFromMarkdown = (fileName: string, body: string): string => {
@@ -54,10 +60,15 @@ const scanEntries = async (
             if (!isTargetPath(repoPath, listKind)) continue;
             const body = await readFile(abs, "utf8").catch(() => "");
             if (!body.trim()) continue;
+            const role =
+                listKind === "experience"
+                    ? extractRoleFromExperienceBody(body)
+                    : null;
             entries.push({
                 path: repoPath,
                 title: titleFromMarkdown(path.basename(abs), body),
                 body,
+                role,
             });
         }
     }
@@ -74,6 +85,9 @@ export const listCorpusEntriesPage = async (input: {
     listKind: CorpusListKind;
     page: number;
     pageSize: number;
+    /** 近 N 年；null/省略 = 不过滤 */
+    timeWindowYears?: number | null;
+    asOfDate?: string | null;
 }): Promise<{
     items: CorpusEntryRow[];
     total: number;
@@ -83,7 +97,18 @@ export const listCorpusEntriesPage = async (input: {
 }> => {
     const page = Math.max(1, input.page);
     const pageSize = Math.max(1, input.pageSize);
-    const all = await scanEntries(input.corpusUserId, input.listKind);
+    let all = await scanEntries(input.corpusUserId, input.listKind);
+    const tw = input.timeWindowYears;
+    if (tw != null && tw > 0) {
+        all = all.filter((e) =>
+            entryOverlapsTimeWindow({
+                path: e.path,
+                body: e.body,
+                timeWindowYears: tw,
+                asOfDate: input.asOfDate,
+            })
+        );
+    }
     const total = all.length;
     const offset = (page - 1) * pageSize;
     const slice = all.slice(offset, offset + pageSize);
@@ -96,11 +121,19 @@ export const listCorpusEntriesPage = async (input: {
     };
 };
 
-export const corpusEntryToHit = (entry: CorpusEntryRow): KnowledgeHit => ({
-    path: entry.path,
-    title: entry.title,
-    excerpt:
+export const corpusEntryToHit = (entry: CorpusEntryRow): KnowledgeHit => {
+    const excerptBase =
         pickExcerpt(entry.body, [], "enumeration") ||
-        entry.body.slice(0, EXCERPT_MAX).trim(),
-    relevance: 0.5,
-});
+        entry.body.slice(0, EXCERPT_MAX).trim();
+    const role = entry.role?.trim();
+    const excerpt =
+        role && !excerptBase.includes(role)
+            ? `角色：${role}\n${excerptBase}`
+            : excerptBase;
+    return {
+        path: entry.path,
+        title: entry.title,
+        excerpt,
+        relevance: 0.5,
+    };
+};

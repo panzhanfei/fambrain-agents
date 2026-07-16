@@ -9,6 +9,8 @@ export type {
 
 export {
     applyIntakeChitchatGuard,
+    applyPureSocialUtteranceGuard,
+    buildPureChitchatDecision,
     DEFAULT_CHITCHAT_BRIEF_REPLY,
 } from "./intake-chitchat-guard";
 export {
@@ -25,6 +27,7 @@ export {
 export type { IntakeContinuationGuardReason } from "./intake-continuation-guard";
 export {
     applyIntakeLinkLookupGuard,
+    harmonizeRetrievalPlanQueryTypes,
 } from "./intake-link-lookup-guard";
 export type { IntakeLinkLookupGuardReason } from "./intake-link-lookup-guard";
 export {

@@ -9,7 +9,7 @@ export default defineConfig({
         globals: false,
         environment: "node",
         include: [
-            "apps/brain-service/src/**/*.test.ts",
+            "apps/brain-service/tests/**/*.test.ts",
             "packages/*/src/**/*.test.ts",
             "packages/test-kit/src/**/*.test.ts",
         ],

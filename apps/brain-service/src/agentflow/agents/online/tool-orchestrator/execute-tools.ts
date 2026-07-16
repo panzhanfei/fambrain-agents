@@ -11,7 +11,20 @@ import {
 } from "@/agentflow/tools";
 import type { PipelineGraphState } from "@/agentflow/pipeline/graph/state";
 import type { RoutedIntakeDecision } from "@/agentflow/agents/online/intake-coordinator";
-import { resolveIdentityField } from "./field-catalog";
+import { resolveIdentityField, resolveIdentityFieldFromPlan } from "./field-catalog";
+import type { IntakeIdentityField } from "@/agentflow/agents/online/intake-coordinator/contract";
+import {
+    buildIdentityFieldAnswer,
+    extractIdentityFieldFromHits,
+} from "@/agentflow/tools/lib/extract-identity-field";
+import {
+    buildExternalLinksAnswer,
+    extractExternalLinksFromHits,
+} from "@/agentflow/tools/lib/extract-external-links";
+import {
+    buildTenureAnswer,
+    extractTenureFromHits,
+} from "@/agentflow/tools/lib/compute-tenure";
 import type {
     ExecutionPlanNode,
     PipelineToolResults,
@@ -201,6 +214,97 @@ export const invokeSynthesizeMerge = (input: {
     };
 };
 
+export const invokeComputeTenure = (input: {
+    hits: KnowledgeHit[];
+    language: "zh" | "en" | "mixed";
+    label: string;
+    asOfDate: string;
+}): ToolRunResult => {
+    const extraction = extractTenureFromHits(input.hits);
+    const { answer, insufficientEvidence } = buildTenureAnswer({
+        extraction,
+        language: input.language,
+        asOfDate: input.asOfDate,
+    });
+    const citations =
+        extraction?.sourceHit && !insufficientEvidence
+            ? dedupeCitations([
+                  {
+                      path: extraction.sourceHit.path,
+                      excerpt: extraction.sourceHit.excerpt,
+                  },
+              ])
+            : [];
+    return {
+        toolId: "compute_tenure_from_hits",
+        label: input.label,
+        ok: !insufficientEvidence,
+        answer,
+        citations,
+        hits: input.hits,
+        insufficientEvidence,
+        confidence: insufficientEvidence ? 0.85 : 0.92,
+    };
+};
+
+export const invokeExtractIdentityField = (input: {
+    hits: KnowledgeHit[];
+    field: IntakeIdentityField;
+    language: "zh" | "en" | "mixed";
+    label: string;
+}): ToolRunResult => {
+    const extraction = extractIdentityFieldFromHits(input.hits, input.field);
+    const { answer, insufficientEvidence } = buildIdentityFieldAnswer({
+        field: input.field,
+        extraction,
+        language: input.language,
+    });
+    const citations =
+        extraction?.sourceHit && !insufficientEvidence
+            ? dedupeCitations([
+                  {
+                      path: extraction.sourceHit.path,
+                      excerpt: extraction.sourceHit.excerpt,
+                  },
+              ])
+            : [];
+    return {
+        toolId: "extract_identity_from_hits",
+        label: input.label,
+        ok: !insufficientEvidence,
+        answer,
+        citations,
+        hits: input.hits,
+        insufficientEvidence,
+        confidence: insufficientEvidence ? 0.85 : 0.92,
+    };
+};
+
+export const invokeExtractExternalLinks = (input: {
+    hits: KnowledgeHit[];
+    language: "zh" | "en" | "mixed";
+    label: string;
+}): ToolRunResult => {
+    const links = extractExternalLinksFromHits(input.hits);
+    const { answer, insufficientEvidence } = buildExternalLinksAnswer({
+        links,
+        language: input.language,
+    });
+    const citations = dedupeCitations(
+        links.slice(0, 6).map((l) => ({ path: l.path, excerpt: l.url }))
+    );
+    return {
+        toolId: "extract_external_links_from_hits",
+        label: input.label,
+        ok: !insufficientEvidence,
+        answer,
+        citations,
+        hits: input.hits,
+        insufficientEvidence,
+        confidence: insufficientEvidence ? 0.85 : 0.9,
+    };
+};
+
 export const runExecutionPlanNode = async (
     node: ExecutionPlanNode,
     ctx: {
@@ -262,6 +366,43 @@ export const runExecutionPlanNode = async (
                 label: node.label,
             });
         }
+        case "compute_tenure_from_hits":
+            return invokeComputeTenure({
+                hits: node.hitsOverride ?? state.hits,
+                language,
+                label: node.label,
+                asOfDate:
+                    state.asOfDate ?? new Date().toISOString().slice(0, 10),
+            });
+        case "extract_identity_from_hits": {
+            const field = (node.field as IntakeIdentityField | null) ?? "name";
+            const resolvedField =
+                (
+                    [
+                        "name",
+                        "age",
+                        "email",
+                        "phone",
+                        "education",
+                        "career",
+                        "tenure",
+                    ] as const
+                ).includes(field as IntakeIdentityField)
+                    ? (field as IntakeIdentityField)
+                    : "name";
+            return invokeExtractIdentityField({
+                hits: node.hitsOverride ?? state.hits,
+                field: resolvedField,
+                language,
+                label: node.label,
+            });
+        }
+        case "extract_external_links_from_hits":
+            return invokeExtractExternalLinks({
+                hits: node.hitsOverride ?? state.hits,
+                language,
+                label: node.label,
+            });
         case "list_corpus_entries": {
             // 取数主路径在 retrieval-node 按槽执行；此处作兜底（无 hits 时）
             const { retrieveEnumerationPage } = await import(
@@ -378,7 +519,11 @@ export const resolvePostRetrievalToolRuns = (
     ) {
         for (const sub of state.compositeSubResults) {
             const slot = enrichedSlots.find((s) => s.id === sub.slot);
-            if (!slot?.toolId || sub.hits.length === 0 || sub.coverage === "none") {
+            if (
+                !slot?.toolId ||
+                sub.hits.length === 0 ||
+                sub.coverage === "none"
+            ) {
                 continue;
             }
             runs.push({
@@ -389,13 +534,14 @@ export const resolvePostRetrievalToolRuns = (
                     dataSource:
                         slot.toolId === "search_web"
                             ? "web"
-                            : slot.toolId === "compute_age_from_hits"
+                            : slot.toolId === "compute_age_from_hits" ||
+                                slot.toolId === "compute_tenure_from_hits"
                               ? "compute"
                               : "corpus",
                     toolId: slot.toolId,
                     queryType: slot.queryType,
                     topics: slot.topics,
-                    field: slot.field ?? null,
+                    field: slot.field ?? slot.identityField ?? null,
                     deps: [],
                     hitsOverride: sub.hits,
                     enumerationMetaOverride: sub.enumerationMeta ?? null,
@@ -428,7 +574,8 @@ export const resolvePostRetrievalToolRuns = (
         (decision.retrievalPlan ?? []).map((p) => ({
             ...p,
             dataSource: "corpus" as const,
-            field: resolveIdentityField(p.label)?.id ?? null,
+            field:
+                resolveIdentityField(p.label, p.identityField)?.id ?? null,
             toolId: null as ToolRunId | null,
         }));
 
@@ -450,12 +597,14 @@ export const resolvePostRetrievalToolRuns = (
         });
     }
 
+    const ageFromPlan = (decision.retrievalPlan ?? []).find(
+        (p) => p.identityField === "age"
+    );
     const ageItem =
         enriched.find((p) => p.toolId === "compute_age_from_hits") ??
-        (decision.queryType === "identity" &&
-        resolveIdentityField(state.userQuestion)?.toolId === "compute_age_from_hits"
+        (decision.queryType === "identity" && ageFromPlan
             ? {
-                  label: "年龄",
+                  label: ageFromPlan.label || "年龄",
                   toolId: "compute_age_from_hits" as const,
                   field: "age",
               }

@@ -54,6 +54,10 @@ export const retrieveCompositeIncremental = async (input: {
             continue;
         }
 
+        if (slotPlan.executor === "list_corpus") {
+            continue;
+        }
+
         const fetched = active.subResults[activeIdx++];
         subResults.push({
             ...(fetched ?? {

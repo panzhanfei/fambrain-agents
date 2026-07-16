@@ -84,13 +84,40 @@ console.log("\n— resolveOrchestratedTool —");
     const tool = resolveOrchestratedTool({
         userQuestion: "姓名",
         language: "zh",
-        hits: [resumeHit("姓名：潘展飞")],
+        hits: [resumeHit("| 姓名 | 潘展飞 |")],
+        coverage: "sufficient",
+        notes: null,
+        queryType: "identity",
+        identityField: "name",
+    });
+    assert.equal(tool, "extract_identity_from_hits");
+    ok("姓名槽 identityField=name → extract_identity_from_hits");
+}
+
+{
+    const tool = resolveOrchestratedTool({
+        userQuestion: "姓名",
+        language: "zh",
+        hits: [resumeHit("| 姓名 | 潘展飞 |")],
         coverage: "sufficient",
         notes: null,
         queryType: "identity",
     });
     assert.equal(tool, null);
-    ok("姓名槽不走年龄工具");
+    ok("无 identityField 的 identity 槽不走 name 工具");
+}
+
+{
+    const tool = resolveOrchestratedTool({
+        userQuestion: "开源链接",
+        language: "zh",
+        hits: [resumeHit("https://github.com/org/repo")],
+        coverage: "sufficient",
+        notes: null,
+        queryType: "external_link",
+    });
+    assert.equal(tool, "extract_external_links_from_hits");
+    ok("external_link → extract_external_links_from_hits");
 }
 
 console.log("\n— runOrchestratedSubQuestion —");
@@ -125,6 +152,41 @@ console.log("\n— runOrchestratedSubQuestion —");
     assert.equal(result.insufficientEvidence, true);
     assert.match(result.answer, /未标注当前年龄/);
     ok("无出生字段 → insufficient 兜底");
+}
+
+{
+    const result = runOrchestratedSubQuestion({
+        userQuestion: "姓名",
+        language: "zh",
+        hits: [resumeHit("| 姓名 | 潘展飞 |")],
+        coverage: "sufficient",
+        notes: null,
+        queryType: "identity",
+        identityField: "name",
+    });
+    assert.ok(result);
+    assert.equal(result.answer, "潘展飞");
+    assert.equal(result.insufficientEvidence, false);
+    ok(`姓名抽取: ${result.answer}`);
+}
+
+{
+    const result = runOrchestratedSubQuestion({
+        userQuestion: "开源 GitHub",
+        language: "zh",
+        hits: [
+            resumeHit(
+                "Sentinel 开源仓库 https://github.com/org/sentinel 线上 https://sentinel.example.com"
+            ),
+        ],
+        coverage: "sufficient",
+        notes: null,
+        queryType: "external_link",
+    });
+    assert.ok(result);
+    assert.match(result.answer, /github\.com\/org\/sentinel/);
+    assert.equal(result.insufficientEvidence, false);
+    ok("外链抽取含 GitHub URL");
 }
 
 console.log("\n— completeAnalyzeSubQuestion skip LLM —");

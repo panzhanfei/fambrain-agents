@@ -4,7 +4,7 @@ import {
     computeAgeYears,
     extractBirthOrAgeFromText,
     isAgeSubQuestion,
-} from "./compute-age";
+} from "@/agentflow/tools/lib/compute-age";
 
 describe("compute-age", () => {
     it("extracts birth date from resume table", () => {

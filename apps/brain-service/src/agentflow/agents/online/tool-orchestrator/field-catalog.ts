@@ -1,73 +1,128 @@
+import type { IntakeIdentityField } from "@/agentflow/agents/online/intake-coordinator/contract";
 import type { ToolRunId } from "./types";
 
-/** 声明式 identity 字段 → 工具映射（扩展时只改此表） */
+/** 声明式 identity 字段 → 工具映射（由 Intake identityField 索引，无口语 patterns） */
 export type IdentityFieldSpec = {
-    id: string;
-    labelPatterns: RegExp[];
+    id: IntakeIdentityField;
     toolId: ToolRunId | null;
     requiresCompute: boolean;
 };
 
-export const IDENTITY_FIELD_CATALOG: IdentityFieldSpec[] = [
+export const IDENTITY_FIELD_BY_ID: Record<IntakeIdentityField, IdentityFieldSpec> =
     {
-        id: "age",
-        labelPatterns: [/年龄/, /多大/, /几岁/, /周岁/, /今年/, /多大了/],
-        toolId: "compute_age_from_hits",
-        requiresCompute: true,
-    },
-    {
-        id: "name",
-        labelPatterns: [/姓名/, /叫什么/, /名字/, /全名/, /我叫什么/],
-        toolId: null,
-        requiresCompute: false,
-    },
-    {
-        id: "education",
-        labelPatterns: [/学历/, /毕业/, /院校/],
-        toolId: null,
-        requiresCompute: false,
-    },
-    {
-        id: "industry",
-        labelPatterns: [/行业/, /从事/, /职业/, /领域/],
-        toolId: null,
-        requiresCompute: false,
-    },
-];
+        age: {
+            id: "age",
+            toolId: "compute_age_from_hits",
+            requiresCompute: true,
+        },
+        name: {
+            id: "name",
+            toolId: "extract_identity_from_hits",
+            requiresCompute: false,
+        },
+        education: {
+            id: "education",
+            toolId: null,
+            requiresCompute: false,
+        },
+        career: {
+            id: "career",
+            toolId: null,
+            requiresCompute: false,
+        },
+        tenure: {
+            id: "tenure",
+            toolId: "compute_tenure_from_hits",
+            requiresCompute: true,
+        },
+        email: {
+            id: "email",
+            toolId: null,
+            requiresCompute: false,
+        },
+        phone: {
+            id: "phone",
+            toolId: null,
+            requiresCompute: false,
+        },
+    };
 
-const WEB_LABEL_PATTERNS =
-    /行情|市场|最近|新闻|怎么样|动态|背景|招聘|融资|公司情况|外界|外部/;
+/** @deprecated 语料表列名常量（非用户问句词表）；供 KM excerpt 使用 */
+export const IDENTITY_CORPUS_FIELD_LABELS: Record<
+    IntakeIdentityField,
+    string[]
+> = {
+    name: ["姓名", "名字"],
+    age: ["出生", "年龄", "出生日期", "出生年月"],
+    email: ["邮箱", "邮件", "email"],
+    phone: ["电话", "手机", "联系方式"],
+    education: ["学历", "毕业", "院校"],
+    career: ["行业", "职业", "从事", "领域"],
+    tenure: ["工作经历", "时间线", "时间段", "任职"],
+};
 
-const HYBRID_EVAL_PATTERNS =
-    /评估|机会|适不适合|匹配度|去.*公司|入职.*机会/;
+export const resolveIdentityFieldFromPlan = (input: {
+    identityField?: IntakeIdentityField | null;
+}): IdentityFieldSpec | null => {
+    const id = input.identityField ?? null;
+    if (!id) return null;
+    return IDENTITY_FIELD_BY_ID[id] ?? null;
+};
 
-export const resolveIdentityField = (label: string): IdentityFieldSpec | null => {
-    const ln = label.trim();
-    if (!ln) return null;
-    return (
-        IDENTITY_FIELD_CATALOG.find((f) =>
-            f.labelPatterns.some((re) => re.test(ln))
-        ) ?? null
+/**
+ * @deprecated 改用 resolveIdentityFieldFromPlan({ identityField })。
+ * 无 identityField 时返回 null（不再对 label 做口语正则）。
+ */
+export const resolveIdentityField = (
+    _label: string,
+    identityField?: IntakeIdentityField | null
+): IdentityFieldSpec | null =>
+    resolveIdentityFieldFromPlan({ identityField });
+
+/** topics 含 external → web 源（Intake 声明，非口语词表） */
+export const topicsSuggestWebSource = (topics: string[]): boolean =>
+    topics.includes("external");
+
+/**
+ * @deprecated 改用 topicsSuggestWebSource(topics)。
+ */
+export const labelSuggestsWebSource = (
+    _label: string,
+    _searchQuery: string,
+    topics: string[] = []
+): boolean => topicsSuggestWebSource(topics);
+
+/** Intake topics 含 external 且同时有 corpus 向 topics → hybrid DAG */
+export const decisionSuggestsHybridDag = (input: {
+    topics: string[];
+    planTopics?: string[][];
+}): boolean => {
+    const all = [
+        ...input.topics,
+        ...(input.planTopics ?? []).flat(),
+    ];
+    const hasExternal = all.includes("external");
+    const hasCorpus = all.some((t) =>
+        ["personal", "resume", "experience", "project", "tech-stack"].includes(
+            t
+        )
     );
+    return hasExternal && hasCorpus;
 };
 
-export const labelSuggestsWebSource = (label: string, searchQuery: string): boolean =>
-    WEB_LABEL_PATTERNS.test(`${label} ${searchQuery}`);
+/**
+ * @deprecated 改用 decisionSuggestsHybridDag。
+ */
+export const userQuestionSuggestsHybridDag = (
+    _userQuestion: string,
+    topics: string[] = []
+): boolean => decisionSuggestsHybridDag({ topics });
 
-export const userQuestionSuggestsHybridDag = (userQuestion: string): boolean => {
-    const q = userQuestion.trim();
-    if (!HYBRID_EVAL_PATTERNS.test(q)) return false;
-    return /简历|我的|个人|技能|经历/.test(q) && /行情|市场|公司|外部/.test(q);
-};
-
-/** 从混合问句提取公司名（简单实体抽取，失败则回退 searchQuery） */
+/** 公司实体：优先 Intake searchQuery（已由 LLM 写入实体），不用口语正则抽 */
 export const extractCompanyHint = (
-    userQuestion: string,
+    _userQuestion: string,
     fallback: string
 ): string => {
-    const m =
-        userQuestion.match(/去\s*([^\s，,。?？]+?)\s*公司/) ??
-        userQuestion.match(/([^\s，,。?？]+)\s*公司/);
-    const hint = m?.[1]?.trim();
-    return hint && hint.length >= 2 ? hint : fallback;
+    const hint = fallback.trim();
+    return hint.length >= 2 ? hint : fallback;
 };

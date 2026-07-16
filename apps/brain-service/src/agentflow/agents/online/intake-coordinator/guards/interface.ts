@@ -1,12 +1,16 @@
 /**
  * Intake guards 类型约定。
- * routeMode：skip | slots | list | dag
+ * routeMode：skip | slots | list | dag（兼容派生；执行以 pathPlan 为准）
  */
 import type {
     CompositeRetrievalSlot,
     CompositeRoutePlanSource,
 } from "@/agentflow/agents/online/intake-coordinator/composite/interface";
 import type { IntakeRoutingDecision } from "@/agentflow/agents/online/intake-coordinator/contract";
+import type {
+    ComposeMode,
+    PathPlan,
+} from "@/agentflow/agents/online/intake-coordinator/path-plan/interface";
 import type { UserFactRoute } from "@/agentflow/agents/online/user-fact";
 import type {
     EnrichedPlanItem,
@@ -30,16 +34,22 @@ export type EnumerationListIntent = "preview" | "continue" | "exhaustive";
 export type IntakeRetrievalPlanGuardReason =
     | "noop"
     | "filled_fallback"
+    | "expanded_identity"
+    | "repaired_plan"
     | "canonicalized";
 
 /**
  * Intake 编排工单（写入 state.decision）。
- * 比 LLM 原始 JSON 多：routeMode、compositeSlots、列举分页、工具计划等。
+ * 主契约：pathPlan + composeMode；routeMode/compositeSlots 为兼容派生。
  */
 export type RoutedIntakeDecision = IntakeRoutingDecision & {
     routeMode: IntakeRouteMode;
     /** 完整槽对象数组；slots 路由时 length ≥ 1 */
     compositeSlots: CompositeRetrievalSlot[];
+    /** 四桶执行计划（km / list / tool / dag） */
+    pathPlan: PathPlan;
+    /** 出稿模式：qa | summarize | composite */
+    composeMode: ComposeMode;
     routeReason?: CompositeRouteReason;
     routePlanSource?: CompositeRoutePlanSource;
     /** 用户自述联系方式 remember/recall，不经 KM */
@@ -49,7 +59,7 @@ export type RoutedIntakeDecision = IntakeRoutingDecision & {
     enumerationPage?: number;
     enumerationPageSize?: number;
     enumerationListKind?: "project" | "experience";
-    /** 混合 DAG：Intake 规划，DagExecutor 执行 */
+    /** 混合 DAG：planExecutor 内执行 */
     executionPlan?: ExecutionPlanNode[];
     enrichedPlan?: EnrichedPlanItem[];
     primaryDataSource?: "corpus" | "web";
