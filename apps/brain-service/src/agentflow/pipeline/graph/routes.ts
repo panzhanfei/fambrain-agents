@@ -37,11 +37,7 @@ export const routeAfterPrepareMemory = (
  */
 export const routeAfterIntake = (
   state: PipelineGraphState
-):
-  | "respondEarly"
-  | "userFact"
-  | "planExecutor"
-  | "contentSummarizer" => {
+): "respondEarly" | "userFact" | "planExecutor" | "contentSummarizer" => {
   if (state.exitEarly || state.error) return "respondEarly";
 
   const decision = state.decision;

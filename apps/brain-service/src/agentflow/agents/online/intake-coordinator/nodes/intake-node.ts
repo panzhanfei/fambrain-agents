@@ -22,11 +22,6 @@ export const runIntakeNode = async (
   state: PipelineGraphState
 ): Promise<Partial<PipelineGraphState>> => {
   try {
-    const session = {
-      conversationId: state.context.conversationId,
-      corpusUserId: state.context.corpusUserId,
-    };
-
     /**
      * 步骤 0a：纯问候/感谢 — 跳过 LLM，强制 chitchat 早退。
      */
@@ -41,6 +36,11 @@ export const runIntakeNode = async (
      * 步骤 0b：UI 按钮精确匹配（ENUMERATION_ACTION_PROMPTS）— 不调 LLM。
      * 仅认 Analyst 发出的固定 prompt，无口语 regex 词表。
      */
+    const session = {
+      conversationId: state.context.conversationId,
+      corpusUserId: state.context.corpusUserId,
+    };
+
     const uiControl = matchUiEnumerationPrompt(state.userQuestion);
     if (
       uiControl &&

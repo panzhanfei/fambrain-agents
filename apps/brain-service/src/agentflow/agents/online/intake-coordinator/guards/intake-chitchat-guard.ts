@@ -19,6 +19,9 @@ export const buildPureChitchatDecision = (): IntakeRoutingDecision => ({
     clarifyingQuestion: null,
     briefReply: null,
     retrievalPlan: [],
+    userFactKey: null,
+    userFactLabel: null,
+    userFactValue: null,
 });
 
 /** intent 为 chitchat 时注入标准 briefReply（忽略 LLM 原文） */
