@@ -1,6 +1,6 @@
 import { resolveQueryProfile } from "@/agentflow/agents/online/knowledge-manager";
 import { ENUMERATION_EXHAUSTIVE_PAGE_SIZE } from "@/agentflow/agents/online/knowledge-manager/list/list-corpus-entries";
-import { organizeKnowledge } from "./organize-knowledge";
+import { organizeKnowledge } from "../organize-knowledge";
 import type { PipelineGraphState } from "@/agentflow/pipeline/graph/state";
 
 /** LangGraph contentOrganizer 节点 */

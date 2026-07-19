@@ -38,16 +38,8 @@ export const routeAfterPrepareMemory = (
 export const routeAfterIntake = (
   state: PipelineGraphState
 ): "respondEarly" | "userFact" | "planExecutor" | "contentSummarizer" => {
-  if (state.exitEarly || state.error) return "respondEarly";
-
-  const decision = state.decision;
-  if (!decision) return "respondEarly";
-
-  if (isUserFactIntent(decision.intent)) return "userFact";
-
-  if (shouldRespondEarlyFromIntake(decision)) return "respondEarly";
-
-  const pathPlan = decision.pathPlan;
+  const decision = state?.decision;
+  const pathPlan = decision?.pathPlan;
   const hasPathSteps =
     (pathPlan?.km.length ?? 0) +
       (pathPlan?.list.length ?? 0) +
@@ -56,9 +48,21 @@ export const routeAfterIntake = (
     0;
 
   if (
-    decision.composeMode === "summarize" &&
-    !hasPathSteps &&
-    !intakeRequiresKmRetrieval(decision)
+    state.exitEarly ||
+    state.error ||
+    !decision ||
+    shouldRespondEarlyFromIntake(decision) ||
+    decision.briefReply
+  )
+    return "respondEarly";
+
+  if (isUserFactIntent(decision.intent)) return "userFact";
+
+  if (
+    (decision.composeMode === "summarize" &&
+      !hasPathSteps &&
+      !intakeRequiresKmRetrieval(decision)) ||
+    decision.intent === "summarize_content"
   ) {
     return "contentSummarizer";
   }
@@ -72,10 +76,6 @@ export const routeAfterIntake = (
   ) {
     return "planExecutor";
   }
-
-  if (decision.intent === "summarize_content") return "contentSummarizer";
-
-  if (decision.briefReply) return "respondEarly";
 
   // 兜底：仍进 planExecutor（空 plan 会报错，优于静默 factChecker）
   return "planExecutor";

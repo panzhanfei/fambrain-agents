@@ -1,6 +1,6 @@
-import { buildSummarizeSourceText } from "./build-source-text";
-import { formatSummaryAsAnswer } from "./format-answer";
-import { summarizeContent } from "./summarize";
+import { buildSummarizeSourceText } from "../build-source-text";
+import { formatSummaryAsAnswer } from "../format-answer";
+import { summarizeContent } from "../summarize";
 import type { PipelineGraphState } from "@/agentflow/pipeline/graph/state";
 
 /** LangGraph contentSummarizer 节点 */

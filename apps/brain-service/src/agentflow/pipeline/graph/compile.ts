@@ -1,11 +1,11 @@
 import { END, START, StateGraph } from "@langchain/langgraph";
-import { runContentOrganizerNode } from "@/agentflow/agents/online/content-organizer/content-organizer-node";
-import { runContentSummarizerNode } from "@/agentflow/agents/online/content-summarizer/content-summarizer-node";
-import { runIntakeNode } from "@/agentflow/agents/online/intake-coordinator/nodes/intake-node";
+import { runContentOrganizerNode } from "@/agentflow/agents/online/content-organizer";
+import { runContentSummarizerNode } from "@/agentflow/agents/online/content-summarizer";
+import { runIntakeNode } from "@/agentflow/agents/online/intake-coordinator";
 import { runRespondEarlyNode } from "@/agentflow/agents/online/respond-early";
 import { userFactNode } from "@/agentflow/agents/online/user-fact";
-import { runAnalystNode } from "@/agentflow/agents/online/information-analyst/analyst-node";
-import { runPlanExecutorNode } from "@/agentflow/agents/online/tool-orchestrator";
+import { runAnalystNode } from "@/agentflow/agents/online/information-analyst";
+import { runPlanExecutorNode } from "@/agentflow/agents/online/plan-executor";
 import {
   runPreparePipelineMemory,
   runPrepareTurnStart,

@@ -1,6 +1,6 @@
 import { getWriter } from "@langchain/langgraph";
 import type { LangGraphRunnableConfig } from "@langchain/langgraph";
-import { streamAnalyzeInformation } from "./stream";
+import { streamAnalyzeInformation } from "../stream";
 import type { PipelineGraphState } from "@/agentflow/pipeline/graph/state";
 
 /** LangGraph analyst 节点（经 custom 通道流式推送） */
