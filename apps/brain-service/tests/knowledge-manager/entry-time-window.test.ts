@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
     entryOverlapsTimeWindow,
     extractRoleFromExperienceBody,
-} from "@/agentflow/agents/online/knowledge-manager/list";
+} from "@/agentflow/agents/online/corpus-lister/list";
 
 describe("entryOverlapsTimeWindow", () => {
     it("keeps entries with years inside window", () => {

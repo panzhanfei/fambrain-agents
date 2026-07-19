@@ -1,3 +1,9 @@
+export {
+    pickExcerpt,
+    isProjectEntryPath,
+    isExperienceEntryPath,
+} from "./recall/retrieve-helpers";
+export { EXCERPT_MAX } from "./profile/km-config";
 export { retrieveKnowledge } from "./recall/retrieve";
 export {
     MAX_CANDIDATES,
@@ -43,19 +49,6 @@ export {
     type IncrementalCompositePlan,
 } from "./composite";
 export { runRetrievalNode } from "./nodes/retrieval-node";
-export {
-    listCorpusEntriesPage,
-    listAllCorpusEntries,
-    ENUMERATION_PREVIEW_PAGE_SIZE,
-    ENUMERATION_EXHAUSTIVE_PAGE_SIZE,
-    type CorpusListKind,
-} from "./list/list-corpus-entries";
-export { retrieveEnumerationPage } from "./list/retrieve-enumeration-page";
-export {
-    collectEntryYears,
-    entryOverlapsTimeWindow,
-    extractRoleFromExperienceBody,
-} from "./list/entry-time-window";
 export {
     assessConfidence,
     deriveCoverageFromTier,

@@ -1,4 +1,4 @@
-import type { KnowledgeRetrievalResult } from "../contract/types";
+import type { KnowledgeRetrievalResult } from "@/agentflow/agents/online/knowledge-manager";
 import {
     corpusEntryToHit,
     listCorpusEntriesPage,

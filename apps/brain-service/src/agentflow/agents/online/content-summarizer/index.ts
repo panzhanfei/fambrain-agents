@@ -1,5 +1,9 @@
 export { runContentSummarizerNode } from "./nodes";
 export { summarizeContent } from "./summarize";
+export {
+    isPureSummarizeDecision,
+    isSummarizeComposeDecision,
+} from "./summarize-route";
 export { summarizeMarkdownFile } from "./summarize-file";
 export { formatSummaryAsAnswer } from "./format-answer";
 export { buildSummarizeSourceText } from "./build-source-text";

@@ -7,7 +7,7 @@ import {
 } from "@/agentflow/agents/online/intake-coordinator/guards";
 import { isPureSocialUtterance } from "@/agentflow/agents/online/intake-coordinator/signals";
 import { buildEarlyExitRoutedDecision } from "../pipeline/intake-pipeline";
-import { ENUMERATION_EXHAUSTIVE_PAGE_SIZE } from "@/agentflow/agents/online/knowledge-manager/list/list-corpus-entries";
+import { ENUMERATION_EXHAUSTIVE_PAGE_SIZE } from "@/agentflow/agents/online/corpus-lister/list";
 import { getEnumerationListSession } from "@fambrain/infra";
 import { runIntakePipeline } from "../pipeline/intake-pipeline";
 import type { PipelineGraphState } from "@/agentflow/pipeline/graph/state";

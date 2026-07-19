@@ -1,6 +1,8 @@
 import type { PipelineGraphState } from "./state";
 import type { IntakeRoutingDecision } from "@/agentflow/agents/online/intake-coordinator/contract/prompt";
 import { intakeRequiresKmRetrieval } from "@/agentflow/agents/online/intake-coordinator/pipeline/intake-km-routing";
+import { isPureSummarizeDecision } from "@/agentflow/agents/online/content-summarizer/summarize-route";
+import { isPureListDecision } from "@/agentflow/agents/online/corpus-lister/pure-list-route";
 import { isUserFactIntent } from "@/agentflow/agents/online/user-fact";
 
 /** clarify / 闲聊 / 越界 / direct_answer 等可直接出 briefReply 的路径 */
@@ -33,11 +35,16 @@ export const routeAfterPrepareMemory = (
 };
 
 /**
- * Intake 之后：early / userFact 短路；其余进 planExecutor（含 summarize 需先查库）。
+ * Intake 之后：early / userFact / 纯 list 短路；复合与 km 进 planExecutor。
  */
 export const routeAfterIntake = (
   state: PipelineGraphState
-): "respondEarly" | "userFact" | "planExecutor" | "contentSummarizer" => {
+):
+  | "respondEarly"
+  | "userFact"
+  | "listRetriever"
+  | "planExecutor"
+  | "contentSummarizer" => {
   const decision = state?.decision;
   const pathPlan = decision?.pathPlan;
   const hasPathSteps =
@@ -58,21 +65,15 @@ export const routeAfterIntake = (
 
   if (isUserFactIntent(decision.intent)) return "userFact";
 
-  if (
-    (decision.composeMode === "summarize" &&
-      !hasPathSteps &&
-      !intakeRequiresKmRetrieval(decision)) ||
-    decision.intent === "summarize_content"
-  ) {
-    return "contentSummarizer";
-  }
+  if (isPureSummarizeDecision(decision)) return "contentSummarizer";
+
+  if (isPureListDecision(decision)) return "listRetriever";
 
   if (
     hasPathSteps ||
     intakeRequiresKmRetrieval(decision) ||
     decision.routeMode === "dag" ||
-    decision.routeMode === "slots" ||
-    decision.routeMode === "list"
+    decision.routeMode === "slots"
   ) {
     return "planExecutor";
   }
@@ -81,18 +82,20 @@ export const routeAfterIntake = (
   return "planExecutor";
 };
 
-/** planExecutor 之后按 composeMode 分流 */
+/** planExecutor 之后统一进入 contentOrganizer → contentSummarizer */
 export const routeAfterPlanExecutor = (
   state: PipelineGraphState
-): "contentSummarizer" | "contentOrganizer" | "respondEarly" => {
+): "contentOrganizer" | "respondEarly" => {
   if (state.error) return "respondEarly";
-  if (
-    state.decision?.composeMode === "summarize" ||
-    state.decision?.intent === "summarize_content"
-  ) {
-    return "contentSummarizer";
-  }
   return "contentOrganizer";
+};
+
+/** contentSummarizer 之后：终态摘要 → respondEarly；qa/composite → analyst */
+export const routeAfterContentSummarizer = (
+  state: PipelineGraphState
+): "respondEarly" | "analyst" => {
+  if (state.error || state.exitEarly) return "respondEarly";
+  return "analyst";
 };
 
 /** @deprecated 保留导出名供旧脚本；图已不再使用 */

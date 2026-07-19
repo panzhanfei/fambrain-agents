@@ -2,7 +2,7 @@
  * 列举型展示：序号 + 项目名；分页说明文案。
  */
 import type { KnowledgeHit } from "@/agentflow/agents/online/knowledge-manager";
-import { ENUMERATION_EXHAUSTIVE_PAGE_SIZE } from "@/agentflow/agents/online/knowledge-manager/list/list-corpus-entries";
+import { ENUMERATION_EXHAUSTIVE_PAGE_SIZE } from "@/agentflow/agents/online/corpus-lister/list";
 import {
     ENUMERATION_ACTION_PROMPTS,
     type EnumerationListKind,

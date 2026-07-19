@@ -4,56 +4,14 @@ import {
   retrieveCompositeIncremental,
   type CompositeSubRetrieval,
 } from "../composite";
-import { resolveEnumerationTarget } from "@/agentflow/agents/online/intake-coordinator";
-import type { CompositeRetrievalSlot } from "@/agentflow/agents/online/intake-coordinator";
-import { retrieveEnumerationPage } from "../list/retrieve-enumeration-page";
+import { fetchListSlot } from "@/agentflow/agents/online/corpus-lister/fetch-list-slot";
 import type { PipelineGraphState } from "@/agentflow/pipeline/graph/state";
 import { upsertEnumerationListSession } from "@fambrain/infra";
 
-const fetchListSlot = async (
-  slot: CompositeRetrievalSlot,
-  corpusUserId: string,
-  asOfDate?: string | null
-): Promise<CompositeSubRetrieval> => {
-  const listKind =
-    slot.enumerationControl?.listKind ??
-    resolveEnumerationTarget({
-      label: slot.label,
-      searchQuery: slot.searchQuery,
-      topics: slot.topics,
-      subTasks: slot.subTasks,
-      listKind: slot.enumerationControl?.listKind ?? null,
-    });
-  const page = slot.enumerationPage ?? 1;
-  const pageSize = slot.enumerationPageSize ?? 20;
-  const retrieval = await retrieveEnumerationPage({
-    corpusUserId,
-    listKind,
-    page,
-    pageSize,
-    timeWindowYears: slot.enumerationControl?.timeWindowYears ?? null,
-    asOfDate,
-  });
-  return {
-    slot: slot.id,
-    facetKey: `list:${listKind}:p${page}`,
-    label: slot.label,
-    hits: retrieval.hits,
-    coverage: retrieval.coverage,
-    notes: retrieval.notes,
-    confidenceTier: retrieval.confidenceTier ?? null,
-    enumerationMeta: retrieval.enumerationMeta ?? null,
-    cacheHit: false,
-    facetAnswerCacheHit: false,
-  };
-};
-
 /**
- * LangGraph `retrieval` 节点：按槽执行数据获取。
+ * KM 检索节点（planExecutor 内）：km_retrieve 槽 + composite 混槽时的 list 槽。
  *
- * - executor=km_retrieve（默认）→ hybrid / composite 增量
- * - executor=list_corpus → 目录扫盘分页（retrieveEnumerationPage）
- * - 同一轮可混搭多槽
+ * 纯 list（UI 分页 / exhaustive / continue）走图节点 listRetriever，不经此节点。
  */
 export const runRetrievalNode = async (
   state: PipelineGraphState
@@ -64,75 +22,6 @@ export const runRetrievalNode = async (
   }
   const fromRetry = !state.checkerPassed && state.retryCount < 1;
   const routeMode = decision.routeMode ?? "skip";
-
-  // 兼容旧 routeMode=list：视为单槽 list_corpus
-  if (
-    routeMode === "list" &&
-    (decision.listIntent === "continue" ||
-      decision.listIntent === "exhaustive")
-  ) {
-    const listKind =
-      decision.enumerationListKind ??
-      resolveEnumerationTarget({
-        label: state.userQuestion,
-        searchQuery: decision.searchQuery,
-        topics: decision.topics,
-        subTasks: decision.subTasks,
-      });
-    const page = decision.enumerationPage ?? 1;
-    const pageSize = decision.enumerationPageSize ?? 20;
-    try {
-      const retrieval = await retrieveEnumerationPage({
-        corpusUserId: state.context.corpusUserId,
-        listKind,
-        page,
-        pageSize,
-      });
-      await upsertEnumerationListSession(
-        {
-          conversationId: state.context.conversationId,
-          corpusUserId: state.context.corpusUserId,
-        },
-        listKind,
-        {
-          lastPage: page,
-          pageSize,
-          total: retrieval.enumerationMeta?.totalExpected ?? 0,
-        }
-      );
-      return {
-        hits: retrieval.hits,
-        coverage: retrieval.coverage,
-        notes: retrieval.notes,
-        confidenceTier: retrieval.confidenceTier ?? null,
-        enumerationMeta: retrieval.enumerationMeta ?? null,
-        retrievalCacheHit: false,
-        retrievalCacheSlotHits: null,
-        compositeSubResults: [
-          {
-            slot: "list-0",
-            facetKey: `list:${listKind}:p${page}`,
-            label: listKind === "project" ? "项目经历" : "工作经历",
-            hits: retrieval.hits,
-            coverage: retrieval.coverage,
-            notes: retrieval.notes,
-            confidenceTier: retrieval.confidenceTier ?? null,
-            enumerationMeta: retrieval.enumerationMeta ?? null,
-            cacheHit: false,
-            facetAnswerCacheHit: false,
-          },
-        ],
-        compositeIncrementalPlan: null,
-        retryCount: fromRetry ? state.retryCount + 1 : state.retryCount,
-      };
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : "列举分页检索失败";
-      return {
-        error: msg,
-        retryCount: fromRetry ? state.retryCount + 1 : state.retryCount,
-      };
-    }
-  }
 
   if (routeMode === "slots") {
     const slots = decision.compositeSlots ?? [];
@@ -196,7 +85,6 @@ export const runRetrievalNode = async (
         ).catch(() => undefined);
       }
 
-      // 按原 slots 顺序合并 subResults
       const byId = new Map<string, CompositeSubRetrieval>();
       for (const s of [...kmSubResults, ...listSubResults]) {
         byId.set(String(s.slot), s);

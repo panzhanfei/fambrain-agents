@@ -8,13 +8,12 @@ import {
     listMarkdownFiles,
     toRepoPath,
 } from "@fambrain/corpus";
-import { EXCERPT_MAX } from "../profile/km-config";
 import {
     isExperienceEntryPath,
     isProjectEntryPath,
-    pickExcerpt,
-} from "../recall/retrieve-helpers";
-import type { KnowledgeHit } from "../contract/types";
+    pickListExcerpt,
+} from "./path-match";
+import type { KnowledgeHit } from "@/agentflow/agents/online/knowledge-manager";
 import {
     entryOverlapsTimeWindow,
     extractRoleFromExperienceBody,
@@ -123,8 +122,7 @@ export const listCorpusEntriesPage = async (input: {
 
 export const corpusEntryToHit = (entry: CorpusEntryRow): KnowledgeHit => {
     const excerptBase =
-        pickExcerpt(entry.body, [], "enumeration") ||
-        entry.body.slice(0, EXCERPT_MAX).trim();
+        pickListExcerpt(entry.body) || entry.body.slice(0, 320).trim();
     const role = entry.role?.trim();
     const excerpt =
         role && !excerptBase.includes(role)

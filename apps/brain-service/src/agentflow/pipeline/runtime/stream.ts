@@ -9,6 +9,8 @@
  * 对外入口：runPipelineStream()，由 HTTP routes / eval / golden 调用。
  */
 import { ensureBrainServiceRuntime } from "@/config";
+import { isPureSummarizeDecision } from "@/agentflow/agents/online/content-summarizer/summarize-route";
+import { isPureListDecision } from "@/agentflow/agents/online/corpus-lister/pure-list-route";
 import { intakeRequiresKmRetrieval } from "@/agentflow/agents/online/intake-coordinator/pipeline/intake-km-routing";
 import { buildLangGraphRunConfig } from "@fambrain/brain-config/langsmith";
 import { logAgentOut } from "@fambrain/brain-shared/agent-log";
@@ -306,6 +308,16 @@ async function* runPipelineStreamInner(
         yield* startStep("user_fact");
       } else if (
         finalState.decision &&
+        isPureSummarizeDecision(finalState.decision)
+      ) {
+        yield* startStep("content_summarizer");
+      } else if (
+        finalState.decision &&
+        isPureListDecision(finalState.decision)
+      ) {
+        yield* startStep("retrieval");
+      } else if (
+        finalState.decision &&
         (intakeRequiresKmRetrieval(finalState.decision) ||
           (finalState.decision.pathPlan &&
             finalState.decision.pathPlan.km.length +
@@ -314,8 +326,18 @@ async function* runPipelineStreamInner(
               0))
       ) {
         yield* startStep("plan_executor");
-      } else if (finalState.decision?.intent === "summarize_content") {
-        yield* startStep("content_summarizer");
+      }
+      continue;
+    }
+    if (nodeName === "listRetriever") {
+      yield* finishStep("retrieval");
+      yield {
+        type: "retrieval_meta",
+        cacheHit: false,
+      };
+      yield* startStep("content_organizer");
+      if (finalState.error) {
+        yield { type: "error", message: finalState.error };
       }
       continue;
     }
@@ -337,14 +359,7 @@ async function* runPipelineStreamInner(
         type: "retrieval_meta",
         cacheHit: Boolean(finalState.retrievalCacheHit),
       };
-      if (
-        finalState.decision?.composeMode === "summarize" ||
-        finalState.decision?.intent === "summarize_content"
-      ) {
-        yield* startStep("content_summarizer");
-      } else {
-        yield* startStep("content_organizer");
-      }
+      yield* startStep("content_organizer");
       if (finalState.error) {
         yield { type: "error", message: finalState.error };
       }
@@ -368,6 +383,12 @@ async function* runPipelineStreamInner(
     }
     if (nodeName === "contentSummarizer") {
       yield* finishStep("content_summarizer");
+      if (finalState.exitEarly && finalState.answer) {
+        timing.markFirstToken();
+        yield* emitAssistant(finalState.answer);
+      } else if (!finalState.exitEarly) {
+        yield* startStep("analyst");
+      }
       continue;
     }
     if (nodeName === "factChecker") {
@@ -382,7 +403,7 @@ async function* runPipelineStreamInner(
     }
     if (nodeName === "contentOrganizer") {
       yield* finishStep("content_organizer");
-      yield* startStep("analyst");
+      yield* startStep("content_summarizer");
       continue;
     }
     if (nodeName === "analyst") {

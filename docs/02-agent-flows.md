@@ -11,8 +11,9 @@
 | **`TurnStart`** | **轮次开始** | LangGraph **START 后首节点**（非 LLM）：挂 ALS 记事本、同问短路、Mem0/LangMem 注入 |
 | **`TurnEnd`** | **轮次结束** | LangGraph **END 前末节点**（非 LLM）：Mem0/LangMem 写入、Learning 候选 |
 | `IntakeCoordinator` | 入口接线员 | 接收输入、理解意图、拆分任务、产出路由 JSON + **PathPlan** |
-| `KnowledgeManager` | 知识管理员 | 检索知识库，返回 `hits` / `coverage` / `notes` |
-| **`PlanExecutor`** | **计划执行器** | 按 **PathPlan** 四桶（km / list / tool / dag）调度检索与工具；**内嵌 per-step FC** |
+| `KnowledgeManager` | 知识管理员 | hybrid 检索（vector ∥ sparse），返回 `hits` / `coverage` / `notes` |
+| **`CorpusLister`** | **语料列举器** | 纯 list 路径：目录扫盘分页（projects / experience）；**不经 KM hybrid** |
+| **`PlanExecutor`** | **计划执行器** | 复合 / km / tool / dag：按 PathPlan 调度；**内嵌 per-step FC** |
 | `FactChecker` | 事实核查员 | （独立节点已并入 PlanExecutor）审查单步证据；不足时局部打回再检索 |
 | `ContentOrganizer` | 内容整理师 | **核查通过后**对 `hits` 做 Zod 规范化与 path 去重，再交给分析师 |
 | **`ToolOrchestrator`** | **工具编排器** | PlanExecutor 内调用：年龄计算、列举合成、联网搜索 |
@@ -21,7 +22,7 @@
 
 **链路：** 用户提问 → **轮次开始** → 意图识别 → **PathPlan 执行**（km / list / tool / dag + per-step FC）→ **内容整理** → **Compose**（qa / composite / summarize）→ 回答 → **轮次结束**。跨轮 **两层 cache**（同问短路 + 检索结果 cache）见 [坑点 §2.2](./04-pitfalls.md)。
 
-**PathPlan 四桶（2026-07）：** Intake guard 链末尾 `compilePathPlan` 产出 `pathPlan` + `composeMode`；LangGraph **`planExecutor`** 单节点替代原 `retrieval` / `factChecker` / `toolOrchestrator` / `dagExecutor` 互斥分支。详见 [架构 v2 §11](./05-architecture-v2-tool-orchestration.md#11-pathplan-统一执行计划-2026-07)、[坑点 §2.8](./04-pitfalls.md#28-pathplan-统一编排-p0-28--2026-07)。
+**PathPlan 四桶（2026-07）：** Intake guard 链末尾 `compilePathPlan` 产出 `pathPlan` + `composeMode`。LangGraph：**纯 list** → `listRetriever`；**纯总结（无查库）** → `contentSummarizer`；**复合 / km / 需查库的总结** → `planExecutor` → `contentOrganizer` → `contentSummarizer` → `analyst`（Summarizer 在 qa/composite 时透传，summarize 时出终稿）。
 
 **架构双线（2026-06，目录 2026-07 对齐）：**
 

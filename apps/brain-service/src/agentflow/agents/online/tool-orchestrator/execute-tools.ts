@@ -406,7 +406,7 @@ export const runExecutionPlanNode = async (
         case "list_corpus_entries": {
             // 取数主路径在 retrieval-node 按槽执行；此处作兜底（无 hits 时）
             const { retrieveEnumerationPage } = await import(
-                "@/agentflow/agents/online/knowledge-manager/list/retrieve-enumeration-page"
+                "@/agentflow/agents/online/corpus-lister"
             );
             const listKind =
                 (node.topics ?? []).some((t) => /^project/i.test(t))

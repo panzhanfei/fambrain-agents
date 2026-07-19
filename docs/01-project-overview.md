@@ -206,7 +206,9 @@ pnpm run dev
 | `getCompiledPipelineGraph` | `pipeline/graph/compile.ts` + `routes.ts` | **prepareTurnStart** → Intake → … → **persistTurnEnd** → END |
 | `userFactNode` / `routeUserFactFromIntake` | `user-fact/nodes/user-fact-node.ts`、`user-fact/user-fact.ts` | P0-16：跨会话 remember/recall；绕过 KM / FC / Analyst |
 | `parseIntakeDecision` / `defaultIntakeDecision` | `intake-coordinator/pipeline/parse-intake.ts` | 解析 Intake 路由 JSON |
-| `runRetrievalNode` | `knowledge-manager/nodes/retrieval-node.ts` + `pipeline/` | 检索 hits 缓存与槽答案缓存 + composite 增量检索 |
+| `runListRetrieverNode` | `agentflow/agents/online/corpus-lister/nodes/` | 纯 list 短路径：目录扫盘分页，跳过 planExecutor/FC |
+| `runRetrievalNode` | `knowledge-manager/nodes/retrieval-node.ts` | planExecutor 内：km hybrid + composite 混槽 list |
+| `isPureListDecision` | `corpus-lister/pure-list-route.ts` | routeAfterIntake → listRetriever 判定 |
 | `addStructuredUserFact` / `searchUserFactMemories` | `packages/brain-memory/src/mem0/store.ts` | Mem0 结构化写入 + 按 factKey 语义检索 |
 | `completeIntakeCoordinator` | `agentflow/agents/online/intake-coordinator/` | 一次 `invoke` → 路由 JSON |
 | `retrieveKnowledge` | `agentflow/agents/online/knowledge-manager/` | 向量 + 关键词扫盘 + **规则精排**（无 LLM）；v3 业界对标见 [km-retrieval-design.md](./km-retrieval-design.md) |
@@ -248,7 +250,7 @@ pnpm run dev
 | `verify:learning-extract` | `apps/brain-service/scripts/` | 自主学习候选抽取（Phase A 前置） |
 | `verify-test-env.ts` | `apps/brain-service/scripts/` | verify 脚本内覆盖 `.env` cache 开关；**勿**在生产入口引用 |
 | `createFambrainTools` | `agentflow/tools/` | LangChain **StructuredTool**：`retrieve_corpus` / `remember_user_fact` / `recall_user_fact` / `list_vault_files` / `summarize_text` |
-| `applyToolPlanGuard` / `runPlanExecutorNode` | `agentflow/agents/online/tool-orchestrator/` | P0-24 四类数据源编排；**P0-28 PathPlan 单节点执行** + per-step FC |
+| `runPlanExecutorNode` | `agentflow/agents/online/plan-executor/` | 复合路径：PathPlan 四桶 + per-step FC + 后置 tool |
 | `compilePathPlan` / `applyPathPlanGuard` | `intake-coordinator/path-plan/` | Intake → PathPlan 四桶 + composeMode |
 | `repairRetrievalPlanItems` / `IDENTITY_FIELD_SEARCH` | `intake-coordinator/composite/` | P0-30：schema 合法化 + facet 去重（无口语 labels） |
 | `compute_tenure_from_hits` | `tools/lib/compute-tenure.ts` | P0-30：从业年限（简历时间线最早起点） |

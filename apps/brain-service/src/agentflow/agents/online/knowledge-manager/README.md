@@ -1,6 +1,6 @@
 # KnowledgeManager（语料检索）
 
-KM 是 Pipeline 的**第一个纯规则在线 Agent**（图内位于 **Intake 之后**）。它把 Intake 产出的 `searchQuery / queryType / compositeSlots` 变成 **`hits / coverage / notes`**，供 FactChecker、ContentOrganizer、Analyst 消费。
+KM 是 Pipeline 的**纯规则检索 Agent**（复合路径在 **planExecutor** 内调用；纯 list 见 [`../corpus-lister/`](../corpus-lister/README.md)）。
 
 **KM 不做的事：** 调 Chat LLM 精排、写最终长答、读写 Mem0、Intake 路由决策（见 [`../intake-coordinator/`](../intake-coordinator/README.md)）。
 
@@ -65,10 +65,6 @@ knowledge-manager/
 │   ├── fusion-rrf.ts      # RRF 融合
 │   └── retrieve-helpers.ts # rank / excerpt / guard / enumeration fill
 │
-├── list/                  ← 列举分页（P0-22 · 2026-07）
-│   ├── list-corpus-entries.ts   # 按 path 排序扫 projects|experience
-│   └── retrieve-enumeration-page.ts
-│
 └── profile/               ← 配置与分档
     ├── km-config.ts       # topK、pathBoost、RRF 常量
     ├── query-profile.ts   # identity / enumeration / tech / default
@@ -96,20 +92,21 @@ state.decision（Intake 输出）
     │
     ▼
 routeAfterIntake()                    pipeline/graph/routes.ts
-    │ intent=retrieve_and_answer / summarize_content(+searchQuery)
-    ▼
-nodes/retrieval-node.ts               runRetrievalNode()
     │
-    └─ routeMode=slots（1～N 槽，可混搭）
-          ├─ executor=km_retrieve → resolveIncrementalCompositePlan + retrieveCompositeIncremental
-          └─ executor=list_corpus → retrieveEnumerationPage（目录扫盘分页，不经 hybrid）
-                混合问示例：槽 A tech（KM）+ 槽 B enumeration exhaustive（list）
+    ├─ 纯 list（全部槽 executor=list_corpus）→ listRetriever（../corpus-lister/）
+    │
+    └─ 复合 / km / tool / dag → planExecutor
+          └─ nodes/retrieval-node.ts     runRetrievalNode()
+                routeMode=slots（可混搭）
+                  ├─ executor=km_retrieve → hybrid / composite 增量
+                  └─ executor=list_corpus → fetchListSlot（corpus-lister，与 km 并行）
     │
     ▼
 state.hits / coverage / notes / confidenceTier
     │
     ▼
-factChecker → contentOrganizer → analyst
+（planExecutor 路径）per-step FC → contentOrganizer → analyst
+（listRetriever 路径）直接 contentOrganizer → analyst
 ```
 
 ### 3.2 单槽检索（slots × 1）

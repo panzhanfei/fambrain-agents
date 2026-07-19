@@ -12,13 +12,13 @@ import {
 } from "@/agentflow/agents/online/intake-coordinator/composite";
 import {
     ENUMERATION_EXHAUSTIVE_PAGE_SIZE,
-} from "@/agentflow/agents/online/knowledge-manager/list/list-corpus-entries";
+} from "@/agentflow/agents/online/corpus-lister/list";
 import {
     matchUiEnumerationPrompt,
     type EnumerationControl,
     type EnumerationListKind,
 } from "../enumeration";
-import { emptyPathPlan } from "@/agentflow/agents/online/intake-coordinator/path-plan";
+import { compilePathPlan } from "@/agentflow/agents/online/intake-coordinator/path-plan";
 import type {
     EnumerationListIntent,
     RoutedIntakeDecision,
@@ -67,7 +67,7 @@ export const buildEnumerationListDecision = (input: {
     const slot = listSlotTemplate(input.listKind, control);
     slot.enumerationPage = input.page;
     slot.enumerationPageSize = input.pageSize;
-    return {
+    const partial: RoutedIntakeDecision = {
         intent: "retrieve_and_answer",
         searchQuery: slot.searchQuery,
         subTasks: [slot.label],
@@ -91,7 +91,7 @@ export const buildEnumerationListDecision = (input: {
         userFactValue: null,
         routeMode: "slots",
         compositeSlots: [slot],
-        pathPlan: emptyPathPlan(),
+        pathPlan: { km: [], list: [], tool: [], dag: [] },
         composeMode: "qa",
         routeReason: "query_type_template",
         routePlanSource: "query_type_template",
@@ -100,6 +100,11 @@ export const buildEnumerationListDecision = (input: {
         enumerationPageSize: input.pageSize,
         enumerationListKind: input.listKind,
     };
+    const { pathPlan, composeMode } = compilePathPlan(
+        partial,
+        input.userQuestion
+    );
+    return { ...partial, pathPlan, composeMode };
 };
 
 const resolvePageForControl = async (

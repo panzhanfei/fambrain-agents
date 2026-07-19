@@ -1,9 +1,16 @@
+import { logAgentOut } from "@fambrain/brain-shared/agent-log";
 import { buildSummarizeSourceText } from "../build-source-text";
 import { formatSummaryAsAnswer } from "../format-answer";
+import { isSummarizeComposeDecision } from "../summarize-route";
 import { summarizeContent } from "../summarize";
 import type { PipelineGraphState } from "@/agentflow/pipeline/graph/state";
 
-/** LangGraph contentSummarizer 节点 */
+/**
+ * LangGraph contentSummarizer 节点。
+ *
+ * - 纯总结（intake 短路）：生成终稿，exitEarly
+ * - planExecutor / listRetriever 链内：composeMode=summarize 时生成终稿；qa/composite 透传
+ */
 export const runContentSummarizerNode = async (
     state: PipelineGraphState
 ): Promise<Partial<PipelineGraphState>> => {
@@ -14,6 +21,15 @@ export const runContentSummarizerNode = async (
             exitEarly: true,
         };
     }
+
+    if (!isSummarizeComposeDecision(decision)) {
+        logAgentOut("ContentSummarizer", "跳过", {
+            composeMode: decision.composeMode,
+            intent: decision.intent,
+        });
+        return {};
+    }
+
     try {
         const { text, sourceLabel } = buildSummarizeSourceText({
             userQuestion: state.userQuestion,
@@ -32,6 +48,11 @@ export const runContentSummarizerNode = async (
             language: decision.language,
         });
         const answer = formatSummaryAsAnswer(summary);
+        logAgentOut("ContentSummarizer", "完成", {
+            sourceLabel,
+            textChars: text.length,
+            exitEarly: true,
+        });
         return { answer, exitEarly: true };
     }
     catch (e) {

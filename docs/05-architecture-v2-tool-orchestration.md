@@ -293,7 +293,7 @@ flowchart TD
   CO --> IA[InformationAnalyst<br/>composeMode]
 ```
 
-**代码：** `intake-coordinator/path-plan/*` · `tool-orchestrator/plan-executor.ts` · `pipeline/graph/compile.ts`（单 `planExecutor` 节点）。
+**代码：** `intake-coordinator/path-plan/*` · `plan-executor/` · `corpus-lister/` · `pipeline/graph/compile.ts`（`listRetriever` + `planExecutor`）。
 
 **验证：**
 
@@ -335,7 +335,7 @@ pnpm --filter @fambrain/brain-service run verify:dag-hybrid
 | `intake-coordinator/composite/repair-retrieval-plan.ts` | schema normalize + facet 去重 |
 | `intake-coordinator/path-plan/` | PathPlan 编译；禁止场景 named DAG |
 | `tools/lib/compute-tenure.ts` / `extract-*.ts` | 确定性工具 |
-| `knowledge-manager/list/entry-time-window.ts` | 时间窗 / 角色抽取 |
+| `corpus-lister/list/entry-time-window.ts` | 时间窗 / 角色抽取 |
 | `apps/brain-service/tests/` | 单元测试集中目录（勿再写 `src/**/*.test.ts`） |
 
 ### 12.4 验证

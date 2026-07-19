@@ -1,5 +1,5 @@
 import { resolveQueryProfile } from "@/agentflow/agents/online/knowledge-manager";
-import { ENUMERATION_EXHAUSTIVE_PAGE_SIZE } from "@/agentflow/agents/online/knowledge-manager/list/list-corpus-entries";
+import { ENUMERATION_EXHAUSTIVE_PAGE_SIZE } from "@/agentflow/agents/online/corpus-lister/list";
 import { organizeKnowledge } from "../organize-knowledge";
 import type { PipelineGraphState } from "@/agentflow/pipeline/graph/state";
 

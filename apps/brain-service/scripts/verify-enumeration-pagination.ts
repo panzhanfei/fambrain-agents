@@ -18,8 +18,8 @@ import {
     cachedFacetToAnalystResult,
 } from "../src/agentflow/agents/online/knowledge-manager";
 import { composeEnumerationAnswer } from "../src/agentflow/agents/online/information-analyst/compose-message";
-import { listCorpusEntriesPage } from "../src/agentflow/agents/online/knowledge-manager/list/list-corpus-entries";
-import { retrieveEnumerationPage } from "../src/agentflow/agents/online/knowledge-manager/list/retrieve-enumeration-page";
+import { listCorpusEntriesPage } from "../src/agentflow/agents/online/corpus-lister";
+import { retrieveEnumerationPage } from "../src/agentflow/agents/online/corpus-lister";
 import {
     clearMemoryEnumerationListSessions,
     upsertEnumerationListSession,

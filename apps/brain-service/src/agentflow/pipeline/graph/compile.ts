@@ -5,6 +5,7 @@ import { runIntakeNode } from "@/agentflow/agents/online/intake-coordinator";
 import { runRespondEarlyNode } from "@/agentflow/agents/online/respond-early";
 import { userFactNode } from "@/agentflow/agents/online/user-fact";
 import { runAnalystNode } from "@/agentflow/agents/online/information-analyst";
+import { runListRetrieverNode } from "@/agentflow/agents/online/corpus-lister/nodes";
 import { runPlanExecutorNode } from "@/agentflow/agents/online/plan-executor";
 import {
   runPreparePipelineMemory,
@@ -19,6 +20,7 @@ import { PipelineGraphAnnotation } from "./state";
 import {
   routeAfterIntake,
   routeAfterPlanExecutor,
+  routeAfterContentSummarizer,
   routeAfterPrepareMemory,
   routeAfterRepeat,
 } from "./routes";
@@ -30,6 +32,7 @@ const buildPipelineGraph = () => {
     .addNode("repeatRespondEarly", runRepeatRespondEarlyNode)
     .addNode("preparePipelineMemory", runPreparePipelineMemory)
     .addNode("intake", runIntakeNode)
+    .addNode("listRetriever", runListRetrieverNode)
     .addNode("planExecutor", runPlanExecutorNode)
     .addNode("contentSummarizer", runContentSummarizerNode)
     .addNode("contentOrganizer", runContentOrganizerNode)
@@ -42,11 +45,12 @@ const buildPipelineGraph = () => {
     .addConditionalEdges("repeatQuestionGuard", routeAfterRepeat)
     .addConditionalEdges("preparePipelineMemory", routeAfterPrepareMemory)
     .addConditionalEdges("intake", routeAfterIntake)
+    .addEdge("listRetriever", "contentOrganizer")
     .addEdge("userFact", "persistTurnEnd")
     .addEdge("repeatRespondEarly", "persistTurnEnd")
     .addConditionalEdges("planExecutor", routeAfterPlanExecutor)
-    .addEdge("contentSummarizer", "respondEarly")
-    .addEdge("contentOrganizer", "analyst")
+    .addEdge("contentOrganizer", "contentSummarizer")
+    .addConditionalEdges("contentSummarizer", routeAfterContentSummarizer)
     .addEdge("analyst", "persistTurnEnd")
     .addEdge("respondEarly", "persistTurnEnd")
     .addEdge("persistTurnEnd", END);
