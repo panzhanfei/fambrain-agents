@@ -285,10 +285,12 @@ export const invokeExtractExternalLinks = (input: {
     language: "zh" | "en" | "mixed";
     label: string;
 }): ToolRunResult => {
-    const links = extractExternalLinksFromHits(input.hits);
+    const scope = { label: input.label };
+    const links = extractExternalLinksFromHits(input.hits, scope);
     const { answer, insufficientEvidence } = buildExternalLinksAnswer({
         links,
         language: input.language,
+        scope,
     });
     const citations = dedupeCitations(
         links.slice(0, 6).map((l) => ({ path: l.path, excerpt: l.url }))

@@ -68,6 +68,7 @@ const buildSubInput = (
         slotId: plan.id,
         facetKey: plan.facetKey,
         identityField: plan.identityField ?? null,
+        parentUserQuestion: input.userQuestion,
         toolResults: input.toolResults,
     };
 };

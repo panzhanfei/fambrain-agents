@@ -5,6 +5,7 @@
 import type { DbChatTurn } from "@fambrain/brain-types";
 import type { IntakeRoutingDecision } from "@/agentflow/agents/online/intake-coordinator/contract";
 import { EXTERNAL_LINK_SLOT } from "@/agentflow/agents/online/intake-coordinator/composite";
+import { isUserFactIntent } from "@/agentflow/agents/online/user-fact";
 import {
     decisionRequestsExternalLink,
     historyContainsUrl,
@@ -23,6 +24,11 @@ export const applyIntakeContinuationGuard = (
     userQuestion: string,
     history: DbChatTurn[]
 ): IntakeRoutingDecision & { continuationGuardReason?: IntakeContinuationGuardReason } => {
+    // remember / recall 是独立分支，禁止续问 guard 改写成 retrieve
+    if (isUserFactIntent(decision.intent)) {
+        return { ...decision, continuationGuardReason: "noop" };
+    }
+
     if (!historySupportsContinuation(history)) {
         return { ...decision, continuationGuardReason: "noop" };
     }

@@ -55,6 +55,8 @@ export type SubQuestionAnalyzeInput = {
   facetKey?: string;
   /** Intake identityField（优先于 facetKey） */
   identityField?: IntakeIdentityField | null;
+  /** 用户原问（external_link 链接类型/实体过滤 hint） */
+  parentUserQuestion?: string;
   /** ToolOrchestrator 预计算结果（优先于 Analyst 内联编排） */
   toolResults?: PipelineToolResults | null;
 };

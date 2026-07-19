@@ -4,7 +4,9 @@ import {
     buildExternalLinksAnswer,
     extractExternalLinksFromHits,
     extractUrlsFromText,
+    resolveExternalLinkScope,
     resolveLinkTitle,
+    scopeRequestsRepoHostOnly,
 } from "@/agentflow/tools/lib/extract-external-links";
 import {
     buildIdentityFieldAnswer,
@@ -102,5 +104,50 @@ describe("extractExternalLinks", () => {
         expect(answer).toMatch(/release-bot：https:\/\/github\.com\/acme\/release-bot/);
         expect(answer).toMatch(/来源：个人简历-某人/);
         expect(answer).not.toMatch(/^1\.\s*个人简历/m);
+    });
+
+    it("filters Sentinel GitHub-only scope to one repo url", () => {
+        const excerpt = [
+            "- Sentinel GitHub：<https://github.com/acme/sentinel-monorepo>",
+            "- Sentinel 线上预览：https://pzfnqbn.top/",
+            "- **对外链接**：GitHub [acme/release-bot](https://github.com/acme/release-bot)。",
+        ].join("\n");
+        const scope = resolveExternalLinkScope(
+            "开源项目的 GitHub 与线上地址",
+            "Sentinel 项目的 GitHub 开源链接是什么？"
+        );
+        expect(scopeRequestsRepoHostOnly(scope)).toBe(true);
+
+        const links = extractExternalLinksFromHits([hit(excerpt)], scope);
+        expect(links).toHaveLength(1);
+        expect(links[0]?.url).toBe("https://github.com/acme/sentinel-monorepo");
+    });
+
+    it("keeps multiple github links for generic open-source scope", () => {
+        const excerpt = [
+            "- Sentinel GitHub：<https://github.com/acme/sentinel-monorepo>",
+            "- release-bot GitHub：<https://github.com/acme/release-bot>",
+            "- Sentinel 线上预览：https://pzfnqbn.top/",
+        ].join("\n");
+        const scope = { label: "开源项目 GitHub 链接" };
+        expect(scopeRequestsRepoHostOnly(scope)).toBe(true);
+        const links = extractExternalLinksFromHits([hit(excerpt)], scope);
+        expect(links.map((l) => l.url)).toEqual([
+            "https://github.com/acme/sentinel-monorepo",
+            "https://github.com/acme/release-bot",
+        ]);
+    });
+
+    it("keeps github and preview when scope asks for both", () => {
+        const excerpt = [
+            "- Sentinel GitHub：<https://github.com/acme/sentinel-monorepo>",
+            "- Sentinel 线上预览：https://pzfnqbn.top/",
+        ].join("\n");
+        const scope = { label: "Sentinel 的 GitHub 与线上地址" };
+        const links = extractExternalLinksFromHits([hit(excerpt)], scope);
+        expect(links.map((l) => l.url)).toEqual([
+            "https://github.com/acme/sentinel-monorepo",
+            "https://pzfnqbn.top/",
+        ]);
     });
 });

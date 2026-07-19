@@ -12,6 +12,7 @@ import { ensureBrainServiceRuntime } from "@/config";
 import { isPureSummarizeDecision } from "@/agentflow/agents/online/content-summarizer/summarize-route";
 import { isPureListDecision } from "@/agentflow/agents/online/corpus-lister/pure-list-route";
 import { intakeRequiresKmRetrieval } from "@/agentflow/agents/online/intake-coordinator/pipeline/intake-km-routing";
+import { isUserFactIntent } from "@/agentflow/agents/online/user-fact";
 import { buildLangGraphRunConfig } from "@fambrain/brain-config/langsmith";
 import { logAgentOut } from "@fambrain/brain-shared/agent-log";
 import type {
@@ -304,27 +305,28 @@ async function* runPipelineStreamInner(
           timing: pipelineTiming,
         };
       }
-      if (finalState.decision?.userFact) {
+      const decision = finalState.decision;
+      if (decision && isUserFactIntent(decision.intent)) {
+        // 与 routeAfterIntake → userFact 对齐；勿依赖 decision.userFact（Intake 早退未必挂载）
         yield* startStep("user_fact");
-      } else if (
-        finalState.decision &&
-        isPureSummarizeDecision(finalState.decision)
-      ) {
+      } else if (decision && isPureSummarizeDecision(decision)) {
         yield* startStep("content_summarizer");
-      } else if (
-        finalState.decision &&
-        isPureListDecision(finalState.decision)
-      ) {
+      } else if (decision && isPureListDecision(decision)) {
+        // 纯列举短路：listRetriever 节点对外仍报 retrieval（兼容旧 SSE）
         yield* startStep("retrieval");
       } else if (
-        finalState.decision &&
-        (intakeRequiresKmRetrieval(finalState.decision) ||
-          (finalState.decision.pathPlan &&
-            finalState.decision.pathPlan.km.length +
-              finalState.decision.pathPlan.list.length +
-              finalState.decision.pathPlan.dag.length >
-              0))
+        decision &&
+        (intakeRequiresKmRetrieval(decision) ||
+          (decision.pathPlan &&
+            decision.pathPlan.km.length +
+              decision.pathPlan.list.length +
+              decision.pathPlan.tool.length +
+              decision.pathPlan.dag.length >
+              0) ||
+          decision.routeMode === "dag" ||
+          decision.routeMode === "slots")
       ) {
+        // PathPlan 主路径：planExecutor（不再有独立 retrieval / fact_checker 图节点）
         yield* startStep("plan_executor");
       }
       continue;

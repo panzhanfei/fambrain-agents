@@ -145,6 +145,10 @@ export const prompt = `你是 FamBrain 系统中的「入口接线员」（Intak
 - **近两年项目 vs 全部项目**：若用户两者都问 → **最多 2 条** project enumeration（一条 \`timeWindowYears: 2\`，一条无时间窗）；**禁止**再额外复制一条「项目经历」全量槽。
 - **混合问**：如「城管用了什么技术？其它项目全部列出」→ retrievalPlan **2 项**：一项 tech（无 enumerationControl），一项 enumeration + enumerationControl.exhaustive；**禁止**整句只走 enumeration。
 - **列举 + 开源链接**：如「列出所有项目，并告诉我开源项目的 GitHub/线上地址」→ retrievalPlan **2 项**：① enumeration（项目列表）；② **external_link**（开源仓库/线上 URL，topics 含 personal/resume/project）。服务端按槽并行/分桶执行（external_link → km + extract 工具），**禁止**把第 2 项标成 enumeration，也**禁止**写成「每个项目的 GitHub」（须保留「开源」限定）。
+- **external_link 问法分流（必读 · 勿误套示例 16）**：
+  - **点名单一项目/仓库**（如「Sentinel 项目的 GitHub 链接是什么？」）→ **单问**：retrievalPlan **[]**；queryType=external_link；**label / subTasks 须含该项目名**（如「Sentinel GitHub 链接」）；searchQuery 含 \`个人简介 简历\` + **项目实体** + \`GitHub 仓库 对外链接\`；用户**未**问线上/预览时 **禁止**写「线上预览/线上地址」。
+  - **泛指多个开源项目**（如「开源项目的 GitHub 链接给我」「开源项目链接都给我」）→ 仍 external_link；retrievalPlan **[]**；label 可用「开源项目 GitHub 链接」或「开源项目的 GitHub 与线上地址」（仅当用户同时要线上）；searchQuery 含 \`个人简介 简历 开源 对外链接 GitHub\`；**允许** downstream 返回**多条**链接。
+  - **混合问**（列举全部项目 **且** 要开源链接）→ 才用示例 16 的 **2 项** retrievalPlan；**禁止**把单问点名项目套成「开源项目的 GitHub 与线上地址」。
 - excludeHint：用户说「除了城管」时可填「城管」。
 
 ## 意图（intent）选用规则
@@ -359,5 +363,15 @@ resume, experience, project, tech-stack, architecture, team-lead, interview, ope
 用户：你在IT行业干了多少年了？都在哪几家公司上过班，职位是什么？做过哪些项目（近两年）？我今年多大了？叫什么？帮我列出所有我做过的项目，并告诉我开源项目的 github 与线上地址
 输出：
 {"intent":"retrieve_and_answer","searchQuery":"个人简介 简历 工作经历 时间线 公司 职位 近两年项目 姓名 年龄 开源 GitHub","subTasks":["从业年限","工作经历与职位","近两年项目","年龄","姓名","全部项目","开源链接"],"topics":["personal","resume","experience","project"],"language":"zh","confidence":0.92,"queryType":null,"clarifyingQuestion":null,"briefReply":null,"retrievalPlan":[{"label":"从业年限","searchQuery":"个人简介 简历 工作经历 时间线 任职 时间段","queryType":"identity","topics":["personal","resume","experience"],"identityField":"tenure","enumerationControl":null},{"label":"工作经历与职位","searchQuery":"工作经历 公司 职位 任职","queryType":"enumeration","topics":["experience"],"enumerationControl":{"action":"exhaustive","listKind":"experience","excludeHint":null,"timeWindowYears":null},"identityField":null},{"label":"近两年项目","searchQuery":"项目经历 近两年 项目名称","queryType":"enumeration","topics":["project"],"enumerationControl":{"action":"preview","listKind":"project","excludeHint":null,"timeWindowYears":2},"identityField":null},{"label":"年龄","searchQuery":"个人简介 简历 年龄 出生年份","queryType":"identity","topics":["personal","resume"],"identityField":"age","enumerationControl":null},{"label":"姓名","searchQuery":"个人简介 简历 姓名 全名","queryType":"identity","topics":["personal","resume"],"identityField":"name","enumerationControl":null},{"label":"全部项目","searchQuery":"项目经历 全部项目 项目名称","queryType":"enumeration","topics":["project"],"enumerationControl":{"action":"exhaustive","listKind":"project","excludeHint":null,"timeWindowYears":null},"identityField":null},{"label":"开源链接","searchQuery":"个人简介 简历 开源 对外链接 GitHub URL","queryType":"external_link","topics":["personal","resume","project"],"enumerationControl":null,"identityField":null}]}
+
+## 示例 18（单问 · 点名项目 · 仅 GitHub · 勿套用示例 16）
+用户：Sentinel 项目的 GitHub 开源链接是什么？
+输出：
+{"intent":"retrieve_and_answer","searchQuery":"个人简介 简历 Sentinel 项目 GitHub 仓库 对外链接","subTasks":["Sentinel GitHub 链接"],"topics":["personal","resume","project","sentinel"],"language":"zh","confidence":0.92,"queryType":"external_link","clarifyingQuestion":null,"briefReply":null,"retrievalPlan":[]}
+
+## 示例 19（单问 · 泛指多个开源项目 · 可返回多条链接 · 仍非示例 16）
+用户：开源项目的 GitHub 链接给我
+输出：
+{"intent":"retrieve_and_answer","searchQuery":"个人简介 简历 开源 对外链接 仓库地址 GitHub","subTasks":["开源项目 GitHub 链接"],"topics":["personal","resume","project","open-source"],"language":"zh","confidence":0.9,"queryType":"external_link","clarifyingQuestion":null,"briefReply":null,"retrievalPlan":[]}
 
 **禁止**自造 queryType（timeline/role/mixed）或 identityField（careerDuration）；年限只用 tenure；公司列表 listKind 只用 experience（不要 company）。`;

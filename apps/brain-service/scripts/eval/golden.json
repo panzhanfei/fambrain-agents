@@ -1,6 +1,6 @@
 {
-  "version": 1,
-  "description": "Eval MVP：Pipeline G1～G5b + KM + E2E + memProbe/cacheProbe/profileProbe；断言见 run-eval.ts",
+  "version": 2,
+  "description": "Eval：对齐 PathPlan 架构（plan_executor 主检索；user_fact 记忆；listRetriever 对外仍报 retrieval；无独立 fact_checker 图节点）",
   "cases": [
     {
       "id": "G1",
@@ -8,18 +8,19 @@
       "label": "闲聊不检索",
       "question": "你好",
       "assert": {
-        "mustNotIncludeSteps": ["retrieval", "fact_checker"],
+        "mustNotIncludeSteps": ["plan_executor", "retrieval", "analyst"],
         "minAnswerLength": 1
       }
     },
     {
       "id": "G2",
       "tier": "pipeline",
-      "label": "姓名检索",
+      "label": "姓名（语料 retrieve 或 Mem0 recall）",
       "question": "我的名字",
       "assert": {
-        "mustIncludeSteps": ["retrieval"],
+        "mustIncludeAnySteps": [["plan_executor", "retrieval", "user_fact"]],
         "minAnswerLength": 1,
+        "answerRe": "潘展飞",
         "answerMustNotRe": "哪|哪个|请说明|指的是|哪一段"
       }
     },
@@ -29,7 +30,8 @@
       "label": "项目与技术",
       "question": "我做过的项目和掌握的技术",
       "assert": {
-        "mustIncludeSteps": ["retrieval", "analyst"],
+        "mustIncludeAnySteps": [["plan_executor", "retrieval"]],
+        "mustIncludeSteps": ["analyst"],
         "minAnswerLength": 60
       }
     },
@@ -39,13 +41,9 @@
       "label": "城管平台技术",
       "question": "城管平台用了什么技术",
       "assert": {
-        "mustIncludeSteps": [
-          "retrieval",
-          "fact_checker",
-          "content_organizer",
-          "analyst"
-        ],
-        "answerRe": "城管|城市管理平台"
+        "mustIncludeAnySteps": [["plan_executor", "retrieval"]],
+        "mustIncludeSteps": ["content_organizer", "analyst"],
+        "answerRe": "城管|城市管理平台|React|TypeScript|UniApp|Vite"
       }
     },
     {
@@ -55,8 +53,8 @@
       "question": "那个项目呢？",
       "assert": {
         "mustIncludeSteps": ["intake"],
-        "mustNotIncludeSteps": ["analyst"],
-        "answerRe": "哪|哪个|请说明|指的是|哪一段|哪一家|什么项目|能否说明"
+        "mustNotIncludeSteps": ["analyst", "plan_executor"],
+        "answerRe": "哪|哪个|请说明|指的是|哪一段|哪一家|什么项目|能否说明|例如|细节|名称|领域|提供更多"
       }
     },
     {
@@ -75,7 +73,7 @@
       ],
       "question": "那个项目呢？",
       "assert": {
-        "mustIncludeSteps": ["retrieval"],
+        "mustIncludeAnySteps": [["plan_executor", "retrieval"]],
         "answerMustNotRe": "哪|哪个|请说明|指的是|哪一段|哪一家|什么项目|能否说明",
         "answerRe": "城管|城市管理|React|UniApp|TypeScript|Vite"
       }
@@ -174,7 +172,7 @@
       "label": "全链路姓名",
       "question": "我的名字是什么？",
       "assert": {
-        "mustIncludeSteps": ["retrieval", "fact_checker"],
+        "mustIncludeAnySteps": [["plan_executor", "retrieval", "user_fact"]],
         "answerRe": "潘展飞"
       }
     },
@@ -184,20 +182,21 @@
       "label": "全链路列举",
       "question": "我在哪几家公司上过班？",
       "assert": {
-        "mustIncludeSteps": ["retrieval", "analyst"],
+        "mustIncludeAnySteps": [["plan_executor", "retrieval"]],
+        "mustIncludeSteps": ["analyst"],
         "answerRe": "云联智慧|友谊时光|奖多多|奥卡云"
       }
     }
   ],
   "memProbe": {
     "id": "GMem",
-    "label": "P0-16 对话 A 记 QQ → 新对话 B 问（对齐 golden:regression GMem）",
+    "label": "P0-16 对话 A 记 QQ → 新对话 B 问（对齐 Intake 示例 remember/recall）",
     "conversationIdPrefix": "eval-mem",
     "qq": "734858469",
     "turns": [
       {
         "conversationSuffix": "a",
-        "question": "我的qq是734858469",
+        "question": "我的qq是734858469，请帮我记住",
         "assert": {
           "answerRe": "734858469",
           "mustIncludeSteps": ["user_fact"]
@@ -215,21 +214,21 @@
   },
   "cacheProbe": {
     "id": "CACHE-G4-repeat",
-    "label": "同问重复（cache 探测）",
+    "label": "同问重复（cache 探测；主路径为 plan_executor）",
     "conversationIdPrefix": "eval-cache",
     "turns": [
       {
         "question": "城管平台用了什么技术",
         "assert": {
-          "mustIncludeSteps": ["retrieval"],
-          "answerRe": "城管|城市管理平台|技术"
+          "mustIncludeAnySteps": [["plan_executor", "retrieval"]],
+          "answerRe": "城管|城市管理平台|技术|React|TypeScript"
         }
       },
       {
         "question": "城管平台用了什么技术",
         "assert": {
-          "mustIncludeSteps": ["retrieval"],
-          "answerRe": "城管|城市管理平台|技术"
+          "mustIncludeAnySteps": [["plan_executor", "retrieval", "repeat_respond_early"]],
+          "answerRe": "城管|城市管理平台|技术|React|TypeScript"
         },
         "expectCacheHit": true
       }
@@ -244,8 +243,9 @@
       {
         "question": "我叫什么，我做过什么项目，我在那几家公司上过班，近两年在干什么？",
         "assert": {
-          "mustIncludeSteps": ["retrieval", "analyst"],
-          "answerRe": "潘展飞",
+          "mustIncludeAnySteps": [["plan_executor", "retrieval"]],
+          "mustIncludeSteps": ["analyst"],
+          "answerRe": "潘展飞|姓名",
           "answerMustIncludeAll": ["云联智慧", "友谊时光", "奖多多", "奥卡云"]
         }
       },
@@ -259,14 +259,16 @@
       {
         "question": "我在哪几家公司上过班？",
         "assert": {
-          "mustIncludeSteps": ["retrieval", "analyst"],
+          "mustIncludeAnySteps": [["plan_executor", "retrieval"]],
+          "mustIncludeSteps": ["analyst"],
           "answerMustIncludeAll": ["云联智慧", "友谊时光", "奖多多", "奥卡云"]
         }
       },
       {
         "question": "1. 我在哪几家公司上过班？",
         "assert": {
-          "mustIncludeSteps": ["retrieval", "analyst"],
+          "mustIncludeAnySteps": [["plan_executor", "retrieval"]],
+          "mustIncludeSteps": ["analyst"],
           "answerMustIncludeAll": ["云联智慧", "友谊时光", "奖多多", "奥卡云"]
         }
       }

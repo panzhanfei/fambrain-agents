@@ -94,15 +94,20 @@ export const isShortContinuationUtterance = (userQuestion: string): boolean => {
     return true;
 };
 
-const recentTurnText = (history: DbChatTurn[], maxTurns = 6): string =>
-    history
-        .slice(-maxTurns)
-        .map((t) => t.content.trim())
-        .filter(Boolean)
-        .join("\n");
-
-export const historySupportsContinuation = (history: DbChatTurn[]): boolean =>
-    recentTurnText(history).length >= 16;
+/**
+ * 是否有「可续问」的上文：须有 assistant 回复，或至少两条 user 问（不含仅当前轮）。
+ * 禁止用「当前问句本身 ≥16 字」当成有上文（会误伤 remember / 首轮短问）。
+ */
+export const historySupportsContinuation = (history: DbChatTurn[]): boolean => {
+    const hasAssistant = history.some(
+        (t) => t.role === "assistant" && t.content.trim().length >= 8
+    );
+    if (hasAssistant) return true;
+    const userTurns = history.filter(
+        (t) => t.role === "user" && t.content.trim().length >= 4
+    );
+    return userTurns.length >= 2;
+};
 
 /** 会话片段是否已出现 URL（结构字符，非词表） */
 export const historyContainsUrl = (history: DbChatTurn[]): boolean =>

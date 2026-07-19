@@ -15,6 +15,7 @@ import {
 import {
     buildExternalLinksAnswer,
     extractExternalLinksFromHits,
+    resolveExternalLinkScope,
 } from "../lib/extract-external-links";
 import {
     buildTenureAnswer,
@@ -170,10 +171,15 @@ const extractIdentityFromHits = (
 const extractExternalLinksFromHitsResult = (
     input: SubQuestionAnalyzeInput
 ): InformationAnalystResult => {
-    const links = extractExternalLinksFromHits(input.hits);
+    const scope = resolveExternalLinkScope(
+        input.userQuestion,
+        input.parentUserQuestion
+    );
+    const links = extractExternalLinksFromHits(input.hits, scope);
     const { answer, insufficientEvidence } = buildExternalLinksAnswer({
         links,
         language: input.language,
+        scope,
     });
     const citations = dedupeCitations(
         links.slice(0, 6).map((l) => ({ path: l.path, excerpt: l.url }))

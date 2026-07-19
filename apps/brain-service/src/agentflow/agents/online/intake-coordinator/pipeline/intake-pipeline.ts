@@ -13,11 +13,13 @@ import {
   type RoutedIntakeDecision,
 } from "@/agentflow/agents/online/intake-coordinator/guards";
 import {
+  clarifyFallbackFromProse,
   defaultIntakeDecision,
   parseIntakeDecision,
 } from "./parse-intake";
 import { applyToolPlanGuard } from "@/agentflow/agents/online/tool-orchestrator";
 import type { IntakeRoutingDecision } from "@/agentflow/agents/online/intake-coordinator/contract";
+import { IDENTITY_FIELD_SEARCH } from "@/agentflow/agents/online/intake-coordinator/composite";
 import {
     applyPathPlanGuard,
     defaultComposeMode,
@@ -133,16 +135,20 @@ export const runIntakePipeline = async (
 ): Promise<RunIntakePipelineResult> => {
   /** ① 解析：从 intakeRaw 提取 JSON → Zod 校验为 IntakeRoutingDecision */
   const parsed = parseIntakeDecision(input.intakeRaw);
-  const parseUsedFallback = parsed === null;
-  /** ① 兜底 */
-  let decision = parsed ?? defaultIntakeDecision(input.userQuestion);
+  const proseClarify =
+    parsed === null ? clarifyFallbackFromProse(input.intakeRaw) : null;
+  const parseUsedFallback = parsed === null && proseClarify === null;
+  /** ① 兜底：散文反问 → clarify；否则 default retrieve */
+  let decision =
+    parsed ?? proseClarify ?? defaultIntakeDecision(input.userQuestion);
 
   logAgentOut("IntakeCoordinator", "解析LLM输出", {
-    parseOk: !parseUsedFallback,
-    ...(parseUsedFallback
+    parseOk: parsed !== null,
+    ...(parsed === null
       ? {
-          fallbackReason:
-            "JSON 解析或 Zod 校验失败，使用 defaultIntakeDecision",
+          fallbackReason: proseClarify
+            ? "JSON 解析失败，散文含问号 → clarifyFallbackFromProse"
+            : "JSON 解析或 Zod 校验失败，使用 defaultIntakeDecision",
         }
       : {}),
     ...summarizeDecision(decision),
@@ -215,20 +221,72 @@ export const runIntakePipeline = async (
 
   /** ④ 用户记忆：仅 remember/recall intent */
   if (isUserFactIntent(decision.intent)) {
-    logAgentOut("IntakeCoordinator", "guard_用户记忆", {
-      matched: true,
-      intent: decision.intent,
-      userFactKey: decision.userFactKey,
-      userFactLabel: decision.userFactLabel,
-      hasValue: Boolean(decision.userFactValue?.trim()),
-    });
-    const routed = buildEarlyExitRoutedDecision(decision);
-    logAgentOut("IntakeCoordinator", "最终路由", {
-      earlyExit: true,
-      reason: decision.intent,
-      ...summarizeDecision(routed),
-    });
-    return { decision: routed, parseUsedFallback, earlyExit: true };
+    const factKey = decision.userFactKey?.trim() ?? "";
+    /**
+     * 无效 recall（缺 userFactKey）：常见于「姓名」误标 recall。
+     * 简历字段应走语料 retrieve；回退 identity plan（信 plan/schema，不猜口语）。
+     */
+    if (decision.intent === "recall_user_fact" && !factKey) {
+      const identityPlan =
+        (decision.retrievalPlan ?? []).find(
+          (p) => p.queryType === "identity" || Boolean(p.identityField)
+        ) ?? null;
+      const field = identityPlan?.identityField ?? "name";
+      const fieldSpec = IDENTITY_FIELD_SEARCH[field];
+      decision = {
+        ...decision,
+        intent: "retrieve_and_answer",
+        queryType: "identity",
+        searchQuery:
+          identityPlan?.searchQuery?.trim() || fieldSpec.searchQuery,
+        topics:
+          identityPlan?.topics?.length
+            ? identityPlan.topics
+            : ["personal", "resume"],
+        subTasks:
+          decision.subTasks.length > 0
+            ? decision.subTasks
+            : [fieldSpec.displayLabel],
+        retrievalPlan: identityPlan
+          ? [identityPlan]
+          : [
+              {
+                label: fieldSpec.displayLabel,
+                searchQuery: fieldSpec.searchQuery,
+                queryType: "identity",
+                topics: ["personal", "resume"],
+                identityField: field,
+                enumerationControl: null,
+              },
+            ],
+        userFactKey: null,
+        userFactLabel: null,
+        userFactValue: null,
+        clarifyingQuestion: null,
+        briefReply: null,
+      };
+      logAgentOut("IntakeCoordinator", "guard_用户记忆", {
+        matched: false,
+        remapped: "invalid_recall_to_identity_retrieve",
+        identityField: field,
+        ...summarizeDecision(decision),
+      });
+    } else {
+      logAgentOut("IntakeCoordinator", "guard_用户记忆", {
+        matched: true,
+        intent: decision.intent,
+        userFactKey: decision.userFactKey,
+        userFactLabel: decision.userFactLabel,
+        hasValue: Boolean(decision.userFactValue?.trim()),
+      });
+      const routed = buildEarlyExitRoutedDecision(decision);
+      logAgentOut("IntakeCoordinator", "最终路由", {
+        earlyExit: true,
+        reason: decision.intent,
+        ...summarizeDecision(routed),
+      });
+      return { decision: routed, parseUsedFallback, earlyExit: true };
+    }
   }
 
   /** ⑤a 对外链接：纠正 GitHub/URL 问法误标 enumeration */

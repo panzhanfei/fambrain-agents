@@ -14,6 +14,11 @@ export type JsonAssert = {
     expectProfile?: string;
     expectConfidenceTier?: string;
     mustIncludeSteps?: string[];
+    /**
+     * 每组至少命中一个 step（架构分叉：plan_executor / retrieval / user_fact）。
+     * 例：[["plan_executor","retrieval"]] 表示走过检索主路径即可。
+     */
+    mustIncludeAnySteps?: string[][];
     mustNotIncludeSteps?: string[];
     minAnswerLength?: number;
     answerRe?: string;
@@ -116,6 +121,12 @@ export const assertPipeline = (
     for (const step of assert.mustIncludeSteps ?? []) {
         if (!snap.steps.includes(step)) {
             issues.push(`缺少 step: ${step}`);
+        }
+    }
+    for (const group of assert.mustIncludeAnySteps ?? []) {
+        if (group.length === 0) continue;
+        if (!group.some((step) => snap.steps.includes(step))) {
+            issues.push(`缺少 step（任一即可）: ${group.join(" | ")}`);
         }
     }
     for (const step of assert.mustNotIncludeSteps ?? []) {
