@@ -20,7 +20,8 @@ CHROMA_HOST="${CHROMA_HOST:-127.0.0.1}"
 CHROMA_PORT="${CHROMA_PORT:-8030}"
 CHROMA_URL="${CHROMA_SERVER_URL:-http://${CHROMA_HOST}:${CHROMA_PORT}}"
 CHROMA_URL="${CHROMA_URL%/}"
-CHROMA_WAIT_SEC="${CHROMA_WAIT_SEC:-90}"
+CHROMA_WAIT_SEC="${CHROMA_WAIT_SEC:-120}"
+CHROMA_FIRST_INSTALL_WAIT_SEC="${CHROMA_FIRST_INSTALL_WAIT_SEC:-180}"
 REDIS_HOST="${REDIS_HOST:-127.0.0.1}"
 REDIS_PORT="${REDIS_PORT:-6379}"
 REDIS_WAIT_SEC="${REDIS_WAIT_SEC:-30}"
@@ -39,14 +40,18 @@ chroma_ready() {
 
 wait_for_chroma() {
   local pid="$1"
+  local max_wait="$2"
   local i
-  for i in $(seq 1 "$CHROMA_WAIT_SEC"); do
+  for i in $(seq 1 "$max_wait"); do
     if chroma_ready; then
       return 0
     fi
     if [[ -n "$pid" ]] && ! kill -0 "$pid" 2>/dev/null; then
       echo "[dev] Chroma 进程已退出（${i}s）" >&2
       return 1
+    fi
+    if (( i % 15 == 0 )); then
+      echo "[dev] 仍在等待 Chroma 就绪（${i}/${max_wait}s）..."
     fi
     sleep 1
   done
@@ -88,19 +93,32 @@ CHROMA_PID=""
 if chroma_ready; then
   echo "[dev] 复用已在运行的 Chroma (${CHROMA_URL})"
 else
-  echo "[dev] 正在启动 Chroma (${CHROMA_URL})，首次运行 uv 可能需下载依赖，请稍候..."
+  if [[ -x "$ROOT/tools/chroma-server/.venv/bin/chroma" ]]; then
+    echo "[dev] 正在启动 Chroma (${CHROMA_URL})..."
+  else
+    echo "[dev] 正在启动 Chroma (${CHROMA_URL})，首次会 uv sync 一次（tools/chroma-server/.venv），请稍候..."
+  fi
   bash "$ROOT/scripts/chroma-server.sh" &
   CHROMA_PID=$!
-  if ! wait_for_chroma "$CHROMA_PID"; then
-    kill "$CHROMA_PID" 2>/dev/null || true
-    if ! command -v uv >/dev/null 2>&1; then
-      echo "[dev] 未找到 uv，请先安装：https://docs.astral.sh/uv/" >&2
-    else
-      echo "[dev] Chroma 在 ${CHROMA_WAIT_SEC}s 内未就绪，可单独运行 pnpm run chroma:server 查看日志" >&2
-    fi
-    exit 1
+  CHROMA_WAIT="$CHROMA_WAIT_SEC"
+  if [[ ! -x "$ROOT/tools/chroma-server/.venv/bin/chroma" ]]; then
+    CHROMA_WAIT="$CHROMA_FIRST_INSTALL_WAIT_SEC"
   fi
-  echo "[dev] Chroma 已就绪 (pid=${CHROMA_PID})"
+  if ! wait_for_chroma "$CHROMA_PID" "$CHROMA_WAIT"; then
+    if chroma_ready; then
+      echo "[dev] Chroma 已就绪（等待超时后 heartbeat 成功）"
+    else
+      kill "$CHROMA_PID" 2>/dev/null || true
+      if ! command -v uv >/dev/null 2>&1; then
+        echo "[dev] 未找到 uv，请先安装：https://docs.astral.sh/uv/" >&2
+      else
+        echo "[dev] Chroma 在 ${CHROMA_WAIT}s 内未就绪，可单独运行 pnpm run chroma:server 查看日志" >&2
+      fi
+      exit 1
+    fi
+  else
+    echo "[dev] Chroma 已就绪 (pid=${CHROMA_PID})"
+  fi
 fi
 
 # --- Redis（REDIS_URL 或 REDIS_ENABLED=1 时启用；否则 memory fallback）---

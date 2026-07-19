@@ -968,6 +968,7 @@ Intake searchQuery: "个人简介 简历 姓名"
 | D3-10 | RAG | G3「项目+技术」hits 有但偏 `aky-*` 模板 | 向量未优先 `experience/` / `personal/` | 路径加权或 Intake topics 引导；Golden G3 断言 path 分布 | ⬜ sprint D2 |
 | D3-11 | 文档 | 流程图/roadmap 仍写 LlamaIndex retriever、D3 未接 | 迁移后未同步 docs | 与代码对齐 LangChain；更新 A2 验收状态 | ⬜ sprint D4 |
 | D3-12 | 开发 | `pnpm dev` agents `EADDRINUSE :3001`；需多终端起 Chroma/Redis | 旧进程占端口；依赖分散 | `scripts/dev-all.sh` 一键起 Chroma + Redis + Web + Agents；端口冲突仍需手动 kill | 🔄 **部分缓解**（2026-06-18） |
+| D3-13 | 开发 | 每次 `pnpm dev` 都 `uv` 下载包；或 Chroma 未就绪导致 **Web/Brain 未启动** | 旧脚本 `uv run --with chromadb` 临时环境；heartbeat 等待过短 | `tools/chroma-server/.venv` + `pnpm run chroma:install`；`chroma-server.sh` 直调 `.venv/bin/chroma`；`CHROMA_WAIT_SEC` / 首次 180s | ✅ **已解决**（2026-07-19） |
 
 **典型日志（D3-2）：**
 

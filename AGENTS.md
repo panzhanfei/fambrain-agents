@@ -10,6 +10,7 @@ This version has breaking changes — APIs, conventions, and file structure may 
 - **DB / Auth / Brain 公共包**：`packages/*`
 - **环境变量**：仓库根目录 `.env` 唯一来源；端口用 `PORT` / `OLLAMA_HOST`+`OLLAMA_PORT` / `CHROMA_HOST`+`CHROMA_PORT`（完整 URL 变量可覆盖）
 - **语料 / 向量库**：`data/doc/`、`data/chroma/`
+- **本地 Chroma 服务**：`tools/chroma-server/`（Python，`pnpm run chroma:install` → `.venv`；`pnpm dev` 自动启动 HTTP 服务）
 
 ## 模块目录约定（详见 `.cursor/rules/module-folder-conventions.mdc`）
 

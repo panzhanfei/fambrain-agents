@@ -12,6 +12,7 @@ cp .env.example .env
 pnpm run db:migrate
 pnpm run db:generate
 # 本地对话需 Ollama，例如：ollama pull qwen2.5:14b
+# 本地 Chroma（Python 向量库 HTTP 服务）需 uv，首次：pnpm run chroma:install
 pnpm run dev    # 一键：Chroma + Redis + Web + Brain Service
 ```
 
@@ -40,7 +41,8 @@ pnpm run redis:server     # 单独 Docker 起 Redis
 pnpm run build            # db generate + standalone 打包
 pnpm run pack:deploy      # 本地构建并打 tar 部署包
 pnpm run docker:up        # Docker 一键启动 web + brain-service + chroma
-pnpm run chroma:server    # 启动 Chroma（向量库）
+pnpm run chroma:install   # 首次安装 Chroma Python 依赖（tools/chroma-server/.venv）
+pnpm run chroma:server    # 单独启动 Chroma（向量库）
 pnpm run index:corpus     # 离线语料入库（apps/brain-service）
 pnpm run summarize:document -- path/to.md   # 内容摘要师 CLI
 pnpm run experiment:mcp-vault             # MCP 只读列 vault
@@ -58,6 +60,7 @@ apps/brain-service/   Brain HTTP 服务 + 多 Agent 编排（默认 BRAIN_SERVIC
 packages/db/        Prisma + 会话 repo
 packages/auth/      JWT / 登录注册 / 会话
 packages/brain-*/   types / config / shared / memory 公共代码
+tools/chroma-server/  本地 Chroma Python 服务（uv + .venv，见 chroma:install）
 ```
 
 语料目录：`data/doc/users/<userId>/corpus/` · SQLite：`packages/db/prisma/dev.db`

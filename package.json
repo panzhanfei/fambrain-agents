@@ -9,6 +9,7 @@
     "dev:web": "pnpm --filter @fambrain/web dev",
     "dev:brain-service": "pnpm --filter @fambrain/brain-service dev",
     "dev:brain-worker": "pnpm --filter @fambrain/brain-service dev:worker",
+    "chroma:install": "bash scripts/chroma-install.sh",
     "chroma:server": "bash scripts/chroma-server.sh",
     "redis:server": "docker compose up -d redis",
     "build": "pnpm --filter @fambrain/db generate && pnpm --filter @fambrain/web build",

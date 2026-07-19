@@ -53,11 +53,15 @@ pnpm run db:migrate
 pnpm run db:generate
 # 本地对话依赖 Ollama，请先安装并拉取模型，例如：
 #   ollama pull qwen2.5:14b
+# 本地 Chroma 为 Python HTTP 服务（非 npm 包），需安装 uv：https://docs.astral.sh/uv/
+#   pnpm run chroma:install   # 首次：写入 tools/chroma-server/.venv（类似 node_modules）
 # pnpm dev 会自动启动/等待 Chroma、Redis（可 Docker 拉起），并起 Web + Brain Service
 pnpm run dev
 ```
 
 浏览器访问 `http://localhost:${PORT}`（默认 3000，见 `.env` 的 `PORT`）。聊天需 **[Ollama](https://ollama.com/)** 可访问（`.env` 中 `OLLAMA_HOST`/`OLLAMA_PORT` 或 `OLLAMA_BASE_URL`），`OLLAMA_MODEL` 与本地已 pull 模型一致。**Chroma / Redis 无需另开终端**（`scripts/dev-all.sh` 会检测就绪或自动启动；Redis 不可达且 `DEV_REDIS_AUTO_START=1` 时用 `docker compose up redis`）。
+
+**Chroma 本地服务：** Brain 侧 npm 包 `chromadb` 仅为 HTTP 客户端；向量库进程由 `tools/chroma-server/` 提供（PyPI `chromadb`，与 JS client 版本号不同，经 HTTP 互通）。依赖装在 `tools/chroma-server/.venv/`（已 gitignore），首次 clone 后执行 `pnpm run chroma:install`，或让 `pnpm dev` / `chroma:server` 在缺失时自动 `uv sync`。不想装 Python 时可改用 `pnpm run docker:up`（Chroma 走 Docker 镜像）。
 
 **pnpm 10+** 若安装后提示需批准依赖的构建脚本（如 `prisma`、`better-sqlite3`），在本仓库根目录执行一次 `pnpm approve-builds` 并按提示勾选即可；`package.json` 里已配置 `pnpm.onlyBuiltDependencies` 作为允许构建的名单，新开环境仍可能需要你本地确认一次。
 
@@ -86,7 +90,8 @@ pnpm run dev
 | `pnpm run db:push` | 无迁移文件时推送 schema（慎用） |
 | `pnpm run db:studio` | Prisma Studio |
 | `pnpm run rebuild:native` | 重新编译 `better-sqlite3`（解决缺少 `.node` 绑定） |
-| `pnpm run chroma:server` | 单独启动 Chroma（需 [uv](https://docs.astral.sh/uv/)，数据目录 `data/chroma/`） |
+| `pnpm run chroma:install` | **首次**安装 Chroma Python 依赖（`uv sync` → `tools/chroma-server/.venv`） |
+| `pnpm run chroma:server` | 单独启动 Chroma HTTP 服务（需 [uv](https://docs.astral.sh/uv/)，数据目录 `data/chroma/`） |
 | `pnpm run redis:server` | 单独 `docker compose up -d redis` |
 | `pnpm run index:corpus` | **知识入库师**：全量扫描 `corpus/*.md` → embed → 写入 Chroma（语料变更后手动重跑） |
 | `pnpm run parse:documents -- <path...>` | **文档解析师**：CLI 批量解析（**自动分类**，无需 userId；语料归属见 `.env` `FAMBRAIN_CORPUS_USER_ID`） |
@@ -120,6 +125,8 @@ pnpm run dev
 | `BRAIN_SERVICE_URL` | 否 | 完整 Brain 服务 URL；Docker 内通常为 `http://brain-service:3001` |
 | `OLLAMA_HOST` / `OLLAMA_PORT` | 建议 | Ollama 地址；或用 `OLLAMA_BASE_URL` 直接覆盖 |
 | `CHROMA_HOST` / `CHROMA_PORT` | 否 | 本地 Chroma；`pnpm dev` 会自动启动/等待；或用 `CHROMA_SERVER_URL` 覆盖 |
+| `CHROMA_WAIT_SEC` | 否 | `pnpm dev` 等待 Chroma heartbeat 秒数，默认 `120` |
+| `CHROMA_FIRST_INSTALL_WAIT_SEC` | 否 | 首次 `uv sync` 后冷启动等待上限，默认 `180` |
 | `DATABASE_URL` | 建议 | 默认 `file:./packages/db/prisma/dev.db`（相对仓库根目录 `.env`） |
 | `JWT_SECRET` | 生产必填 | 长度 ≥ 24；开发未设置时会使用占位密钥（控制台告警） |
 | `JWT_RENEW_BEFORE_EXPIRY_SEC` | 否 | 中间件刷新 Cookie 的提前量（秒），默认约 4 天 |
@@ -179,6 +186,7 @@ pnpm run dev
 | `packages/auth/` | JWT、登录注册、会话 |
 | `packages/brain-types/` | `DbChatTurn`、`AgentPipelineContext` 等共享类型 |
 | `packages/brain-config/` | Ollama / Chroma 环境配置 |
+| `tools/chroma-server/` | 本地 Chroma Python 项目（`pyproject.toml` + `.venv`；`scripts/chroma-*.sh` 启动） |
 | `packages/brain-shared/` | agent-log、ollama-native-stream |
 | `apps/web/src/server/chat/handle-post-message.ts` | 存用户消息 → 调 Orchestrator → SSE → 存 assistant |
 | `apps/web/src/app/api/conversations/[id]/messages/route.ts` | GET 历史；POST 鉴权后委托 BFF |

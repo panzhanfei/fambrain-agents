@@ -4,6 +4,7 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 ENV_FILE="$ROOT/.env"
+CHROMA_PY="$ROOT/tools/chroma-server"
 
 if [[ -f "$ENV_FILE" ]]; then
   set -a
@@ -21,5 +22,10 @@ if ! command -v uv >/dev/null 2>&1; then
   exit 1
 fi
 
+if [[ ! -x "$CHROMA_PY/.venv/bin/chroma" ]]; then
+  echo "Chroma: 首次安装 Python 依赖（uv sync，仅需一次，写入 tools/chroma-server/.venv）..."
+  (cd "$CHROMA_PY" && uv sync)
+fi
+
 echo "Chroma: path=$DATA_PATH port=$PORT"
-exec uv run --with chromadb chroma run --path "$DATA_PATH" --port "$PORT"
+exec "$CHROMA_PY/.venv/bin/chroma" run --path "$DATA_PATH" --port "$PORT"

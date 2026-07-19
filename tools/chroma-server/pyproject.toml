@@ -1,0 +1,12 @@
+[project]
+name = "fambrain-chroma-server"
+version = "0.1.0"
+description = "Local Chroma HTTP server for FamBrain dev (PyPI chromadb; HTTP-compatible with JS client)."
+requires-python = ">=3.10"
+dependencies = ["chromadb==1.5.9"]
+
+# Intel Mac 已无 onnxruntime 1.23+ 的 x86_64 wheel，需单独 pin
+[tool.uv]
+override-dependencies = [
+  "onnxruntime==1.19.2; sys_platform == 'darwin' and platform_machine == 'x86_64'",
+]
