@@ -100,10 +100,15 @@ export const applyIntakeLinkLookupGuard = (
     decision: IntakeRoutingDecision,
     userQuestion: string
 ): IntakeRoutingDecision & { linkLookupGuardReason?: IntakeLinkLookupGuardReason } => {
+    /** 步骤 1：非 retrieve 意图 → 不处理外链 */
     if (decision.intent !== "retrieve_and_answer") {
         return { ...decision, linkLookupGuardReason: "noop" };
     }
 
+    /**
+     * 步骤 2：plan 内误标 enumeration 的链接项 → 改 external_link。
+     * 条件：顶层 queryType 已是 external_link；已有 enum+link 混合 plan 则不动。
+     */
     const rawPlan = decision.retrievalPlan ?? [];
     const { plan: harmonizedPlan, changed: planHarmonized } =
         harmonizeRetrievalPlanQueryTypes(rawPlan, decision.queryType);
@@ -119,6 +124,10 @@ export const applyIntakeLinkLookupGuard = (
           }
         : decision;
 
+    /**
+     * 步骤 3：decision/plan 未声明外链需求 → 仅返回步骤 2 的 harmonize 结果（或 noop）。
+     * 外链信号：queryType=external_link 或 retrievalPlan 含该类型。
+     */
     if (!decisionRequestsExternalLink(working)) {
         return {
             ...working,
@@ -130,7 +139,9 @@ export const applyIntakeLinkLookupGuard = (
 
     const plan = working.retrievalPlan ?? [];
 
-    /** 列举 + 对外链接混合：保留多槽，禁止收成单槽 aggregate */
+    /**
+     * 步骤 4：混合多问 plan（如 列举 + GitHub 链接）→ 保留多槽，不收成单槽。
+     */
     if (plan.length >= 2 && planHasMixedQueryTypes(plan)) {
         return {
             ...working,
@@ -141,6 +152,9 @@ export const applyIntakeLinkLookupGuard = (
         };
     }
 
+    /**
+     * 步骤 5：过期多槽 — LLM 留了多 plan，但当前问句并非多问结构 → 收成单槽外链检索。
+     */
     if (hasStaleMultipartFromDecision(working, userQuestion)) {
         return {
             ...working,
@@ -153,6 +167,9 @@ export const applyIntakeLinkLookupGuard = (
         };
     }
 
+    /**
+     * 步骤 6：当前问句带编号多问（1. xxx 2. yyy）→ 按实体拆多条 external_link plan。
+     */
     if (hasExplicitMultipartStructure(userQuestion)) {
         const numberedPlan = buildExternalLinkPlan(userQuestion);
         if (numberedPlan.length >= 2) {
@@ -168,6 +185,9 @@ export const applyIntakeLinkLookupGuard = (
         }
     }
 
+    /**
+     * 步骤 7：已判定外链但 queryType 未对齐 → 补 external_link + searchQuery/topics/subTasks。
+     */
     if (working.queryType !== "external_link") {
         return {
             ...working,
@@ -187,6 +207,7 @@ export const applyIntakeLinkLookupGuard = (
         };
     }
 
+    /** 步骤 8：已是 external_link 但 searchQuery 空 → 填固定外链检索词 */
     if (!working.searchQuery.trim()) {
         return {
             ...working,
@@ -196,6 +217,7 @@ export const applyIntakeLinkLookupGuard = (
         };
     }
 
+    /** 步骤 9：无需再改；若步骤 2 harmonize 过则记 reason */
     return {
         ...working,
         linkLookupGuardReason: planHarmonized

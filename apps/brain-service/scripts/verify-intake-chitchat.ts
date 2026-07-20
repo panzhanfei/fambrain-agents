@@ -106,6 +106,9 @@ assertSync("signals：纯社交句识别", () => {
     if (!isPureSocialUtterance("你好")) throw new Error("「你好」应命中");
     if (!isPureSocialUtterance("谢谢！")) throw new Error("「谢谢！」应命中");
     if (!isPureSocialUtterance("hi")) throw new Error("「hi」应命中");
+    if (!isPureSocialUtterance("你好 你好 你好 你好 你好")) {
+        throw new Error("重复问候应命中");
+    }
     if (isPureSocialUtterance("你好，我叫什么")) {
         throw new Error("带检索意图的不应命中");
     }

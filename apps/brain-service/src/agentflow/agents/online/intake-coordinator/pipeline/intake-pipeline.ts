@@ -114,31 +114,37 @@ export type RunIntakePipelineInput = {
 export type RunIntakePipelineResult = {
   decision: RoutedIntakeDecision;
   parseUsedFallback: boolean;
-  /** pipeline 在检索计划/复合路由之前早退（clarify / chitchat 等） */
+  /** true：clarify/chitchat 等在 ⑤ 之前早退；无效 recall remap 后继续检索则 false */
   earlyExit: boolean;
 };
 
 /**
  * Intake 规则主流程（LLM 之后）：parse → guard 链 → RoutedIntakeDecision。
  *
- * 步骤一览：
- *   ① 解析 LLM JSON（失败则 defaultIntakeDecision 兜底）
- *   ② clarify 早退（仅 intent=clarify 时执行）
- *   ③ chitchat guard + respondEarly（仅 intent=chitchat 时跑 guard）
- *   ④ userFact 早退（仅 remember/recall intent）
- *   ⑤ 检索计划 guard（retrieve_and_answer）
- *   ⑥ 复合路由 guard（retrieve_and_answer）
- *   ⑦ 返回最终 decision 给 compile.ts → routeAfterIntake
+ * 步骤一览（与内联注释一致）：
+ *   ①  解析 intakeRaw → Zod；失败则散文 clarify 或 default retrieve
+ *   ①b 纯社交 utterance → chitchat（pipeline 兜底；intake-node 0a 可已短路）
+ *   ②a 续问/指代 repair → retrieve（在 ② 之前，非早退）
+ *   ②  clarify 且含 clarifyingQuestion → earlyExit → respondEarly
+ *   ③  chitchat guard 注入 briefReply
+ *   ③b 非检索 intent（含 clarify/chitchat/out_of_scope/direct_answer）→ earlyExit
+ *   ④  remember/recall → userFact；无效 recall 无 key → remap identity retrieve（继续 ⑤）
+ *   ⑤a 对外链接 guard（external_link 纠偏）
+ *   ⑤  检索计划 guard（补全/规范化 retrievalPlan）
+ *   ⑥  复合路由 → compositeSlots + routeMode
+ *   ⑦  列举分页 → per-slot executor=list_corpus
+ *   ⑧  工具计划 → toolId / web / dag
+ *   ⑨  PathPlan 四桶 + composeMode
+ *   ⑩  写入 state → routeAfterIntake
  */
 export const runIntakePipeline = async (
   input: RunIntakePipelineInput
 ): Promise<RunIntakePipelineResult> => {
-  /** ① 解析：从 intakeRaw 提取 JSON → Zod 校验为 IntakeRoutingDecision */
+  /** ① 解析 + 兜底：JSON/Zod → IntakeRoutingDecision；失败则散文 clarify 或 default retrieve */
   const parsed = parseIntakeDecision(input.intakeRaw);
   const proseClarify =
     parsed === null ? clarifyFallbackFromProse(input.intakeRaw) : null;
   const parseUsedFallback = parsed === null && proseClarify === null;
-  /** ① 兜底：散文反问 → clarify；否则 default retrieve */
   let decision =
     parsed ?? proseClarify ?? defaultIntakeDecision(input.userQuestion);
 
@@ -209,6 +215,7 @@ export const runIntakePipeline = async (
     });
   }
 
+  /** ③b 非检索 intent 早退 → respondEarly */
   if (isRespondEarlyIntent(decision)) {
     const routed = buildEarlyExitRoutedDecision(decision);
     logAgentOut("IntakeCoordinator", "最终路由", {
@@ -219,7 +226,7 @@ export const runIntakePipeline = async (
     return { decision: routed, parseUsedFallback, earlyExit: true };
   }
 
-  /** ④ 用户记忆：仅 remember/recall intent */
+  /** ④ 用户记忆：remember/recall → userFact；无效 recall 无 key → 下方 remap 后继续 ⑤ */
   if (isUserFactIntent(decision.intent)) {
     const factKey = decision.userFactKey?.trim() ?? "";
     /**
@@ -313,9 +320,10 @@ export const runIntakePipeline = async (
     retrievalPlanCount: afterPlan.retrievalPlan.length,
     retrievalPlanLabels: afterPlan.retrievalPlan.map((p) => p.label),
   });
+  decision = afterPlan;
 
   /** ⑥ 复合路由：plan → compositeSlots；定 routeMode（skip / slots / list / dag） */
-  const routed = applyCompositeRouteGuard(afterPlan, input.userQuestion);
+  const routed = applyCompositeRouteGuard(decision, input.userQuestion);
   logAgentOut("IntakeCoordinator", "guard_复合路由", {
     routeMode: routed.routeMode,
     routeReason: routed.routeReason,

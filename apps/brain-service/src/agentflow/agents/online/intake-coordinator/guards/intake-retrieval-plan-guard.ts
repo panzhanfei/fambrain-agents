@@ -26,6 +26,7 @@ export const applyIntakeRetrievalPlanGuard = (
 ): IntakeRoutingDecision & {
     retrievalPlanGuardReason?: IntakeRetrievalPlanGuardReason;
 } => {
+    /** 步骤 1：非 retrieve 意图 → 不补 plan */
     if (decision.intent !== "retrieve_and_answer") {
         return {
             ...decision,
@@ -34,13 +35,20 @@ export const applyIntakeRetrievalPlanGuard = (
         };
     }
 
+    /**
+     * 步骤 2：是否「多问」— 问句结构像并列/编号，或 LLM subTasks ≥ 2。
+     */
     const multipart =
         looksLikeMultiPartQuestion(userQuestion) ||
         decision.subTasks.length >= 2;
 
+    /** 步骤 3：Zod 合法化 plan 各项（非法 queryType 等） */
     let plan = normalizePlanItems(decision.retrievalPlan ?? []);
     let reason: IntakeRetrievalPlanGuardReason = "noop";
 
+    /**
+     * 步骤 4：多问但 plan 不足 2 条 → 用问句结构/subTasks 兜底生成 plan。
+     */
     if (multipart && plan.length < 2) {
         const fallback = buildFallbackRetrievalPlan(userQuestion, decision);
         if (fallback.length >= 2) {
@@ -49,6 +57,9 @@ export const applyIntakeRetrievalPlanGuard = (
         }
     }
 
+    /**
+     * 步骤 5：subTasks 里有 identity 子问但 plan 缺项 → 按 identityField 扩槽。
+     */
     if (multipart && plan.length >= 1) {
         const expanded = expandIdentityPlanFromSubTasks(plan, decision.subTasks);
         if (expanded.length > plan.length) {
@@ -57,6 +68,9 @@ export const applyIntakeRetrievalPlanGuard = (
         }
     }
 
+    /**
+     * 步骤 6：repair — 合并重复、按 identityField/listKind 重标 queryType，去脏项。
+     */
     if (multipart && plan.length >= 1) {
         const repaired = repairRetrievalPlanItems(
             plan,
@@ -78,6 +92,9 @@ export const applyIntakeRetrievalPlanGuard = (
         }
     }
 
+    /**
+     * 步骤 7：canonicalize — 各 plan 项 searchQuery 对齐模板，便于检索 hits 缓存命中。
+     */
     const canonicalized = plan.map(canonicalizePlanItem);
     if (
         reason === "noop" &&
@@ -89,6 +106,7 @@ export const applyIntakeRetrievalPlanGuard = (
     }
     plan = canonicalized;
 
+    /** 步骤 8：多问且 plan≥2 时，subTasks 与 plan label 对齐 */
     return {
         ...decision,
         retrievalPlan: plan,
