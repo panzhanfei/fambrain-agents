@@ -233,7 +233,7 @@ pnpm run dev
 | `verify:recall-compare` | `apps/brain-service/scripts/` | HY-07 三问 vector/sparse/RRF（需 Chroma） |
 | `verify:confidence-tier` | `apps/brain-service/scripts/` | 置信分档单测 + KM live tier |
 | `verify:analyst-empty-hits` | `apps/brain-service/scripts/` | P0-12 / D5-5：空 hits skip LLM + insufficientEvidence |
-| `verify:intake-coreference` | `apps/brain-service/scripts/` | Intake 多轮指代 + repeat guard 单测 |
+| `verify:intake-coreference` | `apps/brain-service/scripts/` | Intake 多轮指代（JSON peek + 拼接≤1）/ 单字 normalize / repeat · **P0-31** |
 | `verify:intake-chitchat` | `apps/brain-service/scripts/` | P0-13：chitchat briefReply 模板兜底 + live ×10 |
 | `verify:intake-link-lookup` | `apps/brain-service/scripts/` | P0-25：GitHub/对外链接 `external_link` guard + stale multipart 单测 |
 | `verify:composite-route` | `apps/brain-service/scripts/` | P0-15/R6-3：composite 路由 guard + merge + 单问年龄 slot 单测 |

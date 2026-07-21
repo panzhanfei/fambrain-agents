@@ -38,7 +38,3 @@ export const resolveEnumerationTarget = (
 
 export const isProjectEnumeration = (input: EnumerationTargetInput): boolean =>
     resolveEnumerationTarget(input) === "project";
-
-export const isExperienceEnumeration = (
-    input: EnumerationTargetInput
-): boolean => resolveEnumerationTarget(input) === "experience";

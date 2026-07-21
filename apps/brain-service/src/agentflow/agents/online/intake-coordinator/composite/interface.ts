@@ -11,13 +11,10 @@ import type {
 } from "../enumeration";
 import type { IntakeIdentityField } from "@/agentflow/agents/online/intake-coordinator/contract";
 
-export type CompositeFacetId =
-    | "identity"
-    | "projects"
-    | "employers"
-    | "recent";
+/** 已知 canonical facet（槽 id 前缀；动态槽为 `${facet}-${index}`） */
+export type CompositeFacetId = "identity" | "projects" | "employers";
 
-/** 槽 id：已知 facet（identity/projects…）或 plan-N 动态项 */
+/** 槽 id：已知 facet、plan-N，或 `${facet}-${index}` / external_link-* */
 export type CompositeSlotId = CompositeFacetId | `plan-${number}` | string;
 
 /** 一个执行槽：KM 语义检索或 list 目录分页（可混搭） */
@@ -36,10 +33,9 @@ export type CompositeRetrievalSlot = {
     enumerationPageSize?: number;
 };
 
+/** 槽从何而来（档 B：仅 LLM plan / queryType 模板 / none） */
 export type CompositeRoutePlanSource =
     | "intake_retrieval_plan"
-    | "intake_subtasks"
-    | "structural_multipart"
     | "query_type_template"
     | "none";
 

@@ -1,6 +1,10 @@
 /**
  * Intake 编排：LLM → parse → guard 链 → RoutedIntakeDecision。
  * 每步打结构化日志，供 Web 运行日志 / 控制台复盘。
+ *
+ * 复盘沙盘（逐步看 decision 变化）：Cursor Canvas「intake-pipeline-sandbox」
+ * 字段词典：Cursor Canvas「intake-field-dictionary」
+ * 类型：IntakeRoutingDecision（LLM）→ RoutedIntakeDecision（本文件出口）→ state.decision
  */
 import {
   applyCompositeRouteGuard,
@@ -21,11 +25,15 @@ import { applyToolPlanGuard } from "@/agentflow/agents/online/tool-orchestrator"
 import type { IntakeRoutingDecision } from "@/agentflow/agents/online/intake-coordinator/contract";
 import { IDENTITY_FIELD_SEARCH } from "@/agentflow/agents/online/intake-coordinator/composite";
 import {
-    applyPathPlanGuard,
-    defaultComposeMode,
-    emptyPathPlan,
+  applyPathPlanGuard,
+  defaultComposeMode,
+  emptyPathPlan,
 } from "@/agentflow/agents/online/intake-coordinator/path-plan";
 import { isUserFactIntent } from "@/agentflow/agents/online/user-fact";
+import {
+  historySupportsContinuation,
+  isShortContinuationUtterance,
+} from "@/agentflow/agents/online/intake-coordinator/signals";
 import { logAgentOut } from "@fambrain/brain-shared/agent-log";
 import type { DbChatTurn } from "@fambrain/brain-types";
 import type { CompositeSessionKey } from "@fambrain/infra";
@@ -66,7 +74,11 @@ const guardChanged = (
   JSON.stringify(summarizeDecision(before)) !==
   JSON.stringify(summarizeDecision(after));
 
-/** clarify / 非检索 intent 的 pipeline 早退包装（与 composite guard 的 skip_non_retrieve 一致） */
+/**
+ * 早退包装：把 IntakeRoutingDecision 升成 RoutedIntakeDecision，但不安排检索。
+ * 写入：routeMode=skip, compositeSlots=[], pathPlan 空, routeReason=skip_non_retrieve
+ * → routeAfterIntake → respondEarly | userFact（视 intent）
+ */
 export const buildEarlyExitRoutedDecision = (
   decision: IntakeRoutingDecision
 ): RoutedIntakeDecision => ({
@@ -80,11 +92,8 @@ export const buildEarlyExitRoutedDecision = (
 });
 
 /** LLM 判定需反问（无上下文或指代无法消解）→ pipeline 早退 */
-export const isClarifyEarlyExit = (
-  decision: IntakeRoutingDecision
-): boolean =>
-  decision.intent === "clarify" &&
-  Boolean(decision.clarifyingQuestion?.trim());
+export const isClarifyEarlyExit = (decision: IntakeRoutingDecision): boolean =>
+  decision.intent === "clarify" && Boolean(decision.clarifyingQuestion?.trim());
 
 /** 闲聊 / 超范围 / 短 direct_answer → respondEarly */
 export const isRespondEarlyIntent = (
@@ -98,8 +107,7 @@ export const isRespondEarlyIntent = (
     return true;
   }
   return (
-    decision.intent === "direct_answer" &&
-    Boolean(decision.briefReply?.trim())
+    decision.intent === "direct_answer" && Boolean(decision.briefReply?.trim())
   );
 };
 
@@ -121,21 +129,21 @@ export type RunIntakePipelineResult = {
 /**
  * Intake 规则主流程（LLM 之后）：parse → guard 链 → RoutedIntakeDecision。
  *
- * 步骤一览（与内联注释一致）：
- *   ①  解析 intakeRaw → Zod；失败则散文 clarify 或 default retrieve
- *   ①b 纯社交 utterance → chitchat（pipeline 兜底；intake-node 0a 可已短路）
- *   ②a 续问/指代 repair → retrieve（在 ② 之前，非早退）
- *   ②  clarify 且含 clarifyingQuestion → earlyExit → respondEarly
- *   ③  chitchat guard 注入 briefReply
- *   ③b 非检索 intent（含 clarify/chitchat/out_of_scope/direct_answer）→ earlyExit
- *   ④  remember/recall → userFact；无效 recall 无 key → remap identity retrieve（继续 ⑤）
- *   ⑤a 对外链接 guard（external_link 纠偏）
- *   ⑤  检索计划 guard（补全/规范化 retrievalPlan）
- *   ⑥  复合路由 → compositeSlots + routeMode
- *   ⑦  列举分页 → per-slot executor=list_corpus
- *   ⑧  工具计划 → toolId / web / dag
- *   ⑨  PathPlan 四桶 + composeMode
- *   ⑩  写入 state → routeAfterIntake
+ * 步骤一览（Δ = 常变字段；与 Canvas 沙盘步骤 id 对齐）：
+ *   ①   parse+兜底     Δ intent/searchQuery/clarifyingQuestion（失败才变）
+ *   ①b  纯社交         Δ intent→chitchat, briefReply 注入
+ *   ②a  续问 repair    Δ intent→retrieve, searchQuery, queryType, clarifyingQuestion=null
+ *   ②   clarify 早退   → Routed skip + empty pathPlan；earlyExit
+ *   ③   闲聊           Δ briefReply=固定话术
+ *   ③b  非检索早退     → 同 ② 包装；earlyExit
+ *   ④   userFact       合法→早退；无效 recall→Δ intent/retrievalPlan identity（继续）
+ *   ⑤a  外链           Δ retrievalPlan.queryType / searchQuery / topics
+ *   ⑤   检索计划       schema 合法化/去重/canonicalize（不发明槽）
+ *   ⑥   复合路由       + routeMode/compositeSlots（信 retrievalPlan 编译）
+ *   ⑦   列举           Δ slot.executor=list_corpus, listIntent/page
+ *   ⑧   工具           + enrichedPlan/toolId；或 routeMode=dag+executionPlan
+ *   ⑨   PathPlan       + pathPlan 四桶, composeMode；slot enrich
+ *   ⑩   出口           return → state.decision → routeAfterIntake
  */
 export const runIntakePipeline = async (
   input: RunIntakePipelineInput
@@ -147,6 +155,30 @@ export const runIntakePipeline = async (
   const parseUsedFallback = parsed === null && proseClarify === null;
   let decision =
     parsed ?? proseClarify ?? defaultIntakeDecision(input.userQuestion);
+
+  /**
+   * ①+ 解析失败落到 default retrieve，且当前为无上文短续问：
+   * 禁止带着指代原文去查库 → 改 clarify（与 G5 / 档 B 一致）。
+   */
+  if (
+    parseUsedFallback &&
+    decision.intent === "retrieve_and_answer" &&
+    isShortContinuationUtterance(input.userQuestion) &&
+    !historySupportsContinuation(input.intakeHistory)
+  ) {
+    decision = {
+      ...decision,
+      intent: "clarify",
+      searchQuery: "",
+      queryType: null,
+      clarifyingQuestion:
+        decision.clarifyingQuestion?.trim() ||
+        "你指的是哪一段经历或哪个项目？请补充具体名称。",
+      briefReply: null,
+      retrievalPlan: [],
+      confidence: Math.min(decision.confidence, 0.55),
+    };
+  }
 
   logAgentOut("IntakeCoordinator", "解析LLM输出", {
     parseOk: parsed !== null,
@@ -230,54 +262,71 @@ export const runIntakePipeline = async (
   if (isUserFactIntent(decision.intent)) {
     const factKey = decision.userFactKey?.trim() ?? "";
     /**
-     * 无效 recall（缺 userFactKey）：常见于「姓名」误标 recall。
-     * 简历字段应走语料 retrieve；回退 identity plan（信 plan/schema，不猜口语）。
+     * 无效 recall（缺 userFactKey）：纠正 intent，不发明用户口语语义。
+     * 档 B：若 LLM 已给出可用 retrievalPlan → 原样保留，只改成 retrieve_and_answer。
+     * 仅当 plan 为空时，才回退单槽 identity/name（schema 兜底，非口语猜题）。
      */
     if (decision.intent === "recall_user_fact" && !factKey) {
-      const identityPlan =
-        (decision.retrievalPlan ?? []).find(
-          (p) => p.queryType === "identity" || Boolean(p.identityField)
-        ) ?? null;
-      const field = identityPlan?.identityField ?? "name";
-      const fieldSpec = IDENTITY_FIELD_SEARCH[field];
-      decision = {
-        ...decision,
-        intent: "retrieve_and_answer",
-        queryType: "identity",
-        searchQuery:
-          identityPlan?.searchQuery?.trim() || fieldSpec.searchQuery,
-        topics:
-          identityPlan?.topics?.length
-            ? identityPlan.topics
-            : ["personal", "resume"],
-        subTasks:
-          decision.subTasks.length > 0
-            ? decision.subTasks
-            : [fieldSpec.displayLabel],
-        retrievalPlan: identityPlan
-          ? [identityPlan]
-          : [
-              {
-                label: fieldSpec.displayLabel,
-                searchQuery: fieldSpec.searchQuery,
-                queryType: "identity",
-                topics: ["personal", "resume"],
-                identityField: field,
-                enumerationControl: null,
-              },
-            ],
-        userFactKey: null,
-        userFactLabel: null,
-        userFactValue: null,
-        clarifyingQuestion: null,
-        briefReply: null,
-      };
-      logAgentOut("IntakeCoordinator", "guard_用户记忆", {
-        matched: false,
-        remapped: "invalid_recall_to_identity_retrieve",
-        identityField: field,
-        ...summarizeDecision(decision),
-      });
+      const plan = decision.retrievalPlan ?? [];
+      const hasUsablePlan = plan.some(
+        (p) =>
+          Boolean(p.searchQuery?.trim()) ||
+          p.queryType === "enumeration" ||
+          p.queryType === "identity" ||
+          Boolean(p.identityField) ||
+          Boolean(p.enumerationControl)
+      );
+      if (hasUsablePlan) {
+        decision = {
+          ...decision,
+          intent: "retrieve_and_answer",
+          userFactKey: null,
+          userFactLabel: null,
+          userFactValue: null,
+          clarifyingQuestion: null,
+          briefReply: null,
+        };
+        logAgentOut("IntakeCoordinator", "guard_用户记忆", {
+          matched: false,
+          remapped: "invalid_recall_keep_retrieval_plan",
+          ...summarizeDecision(decision),
+        });
+      } else {
+        const field = "name" as const;
+        const fieldSpec = IDENTITY_FIELD_SEARCH[field];
+        decision = {
+          ...decision,
+          intent: "retrieve_and_answer",
+          queryType: "identity",
+          searchQuery: fieldSpec.searchQuery,
+          topics: ["personal", "resume"],
+          subTasks:
+            decision.subTasks.length > 0
+              ? decision.subTasks
+              : [fieldSpec.displayLabel],
+          retrievalPlan: [
+            {
+              label: fieldSpec.displayLabel,
+              searchQuery: fieldSpec.searchQuery,
+              queryType: "identity",
+              topics: ["personal", "resume"],
+              identityField: field,
+              enumerationControl: null,
+            },
+          ],
+          userFactKey: null,
+          userFactLabel: null,
+          userFactValue: null,
+          clarifyingQuestion: null,
+          briefReply: null,
+        };
+        logAgentOut("IntakeCoordinator", "guard_用户记忆", {
+          matched: false,
+          remapped: "invalid_recall_to_identity_retrieve",
+          identityField: field,
+          ...summarizeDecision(decision),
+        });
+      }
     } else {
       logAgentOut("IntakeCoordinator", "guard_用户记忆", {
         matched: true,
@@ -309,11 +358,8 @@ export const runIntakePipeline = async (
   }
   decision = afterLinkLookup;
 
-  /** ⑤ 检索计划：多问并列时补全/规范化 retrievalPlan（与 检索 hits 缓存 key 对齐） */
-  const afterPlan = applyIntakeRetrievalPlanGuard(
-    decision,
-    input.userQuestion
-  );
+  /** ⑤ 检索计划：schema 合法化 / 去重 / canonicalize（不发明多槽） */
+  const afterPlan = applyIntakeRetrievalPlanGuard(decision, input.userQuestion);
   logAgentOut("IntakeCoordinator", "guard_检索计划", {
     reason: afterPlan.retrievalPlanGuardReason ?? "noop",
     changed: guardChanged(decision, afterPlan),
@@ -372,12 +418,10 @@ export const runIntakePipeline = async (
   const withToolPlan = applyToolPlanGuard(withListIntent, input.userQuestion);
   if (
     withToolPlan.routeMode === "dag" ||
-    withToolPlan.primaryDataSource === "web" ||
     (withToolPlan.enrichedPlan ?? []).some((p) => p.toolId)
   ) {
     logAgentOut("IntakeCoordinator", "guard_工具计划", {
       routeMode: withToolPlan.routeMode,
-      primaryDataSource: withToolPlan.primaryDataSource,
       executionPlanCount: withToolPlan.executionPlan?.length ?? 0,
       enrichedToolIds: (withToolPlan.enrichedPlan ?? [])
         .map((p) => p.toolId)

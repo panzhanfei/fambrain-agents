@@ -102,6 +102,18 @@ export const buildHybridExecutionPlan = (
     ];
 };
 
+/**
+ * Intake guard ⑧：工具 / 数据源规划（不执行工具）。
+ *
+ * 本步新增/改写：
+ *   + enrichedPlan[]（每项 dataSource + toolId）
+ *   Δ compositeSlots 挂上 enrich 字段
+ *   或 + routeMode=dag + executionPlan（external∩corpus → hybrid DAG）
+ *
+ * 联网由槽 topics.external → toolId=search_web / pathPlan.tool 表达，
+ * 不再写整轮 primaryDataSource / webQuery。
+ * toolId 映射信 schema：identityField / queryType / topics，无口语词表。
+ */
 export const applyToolPlanGuard = (
     decision: RoutedIntakeDecision,
     userQuestion: string
@@ -135,27 +147,9 @@ export const applyToolPlanGuard = (
         };
     }
 
-    const primaryWeb =
-        enrichedPlan.find((p) => p.dataSource === "web") ??
-        (topicsSuggestWebSource(decision.topics)
-            ? {
-                  label: userQuestion,
-                  searchQuery: decision.searchQuery,
-                  queryType: (decision.queryType ?? "default") as QueryProfile,
-                  topics: decision.topics,
-                  dataSource: "web" as const,
-                  field: null,
-                  toolId: "search_web" as const,
-              }
-            : null);
-
     return {
         ...decision,
         compositeSlots: enrichedSlots,
         enrichedPlan,
-        primaryDataSource: primaryWeb ? "web" : "corpus",
-        webQuery: primaryWeb
-            ? primaryWeb.searchQuery || userQuestion
-            : undefined,
     };
 };

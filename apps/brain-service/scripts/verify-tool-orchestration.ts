@@ -80,7 +80,6 @@ console.log("\n— applyToolPlanGuard —");
         baseDecision(),
         "我今年多大"
     );
-    assert.equal(routed.primaryDataSource, "corpus");
     const agePlan = routed.enrichedPlan?.find((p) => p.field === "age");
     assert.equal(agePlan?.toolId, "compute_age_from_hits");
     assert.equal(agePlan?.dataSource, "compute");
@@ -105,9 +104,9 @@ console.log("\n— applyToolPlanGuard —");
         },
         "奥卡云公司最近怎么样"
     );
-    assert.equal(routed.primaryDataSource, "web");
-    assert.ok(routed.webQuery);
-    ok("topics=external → primaryDataSource=web");
+    const webPlan = routed.enrichedPlan?.find((p) => p.dataSource === "web");
+    assert.equal(webPlan?.toolId, "search_web");
+    ok("topics=external → enrichedPlan search_web");
 }
 
 console.log("\n— hybrid DAG intent —");

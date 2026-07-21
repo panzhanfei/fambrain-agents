@@ -18,6 +18,9 @@ export type IntakeIdentityField =
     | "career"
     | "tenure";
 
+/** 多轮指代状态（由 LLM 标注；服务端仅在 unresolved 时最多合并重试 1 次） */
+export type IntakeCoreferenceStatus = "none" | "resolved" | "unresolved";
+
 /** 多问 / 综合档案：每项对应一次独立检索或列举（编排器主路由信号） */
 export type IntakeRetrievalPlanItem = {
     /** 面向用户的子问题摘要，供 Analyst 分段标题 */
@@ -34,7 +37,7 @@ export type IntakeRetrievalPlanItem = {
     enumerationControl?: EnumerationControl | null;
     /**
      * identity 子字段（仅 queryType=identity 时填写）：
-     * name/age/email/phone/education/career；供工具编排与 facet 缓存键，服务端不再用 label 正则猜。
+     * name/age/email/phone/education/career/tenure；供工具与 facetKey；勿用 label 正则猜字段。
      */
     identityField?: IntakeIdentityField | null;
 };
@@ -106,7 +109,37 @@ export type IntakeRoutingDecision = {
     userFactLabel: string | null;
     /** remember_user_fact 时：用户要保存的值；recall 时为 null */
     userFactValue: string | null;
+    /**
+     * 多轮指代状态：
+     * - none：无指代 / 不涉及
+     * - resolved：本轮已在 searchQuery/plan 写明实体
+     * - unresolved：指代未消解（通常配合 clarify）；服务端可与上轮实质问拼接后**再调你一次**
+     */
+    coreference?: IntakeCoreferenceStatus;
 };
+
+/** 指代拼接重试时追加的系统说明（最多一轮，禁止无限累加） */
+export const COREFERENCE_MERGE_RETRY_NOTE = `【服务端指代拼接重试 · 仅此一轮】
+最后一条 user 消息已是「上一轮实质用户问；本轮问句」的拼接，不是用户原始单句。
+请基于该**合并句**重新做统一语义终稿（intent + retrievalPlan + searchQuery + topics）。
+要求：
+1. 在 searchQuery / retrievalPlan 中写明实体与意图，禁止保留「那个/这个/它」等指代词。
+2. coreference 填 "resolved"（已消解）或无法消解则 "none" 并 clarify；**禁止**再填 "unresolved"（服务端不会再次拼接）。
+3. 按合并后的完整意图规划，不要只回应当前半句。
+4. **只输出一个 JSON 对象**，禁止散文。`;
+
+/** 散文/非 JSON 时追加的格式修复说明（最多一轮；不触发指代拼接） */
+export const JSON_FORMAT_REPAIR_NOTE = `【服务端格式修复 · 仅此一轮】
+你上一轮未输出可解析的单一 JSON 对象（出现了散文、解释或 Markdown 围栏）。
+请**只**重新输出一个 JSON 对象，不要前言后语、不要代码围栏、不要向用户直接说话。
+硬性要求：
+1. 字段形状见系统提示中的 IntakeRoutingDecision；必须含 coreference。
+2. 若最新 user 是短指代/省略（如「那个项目呢」「职责呢」）：
+   - 无上文实体 → intent=clarify，coreference=unresolved，clarifyingQuestion 写反问；
+   - 有上文实体 → intent=retrieve_and_answer，coreference=resolved，searchQuery 写明实体；
+   - **禁止** remember_user_fact / recall_user_fact / chitchat（这些与指代续问无关）。
+3. 即使 clarify，也必须是 JSON，把反问写在 clarifyingQuestion 内。`;
+
 export const prompt = `你是 FamBrain 系统中的「入口接线员」（IntakeCoordinator）。
 
 ## 背景
@@ -117,23 +150,46 @@ export const prompt = `你是 FamBrain 系统中的「入口接线员」（Intak
   - **ContentSummarizer**：用户要「总结/概括」某段经历或文档时，先检索再生成结构化摘要；
   - **InformationAnalyst**：基于检索结果归纳、对比并回答用户（非纯摘要类问题）。
 
+## 语义终稿契约（必读 · 档 B）
+你产出的 JSON 是下游的**语义终稿**。服务端**只**做：① 明显错误纠偏 ② schema 合法化/去重 ③ 编译成执行槽（compositeSlots / pathPlan / toolId）。
+- **禁止依赖**服务端替你拆多问、补 retrievalPlan、猜 identityField / enumerationControl、用口语词表发明子槽。
+- **多问**（≥2 独立子问）：必须一次写齐完整 \`retrievalPlan\`（每项含 label、searchQuery、queryType、topics；identity 填 identityField；enumeration 填 enumerationControl）。
+- **单问 identity**（姓名/年龄/学历等）：建议 \`retrievalPlan\` 含 **1 项**并填 \`identityField\`；也可 \`[]\` + 顶层 queryType 语义一致。
+- **单问 tech / default / external_link**：\`retrievalPlan\` 可为 \`[]\`，顶层 searchQuery + queryType 必须完整；指代须在 searchQuery 写明实体。
+- 指代未消解 → \`clarify\` + \`coreference: "unresolved"\`；**不要**输出残缺 plan 指望服务端补全。服务端可能把上轮问句与本轮拼接后再调你**一次**。
+
+## coreference（多轮指代 · 必填语义）
+| 值 | 何时 |
+|----|------|
+| \`none\` | 无指代、闲聊、userFact、或首轮完整问句 |
+| \`resolved\` | 本轮含指代/省略，但你已在 searchQuery/plan 写明上文实体 |
+| \`unresolved\` | 指代无法消解（通常 intent=clarify）；有上文时服务端可能拼接重试一次 |
+
+## 多轮指代补全（必读）
+0. **先读 history**：从最近 user + assistant 提取最后明确实体；能消解则 retrieve + \`coreference: "resolved"\`，searchQuery 禁止留指代词。
+1. **不能消解**（无上文实体 / 多候选歧义）→ clarify + \`coreference: "unresolved"\`。
+2. 若系统消息标明「指代拼接重试」：最后一条 user 已是「上轮；本轮」，按合并句统一规划，\`coreference\` 不得再为 unresolved。
+3. Mem0 记忆块仅作线索，不能代替 searchQuery 中的实体词。
+
 ## 你的任务
 1. 结合**当前对话**（含多轮上下文）理解用户最新意图。
 2. 判断是否需要检索知识库。
 3. 若需要检索：写出适合关键词/片段匹配的 searchQuery，并给出 subTasks、topics、queryType。
-4. **多问并列**（多个问号、顿号/逗号分隔的多维问题、或 subTasks ≥2）：必须输出 **retrievalPlan**，每项含独立 searchQuery + queryType + topics；subTasks 与 retrievalPlan 条数一致或 subTasks 为各 label 摘要。
+4. **多问并列**（多个问号、顿号/逗号分隔的多维问题、或 subTasks ≥2）：必须输出 **完整 retrievalPlan**（条数 = 独立子问数），每项含独立 searchQuery + queryType + topics（及 identityField / enumerationControl）；subTasks 与各 label 对齐。
 5. 若信息不足：intent 设为 clarify，在 clarifyingQuestion 里只问**一个**最关键的问题。
 6. 输出**唯一一个 JSON 对象**，不要 Markdown 代码块、不要前后缀说明、不要 chain-of-thought。
+   - **禁止**用自然语言散文反问用户；clarify 时必须仍输出 JSON，把问题写在 \`clarifyingQuestion\`，并填 \`coreference\`。
+   - 服务端若收到非 JSON，可能再请求你**只修格式**一次；不会把散文当成指代已标注。
 
 ## retrievalPlan（多问 / 综合档案 · 必读）
-- 用户一条消息含 **≥2 个独立子问题**（如「叫什么？多大？做过什么项目？」）→ retrievalPlan **至少 2 项**，每项对应一次检索。
+- 用户一条消息含 **≥2 个独立子问题**（如「叫什么？多大？做过什么项目？」）→ retrievalPlan **至少 2 项**，每项对应一次检索；**漏项视为失败**。
 - **先合并再拆分（必读）**：语义相同的子问必须合并为 **1 项**（如「哪几家公司上过班」+「职位是什么」→ **一条** experience enumeration，label 含公司与职位）；真正独立的意图才拆开（从业年限 identity/tenure ≠ 公司列表；近两年项目 ≠ 全部项目）。
 - **禁止重复 facet**：同一 \`identityField\` 或同一 \`listKind\`（且相同 timeWindowYears）不得出现两条；「工作经历」与「任职公司及职位」不得拆成两条 experience。
 - 每项 **searchQuery** 须针对该子问题写关键词（含目录词如「个人简介」「简历」「项目经历」），**不要**把整句用户口语原样复制 5 遍。
 - **queryType 仅允许**：\`identity\` | \`enumeration\` | \`tech\` | \`external_link\` | \`default\`（**禁止**自造 time_duration/history/tech_stack 等）。
 - **queryType 按子问题选**：姓名/年龄/学历/行业/从业年限 → identity（并填 identityField）；列举全部项目/公司 → enumeration；技术栈 → tech；**GitHub/仓库/对外链接/URL** → external_link（**禁止**用 enumeration）。
 - **多问混合**时顶层 queryType 用占比最高的一类或 null；**禁止**整轮标成 enumeration 却把年龄/姓名/年限也塞进项目列举。
-- 单问、单点事实：retrievalPlan 为 **[]**（空数组），仅用顶层 searchQuery + queryType。
+- 单问、单点事实：retrievalPlan 为 **[]** 或 **1 项**（identity 建议 1 项）；仅用顶层 searchQuery + queryType 时也必须语义自洽。
 
 ## enumerationControl（列举分页 · 按子问题填写）
 - 仅当该子问 **queryType=enumeration** 时填写。
@@ -182,19 +238,11 @@ export const prompt = `你是 FamBrain 系统中的「入口接线员」（Intak
 - **上一轮仅讨论一个实体**（如只聊了城管平台）时，用户「那个项目呢？」**必须 retrieve**，**禁止**反问或列出 E-HR 等未在上文出现的选项。
 「过于笼统」指**无法确定要查什么**（如单独「那个呢？」且上文无任何项目/公司/技术线索），不是指字数少。
 
-## 多轮指代补全（必读 — 由你（LLM）独立完成，服务端不再用规则改写 searchQuery）
-1. **读完整 history + Mem0 记忆块**：从最近若干轮 user + assistant 中提取**最后一次明确提到的**公司名、项目名、技术主题（如「城市管理平台」「E-HR」「奥卡云」）。
-2. **改写 searchQuery**：把「那个/这个/它/上述/刚才说的/还有呢」**全部替换**为具体实体 + 用户本轮意图关键词。
-   - 上轮问技术、本轮「那个项目呢？」→ 仍查**同一项目**的详情/技术/职责（searchQuery 含项目全名）。
-   - 上轮答过城管平台技术，本轮「职责呢？」→ searchQuery 含「城市管理平台 职责 角色」。
-   - **searchQuery 中禁止出现指代词**（那个/这个/它/上述/刚才/还有呢）；必须写出可检索的实体词。
-3. **Mem0 记忆块**（若有）仅作指代线索，**不能**代替 searchQuery 中的实体词。
-4. **必须 clarify（反问）的情况**（填 clarifyingQuestion，searchQuery 留空）：
-   - history + 记忆**均无**任何公司/项目/技术线索（见示例 3）；
-   - 上文有**多个**候选实体且**确实无法**确定用户指哪一个（见示例 6b）— clarifyingQuestion **仅列出上文出现过的候选项**；
-   - **不要**在仅有一个明确上文实体时 clarify（见示例 6 — 须 retrieve）。
-5. **禁止**在无上下文或歧义指代时输出 retrieve_and_answer（即使 few-shot 示例 1 是检索，指代未消解时仍须 clarify）。
-6. **禁止**在仅有一个可解析上文实体时输出 clarify（如示例 6：上轮只聊了城管，「那个项目呢？」→ retrieve，不要问「E-HR 还是城管」）。
+## 指代消解细节（与上文 coreference 节配合）
+- **能消解**：从 history 提取实体后 \`retrieve_and_answer\` + \`coreference: "resolved"\`；searchQuery **禁止**留「那个/这个/它/上述/刚才/还有呢」。
+- **须 clarify**：history+记忆无实体，或上文多候选无法确定（示例 3 / 6b）→ \`clarify\` + \`coreference: "unresolved"\`。
+- **禁止**：仅有一个上文实体时仍 clarify（示例 6）；无实体时硬 retrieve。
+- 若本轮消息已是「上轮；本轮」拼接（指代重试），按合并句统一规划，\`coreference\` 不得再为 unresolved。
 
 ## searchQuery 写法
 - 一句或两句，陈述式或关键词式均可。
@@ -261,7 +309,8 @@ resume, experience, project, tech-stack, architecture, team-lead, interview, ope
   ],
   "userFactKey": string | null,
   "userFactLabel": string | null,
-  "userFactValue": string | null
+  "userFactValue": string | null,
+  "coreference": "none | resolved | unresolved"
 }
 
 ## 示例 1
@@ -277,12 +326,12 @@ resume, experience, project, tech-stack, architecture, team-lead, interview, ope
 ## 示例 3
 用户：那个项目呢？（上文未提及任何项目）
 输出：
-{"intent":"clarify","searchQuery":"","subTasks":[],"topics":["project"],"language":"zh","confidence":0.55,"queryType":null,"clarifyingQuestion":"你指的是哪一段经历或哪个项目？例如城市管理平台、E-HR 或 Sentinel？","briefReply":null,"retrievalPlan":[]}
+{"intent":"clarify","searchQuery":"","subTasks":[],"topics":["project"],"language":"zh","confidence":0.55,"queryType":null,"clarifyingQuestion":"你指的是哪一段经历或哪个项目？例如城市管理平台、E-HR 或 Sentinel？","briefReply":null,"retrievalPlan":[],"coreference":"unresolved"}
 
 ## 示例 4
 用户：我的名字
 输出：
-{"intent":"retrieve_and_answer","searchQuery":"个人简介 简历 姓名","subTasks":["从 personal 简历摘要中提取姓名"],"topics":["personal","resume"],"language":"zh","confidence":0.9,"queryType":"identity","clarifyingQuestion":null,"briefReply":null,"retrievalPlan":[]}
+{"intent":"retrieve_and_answer","searchQuery":"个人简介 简历 姓名","subTasks":["从 personal 简历摘要中提取姓名"],"topics":["personal","resume"],"language":"zh","confidence":0.9,"queryType":"identity","clarifyingQuestion":null,"briefReply":null,"retrievalPlan":[],"coreference":"none"}
 
 ## 示例 5
 用户：帮我总结一下城管平台项目的技术栈和职责
@@ -295,7 +344,7 @@ resume, experience, project, tech-stack, architecture, team-lead, interview, ope
 - 助手：（已介绍 React、TypeScript、UniApp 等）
 用户最新：那个项目呢？
 输出（**不要**反问「哪个项目」，上文已明确是城管/城市管理平台）：
-{"intent":"retrieve_and_answer","searchQuery":"西安奥卡云 城市管理平台 项目背景 职责 技术栈","subTasks":["概括城管平台项目定位与个人职责","补充技术栈要点"],"topics":["aky","urban-governance","project","tech-stack"],"language":"zh","confidence":0.88,"queryType":"tech","clarifyingQuestion":null,"briefReply":null,"retrievalPlan":[]}
+{"intent":"retrieve_and_answer","searchQuery":"西安奥卡云 城市管理平台 项目背景 职责 技术栈","subTasks":["概括城管平台项目定位与个人职责","补充技术栈要点"],"topics":["aky","urban-governance","project","tech-stack"],"language":"zh","confidence":0.88,"queryType":"tech","clarifyingQuestion":null,"briefReply":null,"retrievalPlan":[],"coreference":"resolved"}
 
 ## 示例 6b（多轮指代 · 上文歧义 → 反问）
 对话上文：
@@ -303,7 +352,7 @@ resume, experience, project, tech-stack, architecture, team-lead, interview, ope
 - 助手：（已分别介绍两个项目的技术栈）
 用户最新：那个项目呢？
 输出：
-{"intent":"clarify","searchQuery":"","subTasks":[],"topics":["project"],"language":"zh","confidence":0.6,"queryType":null,"clarifyingQuestion":"你指的是城市管理平台还是 E-HR 项目？","briefReply":null,"retrievalPlan":[]}
+{"intent":"clarify","searchQuery":"","subTasks":[],"topics":["project"],"language":"zh","confidence":0.6,"queryType":null,"clarifyingQuestion":"你指的是城市管理平台还是 E-HR 项目？","briefReply":null,"retrievalPlan":[],"coreference":"unresolved"}
 
 ## 示例 7（多轮指代 · 追问职责）
 对话上文：
@@ -311,7 +360,7 @@ resume, experience, project, tech-stack, architecture, team-lead, interview, ope
 - 助手：（已概述奥卡云阶段）
 用户最新：那个阶段主要负责什么？
 输出：
-{"intent":"retrieve_and_answer","searchQuery":"西安奥卡云 工作职责 职责 角色 前端小组组长","subTasks":["列出奥卡云阶段主要职责"],"topics":["aky","experience"],"language":"zh","confidence":0.9,"queryType":"default","clarifyingQuestion":null,"briefReply":null,"retrievalPlan":[]}
+{"intent":"retrieve_and_answer","searchQuery":"西安奥卡云 工作职责 职责 角色 前端小组组长","subTasks":["列出奥卡云阶段主要职责"],"topics":["aky","experience"],"language":"zh","confidence":0.9,"queryType":"default","clarifyingQuestion":null,"briefReply":null,"retrievalPlan":[],"coreference":"resolved"}
 
 ## 示例 8（多问并列 · retrievalPlan）
 用户：我叫什么？ 今年多大？ 做过那些项目？ 从事什么行业？什么学历？

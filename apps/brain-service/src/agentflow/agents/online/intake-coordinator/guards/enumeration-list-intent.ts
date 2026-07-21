@@ -163,8 +163,15 @@ const enrichSlotExecutor = async (
 };
 
 /**
- * Guard：按槽设置 list_corpus / km_retrieve；UI 按钮精确匹配可补单槽 list。
- * 始终保持 routeMode=slots（不再升级为全局 list）。
+ * Intake guard ⑦：列举分页 / per-slot executor。
+ *
+ * 本步新增/改写：
+ *   Δ compositeSlots[].executor = list_corpus | km_retrieve
+ *   + listIntent / enumerationPage / enumerationPageSize / enumerationListKind
+ *   UI 按钮 exact-match 可补单槽 list（ENUMERATION_ACTION_PROMPTS）
+ *
+ * preview 列举仍 km_retrieve；continue/exhaustive → list_corpus（目录扫盘）。
+ * routeMode 保持 slots（不再整轮升为 list）。
  */
 export const applyEnumerationSlotGuard = async (
     decision: RoutedIntakeDecision,
@@ -260,103 +267,4 @@ export const applyEnumerationSlotGuard = async (
                 : "enumeration"
             : decision.queryType,
     };
-};
-
-/**
- * @deprecated 使用 applyEnumerationSlotGuard；保留同步包装供旧测试迁移期调用。
- * 无 session 时无法解析 continue 页码，仅处理 UI exact-match exhaustive。
- */
-export const applyEnumerationListIntentGuard = (
-    decision: RoutedIntakeDecision,
-    userQuestion: string
-): RoutedIntakeDecision => {
-    const ui = matchUiEnumerationPrompt(userQuestion);
-    if (!ui || ui.action !== "exhaustive") {
-        // 同步路径：仅标记已有 control 的槽为 list_corpus
-        if (decision.routeMode !== "slots" && decision.routeMode !== "list") {
-            return decision;
-        }
-        const slots = (decision.compositeSlots ?? []).map((slot) => {
-            if (
-                slot.queryType === "enumeration" &&
-                isListAction(slot.enumerationControl?.action)
-            ) {
-                return {
-                    ...slot,
-                    executor: "list_corpus" as const,
-                    enumerationPage: slot.enumerationPage ?? 1,
-                    enumerationPageSize:
-                        slot.enumerationPageSize ??
-                        ENUMERATION_EXHAUSTIVE_PAGE_SIZE,
-                };
-            }
-            return {
-                ...slot,
-                executor: "km_retrieve" as const,
-                enumerationControl:
-                    slot.queryType === "enumeration"
-                        ? slot.enumerationControl
-                        : null,
-            };
-        });
-        const firstList = slots.find((s) => s.executor === "list_corpus");
-        return {
-            ...decision,
-            routeMode: "slots",
-            compositeSlots: slots,
-            listIntent: firstList
-                ? firstList.enumerationControl?.action === "continue"
-                    ? "continue"
-                    : "exhaustive"
-                : decision.listIntent,
-        };
-    }
-    return buildEnumerationListDecision({
-        userQuestion,
-        listKind: ui.listKind,
-        listIntent: "exhaustive",
-        page: 1,
-        pageSize: ENUMERATION_EXHAUSTIVE_PAGE_SIZE,
-    });
-};
-
-/**
- * @deprecated 入口短路已移除；UI 按钮走 LLM 或 applyEnumerationSlotGuard exact-match。
- * 保留供 verify 脚本迁移：exact-match → buildEnumerationListDecision。
- */
-export const resolveEnumerationContinuation = async (input: {
-    userQuestion: string;
-    session: CompositeSessionKey;
-}): Promise<RoutedIntakeDecision | null> => {
-    const ui = matchUiEnumerationPrompt(input.userQuestion);
-    if (!ui || !isListAction(ui.action)) return null;
-    const listIntent: EnumerationListIntent =
-        ui.action === "continue" ? "continue" : "exhaustive";
-    const { page, pageSize } = await resolvePageForControl(
-        ui,
-        input.session,
-        ENUMERATION_EXHAUSTIVE_PAGE_SIZE
-    );
-    return buildEnumerationListDecision({
-        userQuestion: input.userQuestion,
-        listKind: ui.listKind,
-        listIntent,
-        page,
-        pageSize,
-    });
-};
-
-/** @deprecated 词表已删除；仅 UI exact-match */
-export const isExhaustiveListRequest = (userQuestion: string): boolean => {
-    const ui = matchUiEnumerationPrompt(userQuestion);
-    return ui?.action === "exhaustive";
-};
-
-/** @deprecated 词表已删除；仅 UI exact-match */
-export const detectEnumerationContinuationKind = (
-    userQuestion: string
-): EnumerationListKind | null => {
-    const ui = matchUiEnumerationPrompt(userQuestion);
-    if (!ui || !isListAction(ui.action)) return null;
-    return ui.listKind;
 };

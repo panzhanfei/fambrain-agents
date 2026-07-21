@@ -183,6 +183,10 @@ export const intakeRoutingDecisionSchema = z.object({
     (v) => (v === undefined ? null : v),
     nullableTrimmedString
   ),
+  coreference: z
+    .enum(["none", "resolved", "unresolved"])
+    .catch("none" as const)
+    .default("none"),
 });
 const pickIntakeField = (
   raw: Record<string, unknown>,

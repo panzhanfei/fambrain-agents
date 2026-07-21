@@ -10,8 +10,10 @@ export type {
 export {
     applyIntakeChitchatGuard,
     applyPureSocialUtteranceGuard,
+    buildIncompleteUtteranceDecision,
     buildPureChitchatDecision,
     DEFAULT_CHITCHAT_BRIEF_REPLY,
+    INCOMPLETE_UTTERANCE_BRIEF_REPLY,
 } from "./intake-chitchat-guard";
 export {
     applyIntakeRetrievalPlanGuard,
@@ -32,9 +34,5 @@ export {
 export type { IntakeLinkLookupGuardReason } from "./intake-link-lookup-guard";
 export {
     applyEnumerationSlotGuard,
-    applyEnumerationListIntentGuard,
-    resolveEnumerationContinuation,
     buildEnumerationListDecision,
-    detectEnumerationContinuationKind,
-    isExhaustiveListRequest,
 } from "./enumeration-list-intent";

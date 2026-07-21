@@ -13,17 +13,7 @@ import type {
 } from "@/agentflow/agents/online/intake-coordinator/contract";
 import { isProjectEnumeration } from "./enumeration-target";
 import { IDENTITY_FIELD_SEARCH } from "./identity-field-search";
-import type {
-    CompositeFacetId,
-    CompositeRetrievalSlot,
-} from "./interface";
-
-export const COMPOSITE_FACET_IDS = [
-    "identity",
-    "projects",
-    "employers",
-    "recent",
-] as const satisfies readonly CompositeFacetId[];
+import type { CompositeRetrievalSlot } from "./interface";
 
 /** canonical：个人档案 */
 export const IDENTITY_SLOT: CompositeRetrievalSlot = {
@@ -63,32 +53,6 @@ export const EXTERNAL_LINK_SLOT: CompositeRetrievalSlot = {
     queryType: "external_link",
     topics: ["personal", "resume", "project"],
     subTasks: [],
-};
-
-/** canonical：近况 */
-export const RECENT_SLOT: CompositeRetrievalSlot = {
-    id: "recent",
-    label: "近两年",
-    searchQuery: "个人简介 简历 最近 工作经历 时间线 阶段 在干什么",
-    queryType: "identity",
-    topics: ["personal", "resume", "experience"],
-    subTasks: [],
-};
-
-/** @deprecated 综合档案不再固定 4 槽全开；保留供测试/文档引用 */
-export const COMPOSITE_PROFILE_SLOTS: CompositeRetrievalSlot[] = [
-    IDENTITY_SLOT,
-    PROJECTS_SLOT,
-    EMPLOYERS_SLOT,
-    RECENT_SLOT,
-];
-
-export const getCompositeSlot = (
-    id: CompositeFacetId
-): CompositeRetrievalSlot => {
-    const slot = COMPOSITE_PROFILE_SLOTS.find((s) => s.id === id);
-    if (!slot) throw new Error(`unknown composite facet: ${id}`);
-    return slot;
 };
 
 /**

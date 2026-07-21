@@ -10,10 +10,7 @@ export type {
 } from "./interface";
 
 export {
-    buildFallbackRetrievalPlan,
     buildSingleQuestionPlanItem,
-    expandIdentityPlanFromSubTasks,
-    isTechSingleQuestion,
     looksLikeMultiPartQuestion,
     normalizePlanItems,
     resolveCompositeRoute,
@@ -22,16 +19,12 @@ export {
     isCompositeProfileQuestion,
 } from "./composite-routing";
 export {
-    COMPOSITE_FACET_IDS,
-    COMPOSITE_PROFILE_SLOTS,
     EMPLOYERS_SLOT,
     EXTERNAL_LINK_SLOT,
     IDENTITY_SLOT,
     PROJECTS_SLOT,
-    RECENT_SLOT,
     canonicalizePlanItem,
     facetTemplateForQueryType,
-    getCompositeSlot,
     planItemToSlot,
 } from "./composite-slot-queries";
 export {
@@ -39,14 +32,12 @@ export {
     type IdentityFieldSearchSpec,
 } from "./identity-field-search";
 export {
-    annotatePlanItem,
     dedupePlanByFacet,
     normalizePlanItemFromSchema,
     planFacetKey,
     repairRetrievalPlanItems,
 } from "./repair-retrieval-plan";
 export {
-    isExperienceEnumeration,
     isProjectEnumeration,
     resolveEnumerationTarget,
 } from "./enumeration-target";

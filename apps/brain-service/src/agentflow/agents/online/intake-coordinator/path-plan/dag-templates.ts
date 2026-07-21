@@ -4,9 +4,6 @@
  */
 import { extractCompanyHint } from "@/agentflow/agents/online/tool-orchestrator/field-catalog";
 import type { ExecutionPlanNode } from "@/agentflow/agents/online/tool-orchestrator";
-import type { DagRun, DagTemplateId } from "./interface";
-
-export const DAG_TEMPLATE_IDS: DagTemplateId[] = ["hybrid_multi_source"];
 
 /** 语料简历 + 联网公司/市场 + synthesize（deps 拓扑） */
 export const expandHybridMultiSourceTemplate = (
@@ -51,24 +48,4 @@ export const expandHybridMultiSourceTemplate = (
             deps: ["resume", "company", "market"],
         },
     ];
-};
-
-/** @deprecated 使用 expandHybridMultiSourceTemplate */
-export const expandHybridResumeMarketTemplate = expandHybridMultiSourceTemplate;
-
-export const expandDagTemplate = (
-    run: DagRun,
-    ctx: {
-        userQuestion: string;
-        searchQuery: string;
-        reuseListStep: boolean;
-    }
-): ExecutionPlanNode[] => {
-    if (run.template === "hybrid_multi_source") {
-        return expandHybridMultiSourceTemplate(
-            ctx.userQuestion,
-            ctx.searchQuery
-        );
-    }
-    return [];
 };

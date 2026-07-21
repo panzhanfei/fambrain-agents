@@ -10,7 +10,12 @@ import { logAgentIn, logAgentOut } from "@fambrain/brain-shared/agent-log";
 import { recordLangChainOllamaUsage } from "@fambrain/brain-shared/pipeline-run-context";
 import type { DbChatTurn } from "@fambrain/brain-types";
 import { textFromResponse } from "@/agentflow/utils";
-import { prompt } from "@/agentflow/agents/online/intake-coordinator/contract";
+import {
+  COREFERENCE_MERGE_RETRY_NOTE,
+  JSON_FORMAT_REPAIR_NOTE,
+  prompt,
+} from "@/agentflow/agents/online/intake-coordinator/contract";
+
 const { ollama } = getBrainServiceConfig();
 const llm = new ChatOllama({
   baseUrl: ollama.baseUrl,
@@ -21,11 +26,16 @@ const turnToMessage = (t: DbChatTurn) => {
   if (t.role === "assistant") return new AIMessage(t.content);
   return new SystemMessage(t.content);
 };
+
 export const completeIntakeCoordinator = async (
   history: DbChatTurn[],
   options?: {
     memoryBlock?: string | null;
     intakeHistory?: DbChatTurn[];
+    /** 指代拼接重试：追加系统说明，禁止再标 unresolved */
+    coreferenceMergeRetry?: boolean;
+    /** 散文/非 JSON：追加格式修复说明（与指代拼接互斥使用） */
+    jsonFormatRepair?: boolean;
   }
 ): Promise<string> => {
   const recent = options?.intakeHistory ?? history;
@@ -36,8 +46,15 @@ export const completeIntakeCoordinator = async (
     userQuestion: lastUser,
     turnCount: trimmed.length,
     hasMemoryBlock: Boolean(options?.memoryBlock),
+    coreferenceMergeRetry: Boolean(options?.coreferenceMergeRetry),
+    jsonFormatRepair: Boolean(options?.jsonFormatRepair),
   });
   const messages: BaseMessage[] = [new SystemMessage(prompt)];
+  if (options?.coreferenceMergeRetry) {
+    messages.push(new SystemMessage(COREFERENCE_MERGE_RETRY_NOTE));
+  } else if (options?.jsonFormatRepair) {
+    messages.push(new SystemMessage(JSON_FORMAT_REPAIR_NOTE));
+  }
   if (options?.memoryBlock) {
     messages.push(
       new SystemMessage(
@@ -57,6 +74,8 @@ export const completeIntakeCoordinator = async (
   });
   logAgentOut("IntakeCoordinator", "出去", {
     routeJsonPreview: raw.length > 800 ? `${raw.slice(0, 800)}…` : raw,
+    coreferenceMergeRetry: Boolean(options?.coreferenceMergeRetry),
+    jsonFormatRepair: Boolean(options?.jsonFormatRepair),
   });
   return raw;
 };

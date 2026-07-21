@@ -91,10 +91,10 @@ Intake（enrichedPlan / executionPlan）
 ### 4.1 Intake 新增字段（`RoutedIntakeDecision`）
 
 - `enrichedPlan`：每项含 `dataSource`、`toolId`、`field`
-- `primaryDataSource`：`corpus` | `web`
-- `webQuery`：外部事实检索词
 - `executionPlan`：混合 DAG 节点列表
 - `routeMode`：新增 `"dag"`
+
+> 注：整轮 `primaryDataSource` / `webQuery` 已移除；联网由槽 `topics.external` → `toolId=search_web` / `pathPlan.tool` 表达。
 
 ### 4.2 状态字段
 
@@ -116,7 +116,7 @@ TAVILY_API_KEY=...              # 或 FAMBRAIN_TAVILY_API_KEY
 FAMBRAIN_WEB_SEARCH_ENABLED=1   # 显式开启联网（无 key 仍 disabled）
 ```
 
-corpus-first 不变：主路径仍先 KM；仅 `primaryDataSource=web` 或语料弱命中时 `ToolOrchestrator` 调 `search_web`。
+corpus-first 不变：主路径仍先 KM；仅槽 `topics.external` / `pathPlan.tool` 时 `ToolOrchestrator` 调 `search_web`。
 
 ---
 
@@ -344,4 +344,33 @@ pnpm --filter @fambrain/brain-service run verify:dag-hybrid
 pnpm test:unit
 pnpm --filter @fambrain/brain-service exec tsx --env-file=../../.env scripts/diagnose-long-composite-career-query.ts
 pnpm --filter @fambrain/brain-service exec tsx --env-file=../../.env scripts/diagnose-mixed-projects-github-query.ts
+```
+
+---
+
+## 13. Intake 档 B：主路径规划 + 旁路纠偏（2026-07）
+
+> **触发：** 短续问盲预合并误伤换题；单字乱敲浪费 token；用散文 clarify 兜底驱动指代重试，复盘时分不清「LLM 规划」与「代码二次 Intake」。详见 [坑点 §2.10](./04-pitfalls.md#210-intake-档-b主路径规划--旁路纠偏-p0-31--2026-07)。
+
+### 13.1 分工（定型）
+
+| 层 | 职责 | 禁止 |
+|----|------|------|
+| **主路径（LLM）** | 产出语义终稿：`intent` / `retrievalPlan` / `searchQuery` / `coreference` | 依赖代码猜口语、发明多槽 |
+| **旁路·入口** | normalize（压连续重复码点）→ 单字/社交/UI 短路 | NFKC 改写标点导致与 history 对不上；盲预合并 |
+| **旁路·格式** | 非 JSON → 格式修复 **1** 次 | 把散文当 `coreference` 信号 |
+| **旁路·指代** | **仅 JSON peek** 未消解时拼接「上轮；本轮」再调 **1** 次 | 无限重试；无上文硬拼 |
+| **旁路·guard** | schema 合法化、facet 去重、elliptical / link 纠偏、PathPlan 编译 | `filled_fallback` / 口语二次规划 |
+
+### 13.2 为何比「调用前合并」更合理
+
+1. **指代是否成立是语义问题**，句长启发会误伤换题短句 → 先让模型标 `coreference`，未消解再拼。
+2. **散文失败是输出纪律问题**，应修 prompt / JSON 修复，而不是用 `clarifyFallbackFromProse` 假装已结构化。
+3. **复盘路径变短**：日志 `JSON格式修复重试` / `指代拼接重试` / `guard_*` 各司其职。
+
+### 13.3 验证
+
+```bash
+pnpm exec vitest run apps/brain-service/tests/intake-coordinator/effective-intake-question.test.ts
+pnpm --filter @fambrain/brain-service run verify:intake-coreference
 ```

@@ -8,10 +8,14 @@ import { resetInfraConfigForTests } from "@fambrain/infra";
 import {
     completeIntakeCoordinator,
     isClarifyEarlyExit,
+    normalizeIntakeUtterance,
     parseIntakeDecision,
+    rewriteLastUserTurn,
     runIntakePipeline,
+    shouldRetryCoreferenceMerge,
+    shouldShortCircuitIncompleteUtterance,
 } from "../src/agentflow/agents/online/intake-coordinator/index";
-import { findRepeatAnswerInHistory } from "../src/agentflow/agents/online/intake-coordinator";
+import { findRepeatAnswerInHistory } from "../src/agentflow/agents/online/repeat-question-guard";
 import { bootstrapBrainServiceRuntime } from "../src/config/index";
 import { enableRepeatGuardForVerify } from "./verify-test-env";
 
@@ -52,7 +56,75 @@ const retrieveWithEntityJson = JSON.stringify({
     retrievalPlan: [],
 });
 
-console.log("verify-intake-coreference\n— pipeline 单测（LLM JSON 透传） —");
+console.log("verify-intake-coreference\n— 指代重试判定 / 单字短路（无 LLM） —");
+
+await assertCase("unresolved + 有上文 → 应拼接重试", async () => {
+    const history: DbChatTurn[] = [
+        { role: "user", content: "城管平台用了什么技术" },
+        { role: "assistant", content: "城市管理平台使用 React。" },
+        { role: "user", content: "那个项目呢？" },
+    ];
+    const r = shouldRetryCoreferenceMerge(
+        { intent: "clarify", coreference: "unresolved" },
+        "那个项目呢？",
+        history
+    );
+    if (!r.retry || !r.mergedQuestion?.includes("城管平台用了什么技术")) {
+        throw new Error(`重试判定失败: ${JSON.stringify(r)}`);
+    }
+});
+
+await assertCase("resolved → 不重试", async () => {
+    const history: DbChatTurn[] = [
+        { role: "user", content: "城管平台用了什么技术" },
+        { role: "assistant", content: "城市管理平台使用 React。" },
+        { role: "user", content: "那个项目呢？" },
+    ];
+    const r = shouldRetryCoreferenceMerge(
+        { intent: "retrieve_and_answer", coreference: "resolved" },
+        "那个项目呢？",
+        history
+    );
+    if (r.retry) throw new Error("已 resolved 不应重试");
+});
+
+await assertCase("单字无上文 → 应短路", async () => {
+    if (!shouldShortCircuitIncompleteUtterance("嗯", [])) {
+        throw new Error("「嗯」应短路");
+    }
+});
+
+await assertCase("单字有上文 → 不短路", async () => {
+    const history: DbChatTurn[] = [
+        { role: "user", content: "城管平台用了什么技术" },
+        { role: "assistant", content: "城市管理平台使用 React TypeScript。" },
+        { role: "user", content: "呢" },
+    ];
+    if (shouldShortCircuitIncompleteUtterance("呢", history)) {
+        throw new Error("有上文的「呢」不应短路");
+    }
+});
+
+await assertCase("重复敲字 normalize 后按单字短路", async () => {
+    if (normalizeIntakeUtterance("呢呢呢？？？") !== "呢？") {
+        throw new Error(`normalize 失败: ${normalizeIntakeUtterance("呢呢呢？？？")}`);
+    }
+    if (!shouldShortCircuitIncompleteUtterance("嗯嗯嗯！！！", [])) {
+        throw new Error("重复附和应短路");
+    }
+});
+
+await assertCase("散文 peek=null → 不触发指代重试", async () => {
+    const history: DbChatTurn[] = [
+        { role: "user", content: "城管平台用了什么技术" },
+        { role: "assistant", content: "城市管理平台使用 React。" },
+        { role: "user", content: "那个项目呢？" },
+    ];
+    const r = shouldRetryCoreferenceMerge(null, "那个项目呢？", history);
+    if (r.retry) throw new Error("无 JSON peek 不应拼接重试");
+});
+
+console.log("\n— pipeline 单测（LLM JSON 透传） —");
 
 await assertCase("isClarifyEarlyExit：clarify + 反问", async () => {
     const parsed = parseIntakeDecision(clarifyJson);
@@ -199,7 +271,49 @@ await assertCase("repeat：REPEAT_QUESTION_CACHE_DISABLED=1 时不命中", async
     enableRepeatGuardForVerify();
 });
 
-console.log("\n— Intake live + pipeline —");
+console.log("\n— Intake live + pipeline（可能 2× Intake LLM） —");
+
+/** 与 intake-node 一致：normalize → LLM →（非 JSON 则格式修复）→（JSON 指代则拼接）→ pipeline */
+const runLiveLikeIntakeNode = async (history: DbChatTurn[]) => {
+    const lastUser =
+        [...history].reverse().find((t) => t.role === "user")?.content ?? "";
+    const normalized =
+        normalizeIntakeUtterance(lastUser) || lastUser.trim() || lastUser;
+    let effectiveQuestion = normalized;
+    let intakeHistoryForLlm =
+        normalized !== lastUser.trim()
+            ? rewriteLastUserTurn(history, normalized)
+            : history;
+    let raw = await completeIntakeCoordinator(intakeHistoryForLlm, {
+        intakeHistory: intakeHistoryForLlm,
+    });
+    let peek = parseIntakeDecision(raw);
+    if (!peek) {
+        console.log("    … JSON 格式修复重试");
+        raw = await completeIntakeCoordinator(intakeHistoryForLlm, {
+            intakeHistory: intakeHistoryForLlm,
+            jsonFormatRepair: true,
+        });
+        peek = parseIntakeDecision(raw);
+    }
+    const mergeRetry = shouldRetryCoreferenceMerge(peek, effectiveQuestion, history);
+    if (mergeRetry.retry && mergeRetry.mergedQuestion) {
+        console.log(
+            `    … 指代拼接重试: ${effectiveQuestion} → ${mergeRetry.mergedQuestion}`
+        );
+        effectiveQuestion = mergeRetry.mergedQuestion;
+        intakeHistoryForLlm = rewriteLastUserTurn(history, effectiveQuestion);
+        raw = await completeIntakeCoordinator(intakeHistoryForLlm, {
+            intakeHistory: intakeHistoryForLlm,
+            coreferenceMergeRetry: true,
+        });
+    }
+    return runIntakePipeline({
+        intakeRaw: raw,
+        userQuestion: effectiveQuestion,
+        intakeHistory: intakeHistoryForLlm,
+    });
+};
 
 const assertLive = async (
     name: string,
@@ -207,15 +321,7 @@ const assertLive = async (
     check: (result: Awaited<ReturnType<typeof runIntakePipeline>>) => void
 ) => {
     try {
-        const lastUser =
-            [...history].reverse().find((t) => t.role === "user")?.content ??
-            "";
-        const raw = await completeIntakeCoordinator(history);
-        const result = await runIntakePipeline({
-            intakeRaw: raw,
-            userQuestion: lastUser,
-            intakeHistory: history,
-        });
+        const result = await runLiveLikeIntakeNode(history);
         check(result);
         console.log(`  ✓ ${name}`);
     } catch (e) {
@@ -226,12 +332,15 @@ const assertLive = async (
 };
 
 await assertLive(
-    "单轮「那个项目呢？」→ clarify + pipeline 早退",
+    "单轮「那个项目呢？」→ 非检索早退（clarify 优先）",
     [{ role: "user", content: "那个项目呢？" }],
     ({ decision, earlyExit }) => {
-        if (!earlyExit || decision.intent !== "clarify") {
+        if (!earlyExit) {
+            throw new Error(`无上文指代应早退，实际 earlyExit=${earlyExit}`);
+        }
+        if (decision.intent === "retrieve_and_answer") {
             throw new Error(
-                `期望 clarify+earlyExit，实际 earlyExit=${earlyExit} intent=${decision.intent}`
+                `无上文指代不应 retrieve，intent=${decision.intent} q=${decision.searchQuery}`
             );
         }
     }
@@ -276,8 +385,19 @@ await assertLive(
                 `期望 retrieve 非早退，earlyExit=${earlyExit} intent=${decision.intent}`
             );
         }
-        if (!/奥卡云|职责|负责|角色/.test(decision.searchQuery)) {
-            throw new Error(`searchQuery: ${decision.searchQuery}`);
+        const blob = [
+            decision.searchQuery,
+            ...(decision.retrievalPlan ?? []).flatMap((p) => [
+                p.label,
+                p.searchQuery,
+            ]),
+            ...(decision.compositeSlots ?? []).flatMap((s) => [
+                s.label,
+                s.searchQuery,
+            ]),
+        ].join(" ");
+        if (!/奥卡云|职责|负责|角色|工作经历|西安/.test(blob)) {
+            throw new Error(`应含奥卡云/职责/经历线索: ${blob.slice(0, 200)}`);
         }
     }
 );

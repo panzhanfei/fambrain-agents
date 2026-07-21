@@ -553,24 +553,7 @@ export const resolvePostRetrievalToolRuns = (
         return runs;
     }
 
-    if (decision.primaryDataSource === "web" && decision.webQuery) {
-        const corpusWeak =
-            state.hits.length === 0 || state.coverage === "none";
-        if (corpusWeak || decision.webQuery.length > 0) {
-            runs.push({
-                key: "web",
-                node: {
-                    id: "web",
-                    label: "外部检索",
-                    dataSource: "web",
-                    toolId: "search_web",
-                    webQuery: decision.webQuery,
-                    deps: [],
-                },
-            });
-        }
-    }
-
+    // 非 slots 兜底：信 enrichedPlan / pathPlan.tool（web 由槽 topics.external 或 pathPlan 表达）
     const enriched =
         decision.enrichedPlan ??
         (decision.retrievalPlan ?? []).map((p) => ({

@@ -36,7 +36,7 @@ const searchTavily = async (
 
 /**
  * 外部事实检索。需 TAVILY_API_KEY 或 FAMBRAIN_WEB_SEARCH_ENABLED=1 + key。
- * corpus-first：主 pipeline 在语料不足或 primaryDataSource=web 时由 ToolOrchestrator 调用。
+ * corpus-first：主 pipeline 在 pathPlan.tool / 槽 topics.external 时由 ToolOrchestrator 调用。
  */
 export const searchWebTool = tool(
     async (input) => {

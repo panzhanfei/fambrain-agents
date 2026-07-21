@@ -6,7 +6,6 @@
 import {
   applyCompositeRouteGuard,
   applyIntakeRetrievalPlanGuard,
-  buildFallbackRetrievalPlan,
   canonicalizePlanItem,
   EMPLOYERS_SLOT,
   isCompositeProfileQuestion,
@@ -288,21 +287,22 @@ assertSync("年龄多大（Intake identity）→ slots×1", () => {
   }
 });
 
-console.log("\n— 结构 / subTasks 兜底 —");
+console.log("\n— 结构 / subTasks（档 B：不发明多槽）—");
 
-assertSync("Intake subTasks ≥2 → slots", () => {
+assertSync("空 plan + subTasks≥2 → 仍单槽 default（不拆问）", () => {
   const decision: IntakeRoutingDecision = {
     ...retrieveStub,
     queryType: "default",
     searchQuery: "个人简介 项目 工作经历",
     subTasks: ["提取姓名", "列举项目", "哪几家公司", "近两年动态"],
     topics: ["personal", "experience", "project"],
+    retrievalPlan: [],
   };
-  const plan = buildFallbackRetrievalPlan("整体介绍一下", decision);
-  if (plan.length < 4) throw new Error(`plan 不足: ${plan.length}`);
   const out = applyCompositeRouteGuard(decision, "整体介绍一下");
-  if (out.routeMode !== "slots" || out.compositeSlots.length < 2) {
-    throw new Error(`期望 slots≥2，实际 ${out.routeMode}/${out.compositeSlots.length}`);
+  if (out.routeMode !== "slots" || out.compositeSlots.length !== 1) {
+    throw new Error(
+      `期望单槽 slots，实际 ${out.routeMode}/${out.compositeSlots.length}`
+    );
   }
 });
 
@@ -323,11 +323,47 @@ assertSync("用户句空 + Intake enumeration → slots×1", () => {
 assertSync("retrievalPlan 5 项 → 非固定 4 槽", () => {
   const q =
     "我叫什么？ 今年多大？ 做过那些项目？ 从事什么行业？什么学历？";
-  const plan = buildFallbackRetrievalPlan(q, {
-    ...retrieveStub,
-    searchQuery: "个人简介 简历 项目",
-  });
-  if (plan.length !== 5) throw new Error(`plan=${plan.length}`);
+  const plan = [
+    {
+      label: "姓名",
+      searchQuery: "个人简介 简历 姓名",
+      queryType: "identity" as const,
+      topics: ["personal", "resume"],
+      identityField: "name" as const,
+    },
+    {
+      label: "年龄",
+      searchQuery: "个人简介 简历 年龄",
+      queryType: "identity" as const,
+      topics: ["personal", "resume"],
+      identityField: "age" as const,
+    },
+    {
+      label: "项目",
+      searchQuery: "项目经历",
+      queryType: "enumeration" as const,
+      topics: ["project"],
+      enumerationControl: {
+        action: "preview" as const,
+        listKind: "project" as const,
+        excludeHint: null,
+      },
+    },
+    {
+      label: "行业",
+      searchQuery: "个人简介 简历 行业",
+      queryType: "identity" as const,
+      topics: ["personal", "resume"],
+      identityField: "career" as const,
+    },
+    {
+      label: "学历",
+      searchQuery: "个人简介 简历 学历",
+      queryType: "identity" as const,
+      topics: ["personal", "resume"],
+      identityField: "education" as const,
+    },
+  ];
   if (
     !isCompositeProfileQuestion(
       { ...retrieveStub, retrievalPlan: plan },
@@ -340,19 +376,21 @@ assertSync("retrievalPlan 5 项 → 非固定 4 槽", () => {
 
 console.log("\n— Intake retrievalPlan guard —");
 
-assertSync("多问但 plan 空 → guard 补 fallback", () => {
+assertSync("多问但 plan 空 → 不补槽（档 B）", () => {
   const q =
     "我叫什么？ 今年多大？ 做过那些项目？ 从事什么行业？什么学历？";
   const guarded = applyIntakeRetrievalPlanGuard(retrieveStub, q);
-  if ((guarded.retrievalPlan?.length ?? 0) < 5) {
-    throw new Error(`plan 不足: ${guarded.retrievalPlan?.length}`);
+  if ((guarded.retrievalPlan?.length ?? 0) !== 0) {
+    throw new Error(`不应发明 plan: ${guarded.retrievalPlan?.length}`);
   }
-  if (guarded.retrievalPlanGuardReason !== "filled_fallback") {
+  if (guarded.retrievalPlanGuardReason !== "noop") {
     throw new Error(`reason=${guarded.retrievalPlanGuardReason}`);
   }
   const out = applyCompositeRouteGuard(guarded, q);
-  if (out.routeMode !== "slots" || out.compositeSlots.length < 5) {
-    throw new Error(`期望 slots≥5，实际 ${out.routeMode}/${out.compositeSlots.length}`);
+  if (out.routeMode !== "slots" || out.compositeSlots.length !== 1) {
+    throw new Error(
+      `期望单槽 fallback，实际 ${out.routeMode}/${out.compositeSlots.length}`
+    );
   }
 });
 

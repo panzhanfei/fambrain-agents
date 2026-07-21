@@ -1,14 +1,18 @@
 /**
- * Intake guard ⑥：复合路由。
+ * Intake guard ⑥：复合路由（首次升成 RoutedIntakeDecision）。
  *
- * 输入：LLM + 检索计划 guard 之后的 IntakeRoutingDecision
- * 输出：RoutedIntakeDecision（多了 routeMode / compositeSlots / routeReason）
+ * 输入：⑤ 之后的 IntakeRoutingDecision（仍无 compositeSlots/pathPlan）
+ * 输出：RoutedIntakeDecision
  *
- * routeMode：
- *   skip  — 不检索（chitchat / clarify / userFact 等）
- *   slots — 1～N 槽 vector 检索（槽数看 compositeSlots.length）
- *   list  — 列举分页 list API（由 enumeration-list-intent guard 升级）
- *   dag   — 工具编排（由 tool-plan guard 升级）
+ * 本步新增/改写：
+ *   + routeMode（此处多为 slots；skip 仅非 retrieve）
+ *   + compositeSlots[]（有序执行槽；回答顺序）
+ *   + composeMode（1 槽 qa；≥2 composite）
+ *   + routeReason / routePlanSource
+ *   + pathPlan = empty（⑨ 才编译四桶）
+ *   Δ searchQuery/queryType/topics 取自首槽（兼容单问字段）
+ *
+ * list / dag 由后续 ⑦⑧ 升级；执行最终以 ⑨ pathPlan 为准。
  */
 import {
     buildSingleQuestionPlanItem,
@@ -43,10 +47,6 @@ const sourceToReason = (
     switch (source) {
         case "intake_retrieval_plan":
             return "intake_retrieval_plan";
-        case "intake_subtasks":
-            return "intake_subtasks_fallback";
-        case "structural_multipart":
-            return "structural_multipart_fallback";
         case "query_type_template":
             return "query_type_template";
         default:

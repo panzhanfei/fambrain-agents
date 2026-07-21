@@ -14,6 +14,9 @@ import type { StepResult } from "@/agentflow/agents/online/intake-coordinator/pa
 /**
  * LangGraph 编排共享状态（Intake → planExecutor → Compose；摘要分支 composeMode=summarize）。
  * 初始值由 `runtime/initial-state.ts` 的 `buildInitialState()` 注入；prepareTurnStart 填充 memory 字段；节点只返回需要更新的字段。
+ *
+ * 字段词典：Cursor Canvas「intake-field-dictionary」
+ * 核心路由工单：`decision` = RoutedIntakeDecision（Intake pipeline 出口）
  */
 export const PipelineGraphAnnotation = Annotation.Root({
     /** 本轮及历史对话轮次，供 IntakeCoordinator 理解上下文 */

@@ -13,17 +13,21 @@ Intake 是 Pipeline 的**第一个 LLM 在线 Agent**（图内位于 **`prepareT
 | 问题 | Intake 的解法 |
 |------|---------------|
 | 下游 KM / FC / Analyst 各自猜意图会冲突 | **单一决策点**：只在这里定 intent + searchQuery |
-| 纯 LLM 不稳定（闲聊乱称呼、指代误判） | **LLM 理解 + 轻量 guard**（指代由 prompt 负责；闲聊/plan 等规则兜底） |
+| 纯 LLM 不稳定（闲聊乱称呼、指代误判） | **LLM 理解 + 轻量 guard**（指代/多槽语义终稿归 LLM；闲聊/schema 合法化/canonicalize） |
 | 多问并列难检索 | **retrievalPlan → composite 多槽**，每槽独立 KM |
 | 用户口述 QQ/微信不在简历里 | **userFact 分支**，走 Mem0，不经 KM |
 | 同句再问浪费算力 | **同问短路** 在 **`prepare-turn-start`** 节点（Intake 不再重复检） |
+| 短续问/单字噪声 | **intake-node**：normalize（压连续重复码点）后再判单字早短路；**JSON peek** 标 unresolved 时拼接上轮再调 **1** 次；散文只做 JSON 格式修复，不当指代触发 |
 
-### 1.2 核心原则
+### 1.2 核心原则（档 B）
 
-1. **宁可多检索，不要漏检索** — 简历/经历类问题默认 `retrieve_and_answer`。
-2. **结构化输出** — LLM 只产 JSON，不写 Markdown 长文。
-3. **规则只纠偏，不替代 LLM** — guard 在 LLM 之后跑，改 decision 的个别字段。
-4. **对外只暴露 `index.ts`** — 子目录是内部实现，外部 import 统一走 barrel。
+1. **主路径 = 任务规划** — LLM 产出语义终稿：`intent` + `retrievalPlan` / `searchQuery` + `coreference` 等；下游只信结构化字段。
+2. **旁路 = 兜底 + 纠偏** — normalize / 单字短路 / JSON 格式修复 / 指代拼接≤1 / schema 合法化 / PathPlan 编译；**禁止**口语二次拆槽或盲预合并当规划。
+3. **宁可多检索，不要漏检索** — 简历/经历类问题默认 `retrieve_and_answer`。
+4. **结构化输出** — 只产 JSON；散文反问不算合法工单（可格式修复一轮）。
+5. **对外只暴露 `index.ts`** — 子目录是内部实现，外部 import 统一走 barrel。
+
+复盘顺序：**先看 LLM 工单 → 再看哪一层旁路改过字段**（见仓库 [`docs/04-pitfalls.md` §2.10](../../../../../../../docs/04-pitfalls.md#210-intake-档-b主路径规划--旁路纠偏-p0-31--2026-07)）。
 
 ### 1.3 技术栈
 
@@ -31,7 +35,7 @@ Intake 是 Pipeline 的**第一个 LLM 在线 Agent**（图内位于 **`prepareT
 |------|------|------|
 | LangChain `ChatOllama` | `llm/ollama-chat.ts` | 调本地 Ollama（模型名见 `getBrainServiceConfig().ollama.models.intakeCoordinator`） |
 | Zod | `contract/schema.ts` | 校验 / 规范化 LLM 输出的 JSON |
-| 正则 + 纯函数 guard | `guards/*` | 闲聊、plan 补全、userFact 短路 |
+| 正则 + 纯函数 guard | `guards/*` | 闲聊、plan **normalize/dedupe/canonicalize**（不发明槽）、userFact 短路 |
 | Mem0 / LangMem | 由 **`prepareTurnStart`** 注入 `memoryBlock` | 帮理解多轮指代，**不能**替代 searchQuery 里的实体词 |
 
 ---
@@ -54,21 +58,21 @@ intake-coordinator/
 │   ├── intake-pipeline.ts # runIntakePipeline()
 │   └── parse-intake.ts    # parseIntakeDecision(), defaultIntakeDecision()
 │
-├── signals/               ← 问句结构工具（编号/并列/过期 plan；无意图词表）
+├── signals/               ← 问句结构工具 + 指代重试判定 / 单字短路
 ├── enumeration/           ← UI 列举按钮 prompt（exact-match）
 │
 ├── nodes/                 ← LangGraph 图节点（仅 intake）
-│   └── intake-node.ts     # runIntakeNode()
+│   └── intake-node.ts     # 短路 → LLM →（JSON 修复）→（指代拼接≤1）→ pipeline
 │
 ├── guards/                ← LLM 之后的规则兜底（不口语二次规划）
-│   ├── intake-continuation-guard.ts
+│   ├── intake-continuation-guard.ts  # 未合并 elliptical / 误 clarify 兜底
 │   ├── intake-link-lookup-guard.ts
 │   ├── intake-chitchat-guard.ts
-│   ├── intake-retrieval-plan-guard.ts  # schema 合法化 + facet 去重
+│   ├── intake-retrieval-plan-guard.ts  # schema 合法化 + facet 去重 + canonicalize
 │   ├── composite-route-guard.ts
 │   └── enumeration-list-intent.ts
 │
-├── composite/             ← 多问 / 分槽规划（routing、槽模板）
+├── composite/             ← 多问 / 分槽规划（routing、槽模板；信 LLM plan）
 │   ├── composite-routing.ts
 │   ├── composite-slot-queries.ts
 │   ├── identity-field-search.ts   # displayLabel + searchQuery（无口语 labels）
@@ -111,9 +115,13 @@ pipeline/graph/compile.ts  →  runPrepareTurnStart()     ../prepare-turn-start/
     ▼
 intake-coordinator/nodes/intake-node.ts   runIntakeNode()
     │
-    ├─ completeIntakeCoordinator()          llm/ollama-chat.ts
+    ├─ completeIntakeCoordinator()          llm/ollama-chat.ts  ← 原文第 1 次
     │       输入: intakeHistory + memoryBlock + contract/prompt
     │       输出: 原始 JSON 字符串
+    │
+    ├─ peek parseIntakeDecision → shouldRetryCoreferenceMerge
+    │       coreference=unresolved（或短 clarify）且有上轮实质问
+    │       → 改写最后一条 user 为「上轮；本轮」+ 系统注 + **再调 LLM 1 次**
     │
     ├─ runIntakePipeline()                  pipeline/intake-pipeline.ts
     │       parse → guard 链 → RoutedIntakeDecision
@@ -202,7 +210,7 @@ LLM 的 `retrievalPlan` / `subTasks` 可能**与当前问句不一致**（尤其
 | 同上 + 正文含 `1. … 2. …` 两行 | plan 空或任意 | **展开 2 槽**，每槽 entity + 对外链接 canonical query | `multipart_external_link` |
 | 单句 external_link | queryType 已对 | 补全 searchQuery / topics | `single_external_link` / `harmonize_query_type` |
 
-⑤ `applyIntakeRetrievalPlanGuard` 只做**多问补 plan**（`filled_fallback`）与 canonicalize，**不**收束 stale plan（收束在 profile 专用 guard，如 link lookup）。
+⑤ `applyIntakeRetrievalPlanGuard`：schema 合法化 + facet 去重 + canonicalize；**不**发明多槽（档 B）。stale multipart 收束仍在 link lookup 等专用 guard。
 
 **验证：**
 
@@ -224,7 +232,7 @@ pnpm --filter @fambrain/brain-service run verify:composite-route        # 1 槽 
 | `guard_闲聊` | chitchat 注入固定 briefReply |
 | `guard_用户记忆` | remember / recall |
 | `guard_对外链接` | external_link：stale multipart / 分槽 |
-| `guard_检索计划` | retrievalPlan 补全 / canonicalize |
+| `guard_检索计划` | retrievalPlan 合法化 / 去重 / canonicalize |
 | `guard_复合路由` | routeMode、槽位列表 |
 | `guard_列举分页` | listIntent=exhaustive 等 |
 | `最终路由` | 交给下游的 decision 摘要 |
@@ -265,6 +273,7 @@ Intake 产出两层结构：**LLM 层** `IntakeRoutingDecision` → **编排层*
 | **userFactKey** | string \| null | 记忆字段 slug | qq / wechat / phone / email / dingtalk… |
 | **userFactLabel** | string \| null | 展示名 | 「QQ号」「微信号」 |
 | **userFactValue** | string \| null | remember 时的值 | recall 时为 null |
+| **coreference** | none \| resolved \| unresolved | 多轮指代状态（LLM 标注） | unresolved 时服务端可拼接上轮再调 **1** 次 |
 
 #### intent 选用速查
 
@@ -316,9 +325,7 @@ Intake 产出两层结构：**LLM 层** `IntakeRoutingDecision` → **编排层*
 | 值 | 含义 |
 |----|------|
 | `skip_non_retrieve` | chitchat / userFact / clarify 等不检索 |
-| `intake_retrieval_plan` | 来自 LLM 的 retrievalPlan |
-| `intake_subtasks_fallback` | subTasks ≥2 兜底 |
-| `structural_multipart_fallback` | 多问结构检测兜底 |
+| `intake_retrieval_plan` | 来自 LLM 的 retrievalPlan（档 B 主路径） |
 | `query_type_template` | queryType 模板槽 |
 | `slots_default` | 单问 fallback 包装为 1 槽 |
 
@@ -402,8 +409,9 @@ pipeline → earlyExit → respondEarly → answer = briefReply
 ### 5.3 无上下文指代：「那个项目呢？」
 
 ```text
-LLM（读 history）:
+LLM（无上轮可拼）:
   intent: clarify
+  coreference: unresolved
   clarifyingQuestion: "你指的是哪一段经历或哪个项目？…"
   
 pipeline:
@@ -421,13 +429,16 @@ history:
   assistant: "React TypeScript UniApp…"
   user: "那个项目呢？"
 
-LLM:
-  intent: retrieve_and_answer
-  searchQuery 含「城市管理平台 …」（禁止留指代词）
-  
+路径 A（首轮即消解）:
+  coreference: resolved → 不重试
+  searchQuery 含「城市管理平台 …」
+
+路径 B（首轮 clarify/unresolved）:
+  拼接「城管平台用了什么技术；那个项目呢？」→ 第 2 次 Intake LLM
+  → retrieve + coreference resolved（禁止再标 unresolved）
+
 pipeline:
-  LLM指代决策 → earlyExit=false
-  → retrievalPlan → composite → retrieval → analyst
+  earlyExit=false → retrieval → analyst
 ```
 
 ### 5.5 多问 slots×N（原 composite 多槽）
@@ -486,13 +497,14 @@ prepareTurnStart 节点内 findRepeatAnswerInHistory → 直接返回答案
 ```text
 LLM 返回非 JSON / Zod 校验失败
 
-defaultIntakeDecision(userQuestion):
+优先：散文含反问 → clarifyFallbackFromProse
+否则 defaultIntakeDecision(userQuestion):
   intent: retrieve_and_answer
-    searchQuery: userQuestion（原句）
-  queryType: inferQueryProfile(...)
-  retrievalPlan: 多问结构时 buildFallbackRetrievalPlan
+  searchQuery: userQuestion（原句）
+  queryType: default
+  retrievalPlan: []   ← 档 B：不发明多槽；后续编译为 1 槽
 
-→ 仍尽量走检索，confidence=0.4
+无上文短续问 + 解析失败落到 default retrieve → 再纠正为 clarify
 ```
 
 ---
@@ -523,18 +535,18 @@ defaultIntakeDecision(userQuestion):
 
 | 文件 | 职责 |
 |------|------|
-| `intake-node.ts` | LangGraph intake 节点：调 LLM + `runIntakePipeline()` |
-| `respond-early-node.ts` | clarify / chitchat / 同问短路终稿 |
-| `user-fact-node.ts` | remember / recall → Mem0 |
+| `intake-node.ts` | 入口短路（社交/单字）→ 原文 LLM →（未消解则拼接重试 1×）→ `runIntakePipeline()` |
+
+> respondEarly / userFact 已迁出本目录：`../respond-early/`、`../user-fact/`。
 
 ### guards/
 
 | 文件 | 职责 |
 |------|------|
-| `intake-continuation-guard.ts` | 省略续问 / 历史含 URL → retrieve（P0-25） |
+| `intake-continuation-guard.ts` | elliptical / 误 clarify → retrieve（指代重试后多为 noop） |
 | `intake-link-lookup-guard.ts` | `external_link`：stale multipart 收单槽、编号行分实体（P0-25） |
-| `intake-chitchat-guard.ts` | chitchat 注入服务端固定 briefReply |
-| `intake-retrieval-plan-guard.ts` | 多问补 retrievalPlan；canonicalize 对齐 检索 hits 缓存 |
+| `intake-chitchat-guard.ts` | chitchat 注入服务端固定 briefReply；单字残缺话术 |
+| `intake-retrieval-plan-guard.ts` | schema 合法化 + facet 去重 + canonicalize（不发明槽） |
 | `composite-route-guard.ts` | plan → routeMode + compositeSlots |
 | `enumeration-list-intent.ts` | 列举分页 intent（preview / continue / exhaustive） |
 
@@ -542,7 +554,7 @@ defaultIntakeDecision(userQuestion):
 
 | 文件 | 职责 |
 |------|------|
-| `composite-routing.ts` | 多问结构检测；fallback plan；`resolveCompositeRoute()` |
+| `composite-routing.ts` | 结构信号 helpers；`resolveCompositeRoute()` 信 LLM plan / queryType 模板 |
 | `composite-slot-queries.ts` | 槽模板；planItem → slot；canonicalizePlanItem |
 | `enumeration-target.ts` | 列举问是「公司」还是「项目」 |
 

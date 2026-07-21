@@ -1,8 +1,12 @@
-/** IntakeCoordinator 对外 API；子目录经各自 index 聚合。 */
+/**
+ * IntakeCoordinator 对外 API；子目录经各自 index 聚合。
+ * 档 B：LLM 产出语义终稿 retrievalPlan；代码只做纠正 + 编译（不发明多槽）。
+ */
 
 export {
   prompt,
   parseIntakeRoutingDecision,
+  type IntakeCoreferenceStatus,
   type IntakeIdentityField,
   type IntakeRetrievalPlanItem,
   type IntakeRoutingDecision,
@@ -22,6 +26,11 @@ export {
   hasExplicitMultipartStructure,
   hasStaleMultipartFromDecision,
   isPureSocialUtterance,
+  rewriteLastUserTurn,
+  shouldRetryCoreferenceMerge,
+  shouldShortCircuitIncompleteUtterance,
+  buildMergedCoreferenceQuestion,
+  normalizeIntakeUtterance,
 } from "./signals";
 
 export { completeIntakeCoordinator } from "./llm";
@@ -39,26 +48,16 @@ export {
 
 export { runIntakeNode } from "./nodes";
 
-/** @deprecated 已迁至 respond-early；保留 re-export */
-export { runRespondEarlyNode } from "../respond-early";
-/** @deprecated 已迁至 user-fact；保留 re-export */
-export { userFactNode } from "../user-fact";
-
-/** @deprecated 实现已迁至 repeat-question-guard；保留 re-export 兼容旧 import */
-export { findRepeatAnswerInHistory } from "../repeat-question-guard";
-
 export {
   applyIntakeChitchatGuard,
   applyPureSocialUtteranceGuard,
+  buildIncompleteUtteranceDecision,
   buildPureChitchatDecision,
   DEFAULT_CHITCHAT_BRIEF_REPLY,
+  INCOMPLETE_UTTERANCE_BRIEF_REPLY,
   applyIntakeRetrievalPlanGuard,
   applyEnumerationSlotGuard,
-  applyEnumerationListIntentGuard,
-  resolveEnumerationContinuation,
   buildEnumerationListDecision,
-  detectEnumerationContinuationKind,
-  isExhaustiveListRequest,
   applyCompositeRouteGuard,
   decisionToRetrievalSlot,
   isCompositeProfileQuestion,
@@ -70,28 +69,22 @@ export {
 } from "./guards";
 
 export {
-  buildFallbackRetrievalPlan,
   buildSingleQuestionPlanItem,
-  isTechSingleQuestion,
   looksLikeMultiPartQuestion,
   resolveCompositeRoute,
   resolveEffectiveQueryType,
   splitQuestionUnits,
-  COMPOSITE_FACET_IDS,
-  COMPOSITE_PROFILE_SLOTS,
   EMPLOYERS_SLOT,
   EXTERNAL_LINK_SLOT,
   IDENTITY_SLOT,
   PROJECTS_SLOT,
   canonicalizePlanItem,
   facetTemplateForQueryType,
-  getCompositeSlot,
   planItemToSlot,
   dedupePlanByFacet,
   normalizePlanItemFromSchema,
   planFacetKey,
   repairRetrievalPlanItems,
-  isExperienceEnumeration,
   isProjectEnumeration,
   resolveEnumerationTarget,
   type CompositeFacetId,
@@ -108,7 +101,7 @@ export {
   pathPlanToCompositeSlots,
   emptyPathPlan,
   defaultComposeMode,
-  expandDagTemplate,
+  expandHybridMultiSourceTemplate,
   type ComposeMode,
   type PathPlan,
   type PathKind,

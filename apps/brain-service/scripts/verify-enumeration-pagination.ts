@@ -7,10 +7,7 @@ import assert from "node:assert/strict";
 import {
     applyEnumerationSlotGuard,
     buildEnumerationListDecision,
-    detectEnumerationContinuationKind,
-    isExhaustiveListRequest,
     matchUiEnumerationPrompt,
-    resolveEnumerationContinuation,
     runIntakePipeline,
 } from "../src/agentflow/agents/online/intake-coordinator";
 import {
@@ -22,17 +19,19 @@ import { listCorpusEntriesPage } from "../src/agentflow/agents/online/corpus-lis
 import { retrieveEnumerationPage } from "../src/agentflow/agents/online/corpus-lister";
 import {
     clearMemoryEnumerationListSessions,
+    getEnumerationListSession,
     upsertEnumerationListSession,
 } from "@fambrain/infra";
+import { ENUMERATION_EXHAUSTIVE_PAGE_SIZE } from "../src/agentflow/agents/online/corpus-lister";
 
 console.log("verify-enumeration-pagination");
 
 // UI exact-match only（无口语 regex）
-assert.equal(isExhaustiveListRequest("列出全部项目名称"), true);
-assert.equal(isExhaustiveListRequest("做过哪些项目"), false);
-assert.equal(isExhaustiveListRequest("列出全部36个项目"), false);
-assert.equal(detectEnumerationContinuationKind("更多项目"), "project");
-assert.equal(detectEnumerationContinuationKind("更多经历"), "experience");
+assert.equal(matchUiEnumerationPrompt("列出全部项目名称")?.action, "exhaustive");
+assert.equal(matchUiEnumerationPrompt("做过哪些项目"), null);
+assert.equal(matchUiEnumerationPrompt("列出全部36个项目"), null);
+assert.equal(matchUiEnumerationPrompt("更多项目")?.listKind, "project");
+assert.equal(matchUiEnumerationPrompt("更多经历")?.listKind, "experience");
 assert.equal(matchUiEnumerationPrompt("更多项目")?.action, "continue");
 
 const exhaustiveDecision = buildEnumerationListDecision({
@@ -169,15 +168,23 @@ await upsertEnumerationListSession(
     "project",
     { lastPage: 1, pageSize: 8, total: 36 }
 );
-const continued = await resolveEnumerationContinuation({
+const continueUi = matchUiEnumerationPrompt("更多项目");
+assert.ok(continueUi && continueUi.action === "continue");
+const stored = await getEnumerationListSession(
+    { conversationId: "c1", corpusUserId: "u1" },
+    continueUi!.listKind
+);
+const continued = buildEnumerationListDecision({
     userQuestion: "更多项目",
-    session: { conversationId: "c1", corpusUserId: "u1" },
+    listKind: continueUi!.listKind,
+    listIntent: "continue",
+    page: (stored?.lastPage ?? 1) + 1,
+    pageSize: stored?.pageSize ?? ENUMERATION_EXHAUSTIVE_PAGE_SIZE,
 });
-assert.ok(continued);
-assert.equal(continued!.listIntent, "continue");
-assert.equal(continued!.enumerationPage, 2);
-assert.equal(continued!.routeMode, "slots");
-assert.equal(continued!.compositeSlots[0]?.executor, "list_corpus");
+assert.equal(continued.listIntent, "continue");
+assert.equal(continued.enumerationPage, 2);
+assert.equal(continued.routeMode, "slots");
+assert.equal(continued.compositeSlots[0]?.executor, "list_corpus");
 
 const corpusUserId = process.env.FAMBRAIN_CORPUS_USER_ID?.trim();
 if (corpusUserId) {
