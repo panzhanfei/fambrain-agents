@@ -42,6 +42,7 @@ const base = (): RoutedIntakeDecision => ({
     routeMode: "slots",
     compositeSlots: [],
     pathPlan: emptyPathPlan(),
+    answerOrder: [],
     composeMode: "qa",
 });
 

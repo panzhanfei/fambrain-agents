@@ -52,6 +52,13 @@ const chitchatStub = (
     clarifyingQuestion: null,
     briefReply,
     retrievalPlan: [],
+    pathPlan: { km: [], list: [], tool: [], dag: [] },
+    answerOrder: [],
+    composeMode: "qa",
+    userFactKey: null,
+    userFactLabel: null,
+    userFactValue: null,
+    coreference: "none",
 });
 
 console.log("verify-intake-chitchat\n— guard 单测 —");

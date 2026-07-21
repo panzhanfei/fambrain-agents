@@ -1,19 +1,12 @@
 /**
- * Intake 编排（LLM 之后）：parse → early-exit → legalize → compile → RoutedIntakeDecision。
+ * Intake 编排（LLM 之后）：parse → early-exit → legalize PathPlan → 派生 slots。
  * 每步打结构化日志，供 Web 运行日志 / 控制台复盘。
  *
- * 复盘沙盘（逐步看 decision 变化）：Cursor Canvas「intake-pipeline-sandbox」
- * 字段词典：Cursor Canvas「intake-field-dictionary」
- * 类型：IntakeRoutingDecision（LLM）→ RoutedIntakeDecision（本文件出口）→ state.decision
- *
- * 档 B：LLM 写出完整 retrievalPlan；代码只合法化 + 编译；空 plan → clarify。
- * 纯社交短路在 intake-node；continuation 恒 noop。
+ * 端到端：LLM 出 pathPlan 四桶 + answerOrder；代码只合法化、补 list 页码、派生 compositeSlots。
+ * 三信号指代 merge 在 intake-node；continuation 恒 noop。
  */
 import {
-  applyCompositeRouteGuard,
   applyIntakeChitchatGuard,
-  applyIntakeRetrievalPlanGuard,
-  applyEnumerationSlotGuard,
   applyIntakeContinuationGuard,
   applyIntakeLinkLookupGuard,
   type RoutedIntakeDecision,
@@ -23,12 +16,18 @@ import {
   defaultIntakeDecision,
   parseIntakeDecision,
 } from "./parse-intake";
-import { applyToolPlanGuard } from "@/agentflow/agents/online/tool-orchestrator";
 import type { IntakeRoutingDecision } from "@/agentflow/agents/online/intake-coordinator/contract";
 import {
-  applyPathPlanGuard,
   defaultComposeMode,
+  deriveCompositeSlotsFromPathPlan,
+  deriveRetrievalPlanFromPathPlan,
   emptyPathPlan,
+  executionPlanFromPathPlanDag,
+  fillListPagesInPathPlan,
+  isPathPlanEmpty,
+  legalizeAnswerOrder,
+  legalizeComposeMode,
+  legalizePathPlan,
 } from "@/agentflow/agents/online/intake-coordinator/path-plan";
 import { isUserFactIntent } from "@/agentflow/agents/online/user-fact";
 import { logAgentOut } from "@fambrain/brain-shared/agent-log";
@@ -48,6 +47,15 @@ const summarizeDecision = (
   briefReply: decision.briefReply,
   retrievalPlanCount: decision.retrievalPlan?.length ?? 0,
   retrievalPlanLabels: (decision.retrievalPlan ?? []).map((p) => p.label),
+  answerOrder: decision.answerOrder ?? [],
+  pathPlanCounts: decision.pathPlan
+    ? {
+        km: decision.pathPlan.km?.length ?? 0,
+        list: decision.pathPlan.list?.length ?? 0,
+        tool: decision.pathPlan.tool?.length ?? 0,
+        dag: decision.pathPlan.dag?.length ?? 0,
+      }
+    : null,
   userFactKey: decision.userFactKey,
   userFactLabel: decision.userFactLabel,
   ...("routeMode" in decision
@@ -73,8 +81,6 @@ const guardChanged = (
 
 /**
  * 早退包装：把 IntakeRoutingDecision 升成 RoutedIntakeDecision，但不安排检索。
- * 写入：routeMode=skip, compositeSlots=[], pathPlan 空, routeReason=skip_non_retrieve
- * → routeAfterIntake → respondEarly | userFact（视 intent）
  */
 export const buildEarlyExitRoutedDecision = (
   decision: IntakeRoutingDecision
@@ -83,6 +89,7 @@ export const buildEarlyExitRoutedDecision = (
   routeMode: "skip",
   compositeSlots: [],
   pathPlan: emptyPathPlan(),
+  answerOrder: [],
   composeMode: defaultComposeMode(),
   routeReason: "skip_non_retrieve",
   routePlanSource: "none",
@@ -123,21 +130,29 @@ export type RunIntakePipelineResult = {
   earlyExit: boolean;
 };
 
+const emptyPlanClarify = (
+  decision: IntakeRoutingDecision
+): IntakeRoutingDecision => ({
+  ...decision,
+  intent: "clarify",
+  searchQuery: "",
+  queryType: null,
+  clarifyingQuestion:
+    decision.clarifyingQuestion?.trim() ||
+    "请再说清楚你想了解哪一方面（例如某段经历、某个项目，或姓名/年龄等）？",
+  briefReply: null,
+  retrievalPlan: [],
+  pathPlan: emptyPathPlan(),
+  answerOrder: [],
+  composeMode: "qa",
+  confidence: Math.min(decision.confidence, 0.55),
+  coreference: decision.coreference ?? "none",
+});
+
 /**
- * Intake 规则主流程（LLM 之后）：parse → early-exit → legalize → compile。
- *
- * 步骤一览：
- *   ①   parse+兜底（失败 → clarify）
- *   ②a  continuation（恒 noop）
- *   ②   clarify 早退
- *   ③   闲聊 briefReply
- *   ③b  非检索早退
- *   ④   userFact；无效 recall：有 plan→retrieve；无 plan→clarify
- *   ⑤a  外链 harmonize
- *   ⑤   检索计划合法化/去重/canonicalize
- *   ⑥   复合路由：plan→slots；空 plan→clarify 早退
- *   ⑦⑧⑨ 列举 / 工具 / PathPlan
- *   ⑩   出口
+ * Intake 规则主流程（LLM 之后）：
+ *   ① parse+兜底 → ②a continuation noop → ②–④ early-exit →
+ *   ⑤a link harmonize → ⑥ legalize PathPlan → ⑦ fill pages → ⑧ derive slots
  */
 export const runIntakePipeline = async (
   input: RunIntakePipelineInput
@@ -213,23 +228,16 @@ export const runIntakePipeline = async (
     const factKey = decision.userFactKey?.trim() ?? "";
     /**
      * 无效 recall（缺 userFactKey）：
-     * - 已有可用 retrievalPlan → 改成 retrieve，保留 plan（不发明槽）
-     * - plan 为空 → clarify 早退（不再发明 identity/name）
+     * - 已有可用 pathPlan → 改成 retrieve（不发明槽）
+     * - pathPlan 为空 → clarify 早退
      */
     if (decision.intent === "recall_user_fact" && !factKey) {
-      const plan = decision.retrievalPlan ?? [];
-      const hasUsablePlan = plan.some(
-        (p) =>
-          Boolean(p.searchQuery?.trim()) ||
-          p.queryType === "enumeration" ||
-          p.queryType === "identity" ||
-          Boolean(p.identityField) ||
-          Boolean(p.enumerationControl)
-      );
-      if (hasUsablePlan) {
+      const pathPlan = legalizePathPlan(decision.pathPlan);
+      if (!isPathPlanEmpty(pathPlan)) {
         decision = {
           ...decision,
           intent: "retrieve_and_answer",
+          pathPlan,
           userFactKey: null,
           userFactLabel: null,
           userFactValue: null,
@@ -238,24 +246,16 @@ export const runIntakePipeline = async (
         };
         logAgentOut("IntakeCoordinator", "guard_用户记忆", {
           matched: false,
-          remapped: "invalid_recall_keep_retrieval_plan",
+          remapped: "invalid_recall_keep_path_plan",
           ...summarizeDecision(decision),
         });
       } else {
+        decision = emptyPlanClarify(decision);
         decision = {
           ...decision,
-          intent: "clarify",
-          searchQuery: "",
-          queryType: null,
           clarifyingQuestion:
             decision.clarifyingQuestion?.trim() ||
             "你想回忆哪一条个人设定？请说明关键词（例如昵称、偏好）。",
-          briefReply: null,
-          retrievalPlan: [],
-          userFactKey: null,
-          userFactLabel: null,
-          userFactValue: null,
-          confidence: Math.min(decision.confidence, 0.55),
         };
         logAgentOut("IntakeCoordinator", "guard_用户记忆", {
           matched: false,
@@ -288,7 +288,7 @@ export const runIntakePipeline = async (
     }
   }
 
-  /** ⑤a 对外链接：纠正误标 enumeration 等（信 queryType / plan 结构） */
+  /** ⑤ 对外链接：字段自相矛盾 harmonize（不发明 multipart） */
   const afterLinkLookup = applyIntakeLinkLookupGuard(
     decision,
     input.userQuestion
@@ -301,64 +301,75 @@ export const runIntakePipeline = async (
   }
   decision = afterLinkLookup;
 
-  /** ⑤ 检索计划：schema 合法化 / 去重 / canonicalize（不发明多槽） */
-  const afterPlan = applyIntakeRetrievalPlanGuard(decision, input.userQuestion);
-  logAgentOut("IntakeCoordinator", "guard_检索计划", {
-    reason: afterPlan.retrievalPlanGuardReason ?? "noop",
-    changed: guardChanged(decision, afterPlan),
-    retrievalPlanCount: afterPlan.retrievalPlan.length,
-    retrievalPlanLabels: afterPlan.retrievalPlan.map((p) => p.label),
-  });
-  decision = afterPlan;
+  /** ⑥ 合法化 LLM pathPlan；retrieve 且空 → clarify */
+  let pathPlan = legalizePathPlan(decision.pathPlan);
+  const needsPathPlan =
+    decision.intent === "retrieve_and_answer" ||
+    (decision.intent === "summarize_content" &&
+      decision.searchQuery.trim().length > 0);
 
-  /** ⑥ 复合路由：plan → compositeSlots；空 plan → clarify 早退 */
-  const routed = applyCompositeRouteGuard(decision, input.userQuestion);
-  logAgentOut("IntakeCoordinator", "guard_复合路由", {
-    routeMode: routed.routeMode,
-    routeReason: routed.routeReason,
-    routePlanSource: routed.routePlanSource,
-    compositeSlotCount: routed.compositeSlots.length,
-    compositeSlots: routed.compositeSlots.map((s) => ({
-      id: s.id,
-      label: s.label,
-      queryType: s.queryType,
-      searchQuery:
-        s.searchQuery.length > 120
-          ? `${s.searchQuery.slice(0, 120)}…`
-          : s.searchQuery,
-    })),
-  });
-
-  if (routed.routeMode === "skip" || isClarifyEarlyExit(routed)) {
+  if (needsPathPlan && isPathPlanEmpty(pathPlan)) {
+    decision = emptyPlanClarify(decision);
+    logAgentOut("IntakeCoordinator", "guard_PathPlan", {
+      reason: "empty_path_plan_to_clarify",
+      ...summarizeDecision(decision),
+    });
+    const routed = buildEarlyExitRoutedDecision(decision);
     logAgentOut("IntakeCoordinator", "最终路由", {
       earlyExit: true,
-      reason: routed.intent,
+      reason: "clarify",
       ...summarizeDecision(routed),
     });
     return { decision: routed, parseUsedFallback, earlyExit: true };
   }
 
-  /** ⑦ 列举分页：按槽 executor=list_corpus */
+  const answerOrder = legalizeAnswerOrder(decision.answerOrder, pathPlan);
+  const composeMode =
+    decision.intent === "summarize_content"
+      ? "summarize"
+      : legalizeComposeMode(decision.composeMode, pathPlan);
+
+  logAgentOut("IntakeCoordinator", "guard_PathPlan", {
+    reason: "legalized",
+    composeMode,
+    answerOrder,
+    km: pathPlan.km.length,
+    list: pathPlan.list.length,
+    tool: pathPlan.tool.length,
+    dag: pathPlan.dag.map((d) => d.template),
+  });
+
+  /** ⑦ list 步补 session 页码 */
   const sessionKey: CompositeSessionKey = input.session ?? {
     conversationId: "_",
     corpusUserId: "_",
   };
-  const withListIntent = await applyEnumerationSlotGuard(
-    routed,
+  pathPlan = await fillListPagesInPathPlan(pathPlan, sessionKey);
+
+  /** ⑧ 按 answerOrder 派生 compositeSlots / retrievalPlan；hybrid DAG 展开 */
+  const compositeSlots = deriveCompositeSlotsFromPathPlan(
+    pathPlan,
+    answerOrder
+  );
+  const retrievalPlan = deriveRetrievalPlanFromPathPlan(pathPlan, answerOrder);
+  const executionPlan = executionPlanFromPathPlanDag(
+    pathPlan,
     input.userQuestion,
-    sessionKey
+    decision.searchQuery
   );
-  const listSlots = withListIntent.compositeSlots.filter(
-    (s) => s.executor === "list_corpus"
-  );
+
+  const listSlots = compositeSlots.filter((s) => s.executor === "list_corpus");
+  const firstList = listSlots[0];
+  const listIntent = firstList?.enumerationControl?.action ?? null;
+
   if (listSlots.length > 0) {
     logAgentOut("IntakeCoordinator", "guard_列举分页", {
       listSlotCount: listSlots.length,
-      listIntent: withListIntent.listIntent,
-      page: withListIntent.enumerationPage,
-      pageSize: withListIntent.enumerationPageSize,
-      listKind: withListIntent.enumerationListKind,
-      slotExecutors: withListIntent.compositeSlots.map((s) => ({
+      listIntent,
+      page: firstList?.enumerationPage,
+      pageSize: firstList?.enumerationPageSize,
+      listKind: firstList?.enumerationControl?.listKind ?? null,
+      slotExecutors: compositeSlots.map((s) => ({
         id: s.id,
         executor: s.executor ?? "km_retrieve",
         action: s.enumerationControl?.action ?? null,
@@ -366,42 +377,46 @@ export const runIntakePipeline = async (
     });
   }
 
-  /** ⑧ 工具计划：dataSource / toolId */
-  const withToolPlan = applyToolPlanGuard(withListIntent, input.userQuestion);
-  if (
-    withToolPlan.routeMode === "dag" ||
-    (withToolPlan.enrichedPlan ?? []).some((p) => p.toolId)
-  ) {
+  if (executionPlan) {
     logAgentOut("IntakeCoordinator", "guard_工具计划", {
-      routeMode: withToolPlan.routeMode,
-      executionPlanCount: withToolPlan.executionPlan?.length ?? 0,
-      enrichedToolIds: (withToolPlan.enrichedPlan ?? [])
-        .map((p) => p.toolId)
-        .filter(Boolean),
+      routeMode: "dag",
+      executionPlanCount: executionPlan.length,
+      dagTemplates: pathPlan.dag.map((d) => d.template),
     });
   }
 
-  /** ⑨ PathPlan：编译四桶 + composeMode */
-  const withPathPlan = applyPathPlanGuard(withToolPlan, input.userQuestion);
-  logAgentOut("IntakeCoordinator", "guard_PathPlan", {
-    composeMode: withPathPlan.composeMode,
-    km: withPathPlan.pathPlan.km.length,
-    list: withPathPlan.pathPlan.list.length,
-    tool: withPathPlan.pathPlan.tool.length,
-    dag: withPathPlan.pathPlan.dag.map((d) => d.template),
-    routeMode: withPathPlan.routeMode,
-  });
+  const routed: RoutedIntakeDecision = {
+    ...decision,
+    pathPlan,
+    answerOrder,
+    composeMode,
+    retrievalPlan,
+    compositeSlots,
+    routeMode: executionPlan ? "dag" : "slots",
+    routeReason: "intake_path_plan",
+    routePlanSource: "intake_path_plan",
+    executionPlan,
+    listIntent:
+      listIntent === "continue" || listIntent === "exhaustive"
+        ? listIntent
+        : listIntent === "preview"
+          ? "preview"
+          : null,
+    enumerationPage: firstList?.enumerationPage,
+    enumerationPageSize: firstList?.enumerationPageSize,
+    enumerationListKind: firstList?.enumerationControl?.listKind,
+  };
 
-  /** ⑩ 出口 */
+  /** ⑨ 出口 */
   logAgentOut("IntakeCoordinator", "最终路由", {
-    ...summarizeDecision(withPathPlan),
-    composeMode: withPathPlan.composeMode,
+    ...summarizeDecision(routed),
+    composeMode: routed.composeMode,
     pathPlanCounts: {
-      km: withPathPlan.pathPlan.km.length,
-      list: withPathPlan.pathPlan.list.length,
-      tool: withPathPlan.pathPlan.tool.length,
-      dag: withPathPlan.pathPlan.dag.length,
+      km: routed.pathPlan.km.length,
+      list: routed.pathPlan.list.length,
+      tool: routed.pathPlan.tool.length,
+      dag: routed.pathPlan.dag.length,
     },
   });
-  return { decision: withPathPlan, parseUsedFallback, earlyExit: false };
+  return { decision: routed, parseUsedFallback, earlyExit: false };
 };

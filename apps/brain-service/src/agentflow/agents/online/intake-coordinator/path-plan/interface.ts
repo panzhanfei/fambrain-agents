@@ -4,13 +4,17 @@
 import type { IntakeIdentityField } from "@/agentflow/agents/online/intake-coordinator/contract";
 import type { EnumerationControl } from "@/agentflow/agents/online/intake-coordinator/enumeration";
 import type {
-    ConfidenceTier,
-    EnumerationMeta,
-    KnowledgeHit,
-    KnowledgeRetrievalResult,
+  ConfidenceTier,
+  EnumerationMeta,
+  KnowledgeHit,
+  KnowledgeRetrievalResult,
 } from "@/agentflow/agents/online/knowledge-manager";
 import type { FactCheckerIssue } from "@/agentflow/agents/online/fact-checker";
-import type { ToolRunResult } from "@/agentflow/agents/online/tool-orchestrator";
+import type {
+  DataSource,
+  ToolRunId,
+  ToolRunResult,
+} from "@/agentflow/agents/online/tool-orchestrator";
 
 export type PathKind = "km" | "list" | "tool" | "dag";
 
@@ -20,70 +24,69 @@ export type ComposeMode = "qa" | "summarize" | "composite";
 export type DagTemplateId = "hybrid_multi_source";
 
 export type PathStepBase = {
-    id: string;
-    label: string;
-    searchQuery: string;
-    queryType: "identity" | "enumeration" | "tech" | "external_link" | "default";
-    topics: string[];
-    identityField?: IntakeIdentityField | null;
+  id: string;
+  label: string;
+  searchQuery: string;
+  queryType: "identity" | "enumeration" | "tech" | "external_link" | "default";
+  topics: string[];
+  identityField?: IntakeIdentityField | null;
+  /** 检索后工具（可选）；白名单 ToolRunId */
+  toolId?: ToolRunId | null;
+  dataSource?: DataSource | null;
 };
 
 export type KmStep = PathStepBase & {
-    pathKind: "km";
+  pathKind: "km";
 };
 
 export type ListStep = PathStepBase & {
-    pathKind: "list";
-    enumerationControl?: EnumerationControl | null;
-    enumerationPage?: number;
-    enumerationPageSize?: number;
+  pathKind: "list";
+  enumerationControl?: EnumerationControl | null;
+  enumerationPage?: number;
+  enumerationPageSize?: number;
 };
 
 export type ToolStep = PathStepBase & {
-    pathKind: "tool";
-    toolId:
-        | "search_web"
-        | "compute_age_from_hits"
-        | "compose_enumeration"
-        | "retrieve_corpus";
-    dataSource: "web" | "compute" | "corpus";
+  pathKind: "tool";
+  toolId: ToolRunId;
+  dataSource: DataSource;
 };
 
 export type DagRun = {
-    id: string;
-    pathKind: "dag";
-    label: string;
-    template: DagTemplateId;
-    /** 复用 pathPlan 内其它 step 的结果（如 list-0） */
-    deps?: string[];
-    params?: Record<string, unknown>;
+  id: string;
+  pathKind: "dag";
+  label: string;
+  template: DagTemplateId;
+  /** 复用 pathPlan 内其它 step 的结果（如 list-0） */
+  deps?: string[];
+  params?: Record<string, unknown>;
 };
 
 export type PathPlan = {
-    km: KmStep[];
-    list: ListStep[];
-    tool: ToolStep[];
-    dag: DagRun[];
+  km: KmStep[];
+  list: ListStep[];
+  tool: ToolStep[];
+  dag: DagRun[];
 };
 
 export type StepFactCheck = {
-    passed: boolean;
-    refinedSearchQuery?: string | null;
-    issues?: FactCheckerIssue[];
-    checkerNotes?: string | null;
+  passed: boolean;
+  refinedSearchQuery?: string | null;
+  issues?: FactCheckerIssue[];
+  checkerNotes?: string | null;
 };
 
 export type StepResult = {
-    stepId: string;
-    pathKind: PathKind;
-    label: string;
-    hits: KnowledgeHit[];
-    coverage: KnowledgeRetrievalResult["coverage"];
-    notes: string | null;
-    confidenceTier?: ConfidenceTier | null;
-    enumerationMeta?: EnumerationMeta | null;
-    toolOutput?: ToolRunResult | null;
-    cacheHit?: boolean;
-    facetKey?: string;
-    fc: StepFactCheck;
+  stepId: string;
+  pathKind: PathKind;
+  label: string;
+  hits: KnowledgeHit[];
+  coverage: KnowledgeRetrievalResult["coverage"];
+  notes: string | null;
+  confidenceTier?: ConfidenceTier | null;
+  enumerationMeta?: EnumerationMeta | null;
+  toolOutput?: ToolRunResult | null;
+  cacheHit?: boolean;
+  facetKey?: string;
+  fc: StepFactCheck;
 };

@@ -5,6 +5,7 @@ import {
   unitInterval,
 } from "@/agentflow/utils";
 import type { IntakeRoutingDecision } from "./prompt";
+import type { PathPlan } from "@/agentflow/agents/online/intake-coordinator/path-plan/interface";
 const INTAKE_QUERY_TYPES = [
   "identity",
   "enumeration",
@@ -140,13 +141,15 @@ const normalizeIdentityField = (
   return null;
 };
 
-export const intakeIdentityFieldSchema = z.preprocess(
-  normalizeIdentityField,
-  z
-    .enum(["name", "age", "email", "phone", "education", "career", "tenure"])
-    .nullable()
-).optional()
-.catch(null);
+export const intakeIdentityFieldSchema = z
+  .preprocess(
+    normalizeIdentityField,
+    z
+      .enum(["name", "age", "email", "phone", "education", "career", "tenure"])
+      .nullable()
+  )
+  .optional()
+  .catch(null);
 
 export const intakeRetrievalPlanItemSchema = z.object({
   label: z.coerce.string().transform((s) => String(s).trim()),
@@ -156,6 +159,25 @@ export const intakeRetrievalPlanItemSchema = z.object({
   enumerationControl: enumerationControlSchema,
   identityField: intakeIdentityFieldSchema,
 });
+/** pathPlan 由 pipeline legalizePathPlan 深合法化；此处仅透传对象 */
+export const intakePathPlanPassthroughSchema = z
+  .unknown()
+  .optional()
+  .nullable()
+  .catch(null);
+
+export const intakeComposeModeSchema = z
+  .enum(["qa", "composite", "summarize"])
+  .optional()
+  .nullable()
+  .catch(null);
+
+export const intakeAnswerOrderSchema = z
+  .array(z.coerce.string().transform((s) => String(s).trim()).pipe(z.string().min(1)))
+  .optional()
+  .nullable()
+  .catch([]);
+
 export const intakeRoutingDecisionSchema = z.object({
   intent: intakeIntentSchema,
   searchQuery: z.coerce.string().transform((s) => String(s).trim()),
@@ -163,14 +185,20 @@ export const intakeRoutingDecisionSchema = z.object({
   topics: nonEmptyStringArray.catch([]),
   language: intakeLanguageSchema,
   confidence: unitInterval,
-  queryType: z.preprocess((v) => {
-    if (v === null || v === undefined) return null;
-    if (typeof v !== "string") return null;
-    return (INTAKE_QUERY_TYPES as readonly string[]).includes(v) ? v : null;
-  }, z.enum(INTAKE_QUERY_TYPES).nullable()).catch(null),
+  queryType: z
+    .preprocess((v) => {
+      if (v === null || v === undefined) return null;
+      if (typeof v !== "string") return null;
+      return (INTAKE_QUERY_TYPES as readonly string[]).includes(v) ? v : null;
+    }, z.enum(INTAKE_QUERY_TYPES).nullable())
+    .catch(null),
   clarifyingQuestion: nullableTrimmedString,
   briefReply: nullableTrimmedString,
+  /** 兼容/派生；LLM 可不填，pipeline 从 pathPlan 生成 */
   retrievalPlan: z.array(intakeRetrievalPlanItemSchema).catch([]),
+  pathPlan: intakePathPlanPassthroughSchema,
+  answerOrder: intakeAnswerOrderSchema,
+  composeMode: intakeComposeModeSchema,
   userFactKey: z.preprocess(
     (v) => (v === undefined ? null : v),
     nullableTrimmedString
@@ -211,6 +239,38 @@ const normalizePlanItem = (
   };
 };
 
+const normalizePathPlanStep = (
+  item: Record<string, unknown>
+): Record<string, unknown> => ({
+  ...item,
+  searchQuery: pickIntakeField(item, "searchQuery", "search_query"),
+  queryType: pickIntakeField(item, "queryType", "query_type"),
+  pathKind: pickIntakeField(item, "pathKind", "path_kind"),
+  identityField: pickIntakeField(item, "identityField", "identity_field"),
+  toolId: pickIntakeField(item, "toolId", "tool_id"),
+  dataSource: pickIntakeField(item, "dataSource", "data_source"),
+  enumerationControl: pickIntakeField(
+    item,
+    "enumerationControl",
+    "enumeration_control"
+  ),
+  enumerationPage: pickIntakeField(item, "enumerationPage", "enumeration_page"),
+  enumerationPageSize: pickIntakeField(
+    item,
+    "enumerationPageSize",
+    "enumeration_page_size"
+  ),
+});
+
+const normalizePathPlanBucket = (raw: unknown): unknown => {
+  if (!Array.isArray(raw)) return [];
+  return raw.map((item) =>
+    item && typeof item === "object" && !Array.isArray(item)
+      ? normalizePathPlanStep(item as Record<string, unknown>)
+      : item
+  );
+};
+
 const normalizeIntakeRaw = (
   raw: Record<string, unknown>
 ): Record<string, unknown> => {
@@ -222,6 +282,18 @@ const normalizeIntakeRaw = (
           : item
       )
     : planRaw;
+  const pathPlanRaw = pickIntakeField(raw, "pathPlan", "path_plan");
+  let pathPlan: unknown = pathPlanRaw;
+  if (pathPlanRaw && typeof pathPlanRaw === "object" && !Array.isArray(pathPlanRaw)) {
+    const pp = pathPlanRaw as Record<string, unknown>;
+    pathPlan = {
+      ...pp,
+      km: normalizePathPlanBucket(pp.km),
+      list: normalizePathPlanBucket(pp.list),
+      tool: normalizePathPlanBucket(pp.tool),
+      dag: normalizePathPlanBucket(pp.dag),
+    };
+  }
   return {
     ...raw,
     searchQuery: pickIntakeField(raw, "searchQuery", "search_query"),
@@ -234,6 +306,9 @@ const normalizeIntakeRaw = (
     ),
     briefReply: pickIntakeField(raw, "briefReply", "brief_reply"),
     retrievalPlan,
+    pathPlan,
+    answerOrder: pickIntakeField(raw, "answerOrder", "answer_order"),
+    composeMode: pickIntakeField(raw, "composeMode", "compose_mode"),
     userFactKey: pickIntakeField(raw, "userFactKey", "user_fact_key"),
     userFactLabel: pickIntakeField(raw, "userFactLabel", "user_fact_label"),
     userFactValue: pickIntakeField(raw, "userFactValue", "user_fact_value"),
@@ -248,5 +323,17 @@ export const parseIntakeRoutingDecision = (
       ? normalizeIntakeRaw(raw as Record<string, unknown>)
       : raw;
   const parsed = intakeRoutingDecisionSchema.safeParse(normalized);
-  return parsed.success ? parsed.data : null;
+  if (!parsed.success) return null;
+  const data = parsed.data;
+  /** 深合法化在 pipeline.legalizePathPlan；此处仅收窄类型 */
+  const pathPlan =
+    data.pathPlan == null
+      ? data.pathPlan
+      : (data.pathPlan as PathPlan);
+  return {
+    ...data,
+    pathPlan,
+    answerOrder: data.answerOrder ?? [],
+    composeMode: data.composeMode ?? null,
+  };
 };

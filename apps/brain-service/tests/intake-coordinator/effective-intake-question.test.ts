@@ -7,7 +7,7 @@ import {
   shouldRetryCoreferenceMerge,
   shouldShortCircuitIncompleteUtterance,
   surfaceForSingleCharSignal,
-} from "@/agentflow/agents/online/intake-coordinator/signals";
+} from "@/agentflow/agents/online/intake-coordinator";
 
 describe("normalizeIntakeUtterance", () => {
   it("collapses consecutive identical code points", () => {
@@ -53,11 +53,102 @@ describe("shouldRetryCoreferenceMerge", () => {
     expect(r.retry).toBe(true);
   });
 
-  it("does not retry when already resolved", () => {
+  it("does not retry when already resolved without enumeration", () => {
     const r = shouldRetryCoreferenceMerge(
       { intent: "retrieve_and_answer", coreference: "resolved" },
       "那个项目呢？",
       historyWithPrior
+    );
+    expect(r.retry).toBe(false);
+  });
+
+  it("retries short entity-swap when retrieve wrongly uses enumeration", () => {
+    const history: DbChatTurn[] = [
+      { role: "user", content: "我那一年入职奥卡云的？" },
+      {
+        role: "assistant",
+        content: "你于 2021 年 6 月入职西安奥卡云科技有限公司。",
+      },
+      { role: "user", content: "云联智慧呢" },
+    ];
+    const r = shouldRetryCoreferenceMerge(
+      {
+        intent: "retrieve_and_answer",
+        coreference: "resolved",
+        queryType: "enumeration",
+        retrievalPlan: [
+          {
+            label: "云联智慧经历",
+            searchQuery: "工作经历 云联智慧",
+            queryType: "enumeration",
+            topics: ["experience"],
+          },
+        ],
+      },
+      "云联智慧呢",
+      history
+    );
+    expect(r.retry).toBe(true);
+    expect(r.mergedQuestion).toBe("我那一年入职奥卡云的？；云联智慧呢");
+  });
+
+  it("retries when short continuation entity is missing from plan", () => {
+    const history: DbChatTurn[] = [
+      { role: "user", content: "我那一年入职奥卡云的？" },
+      {
+        role: "assistant",
+        content: "你于 2021 年 6 月入职西安奥卡云科技有限公司。",
+      },
+      { role: "user", content: "云联智慧呢" },
+    ];
+    const r = shouldRetryCoreferenceMerge(
+      {
+        intent: "retrieve_and_answer",
+        coreference: "resolved",
+        queryType: "default",
+        searchQuery: "奥卡云 入职 年份",
+        retrievalPlan: [
+          {
+            label: "奥卡云入职年份",
+            searchQuery: "奥卡云 入职 年份",
+            queryType: "default",
+            topics: ["experience"],
+          },
+        ],
+      },
+      "云联智慧呢",
+      history
+    );
+    expect(r.retry).toBe(true);
+    expect(r.mergedQuestion).toContain("云联智慧呢");
+  });
+
+  it("does not retry when short continuation entity already in plan", () => {
+    const history: DbChatTurn[] = [
+      { role: "user", content: "我那一年入职奥卡云的？" },
+      {
+        role: "assistant",
+        content: "你于 2021 年 6 月入职西安奥卡云科技有限公司。",
+      },
+      { role: "user", content: "云联智慧呢" },
+    ];
+    const r = shouldRetryCoreferenceMerge(
+      {
+        intent: "retrieve_and_answer",
+        coreference: "resolved",
+        queryType: "default",
+        searchQuery: "云联智慧 入职 年份",
+        retrievalPlan: [
+          {
+            label: "云联智慧入职年份",
+            searchQuery: "云联智慧 入职 年份 哪一年",
+            queryType: "default",
+            topics: ["experience"],
+          },
+        ],
+      },
+      "云联智慧呢",
+      history
     );
     expect(r.retry).toBe(false);
   });

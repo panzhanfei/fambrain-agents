@@ -19,7 +19,7 @@ import { bootstrapBrainServiceRuntime } from "@/config";
 /** 默认连跑遍数；也可用环境变量 GOLDEN_RUNS 或 CLI 参数覆盖 */
 const DEFAULT_GOLDEN_RUNS = 3;
 
-type GoldenId = "G1" | "G2" | "G3" | "G4" | "G5" | "G5b" | "GMem";
+type GoldenId = "G1" | "G2" | "G3" | "G4" | "G5" | "G5b" | "G5c" | "GMem";
 
 /** 跨会话记忆探测用 QQ（与 verify:user-fact 一致） */
 const GOLDEN_QQ = "734858469";
@@ -171,7 +171,11 @@ const GOLDEN_CASES: GoldenCase[] = [
     assert: ({ steps, answer }) => {
       if (!hasRetrievalStep(steps) && !hasStep(steps, "user_fact"))
         return "应进入 plan_executor/retrieval 或 user_fact（非 clarify 短路）";
-      if (!hasStep(steps, "analyst") && !hasStep(steps, "user_fact") && CLARIFY_ANSWER.test(answer))
+      if (
+        !hasStep(steps, "analyst") &&
+        !hasStep(steps, "user_fact") &&
+        CLARIFY_ANSWER.test(answer)
+      )
         return "不应 clarify，应检索 personal/简历";
       if (!answer.trim()) return "answer 为空";
       return null;
@@ -206,7 +210,8 @@ const GOLDEN_CASES: GoldenCase[] = [
     question: "那个项目呢？",
     assert: ({ steps, answer }) => {
       if (hasStep(steps, "analyst")) return "无上下文时不应进入 analyst 编造";
-      if (!hasStep(steps, "prepare_turn_start")) return "应至少经过 prepare_turn_start";
+      if (!hasStep(steps, "prepare_turn_start"))
+        return "应至少经过 prepare_turn_start";
       if (!hasStep(steps, "intake")) return "应至少经过 intake";
       if (!CLARIFY_ANSWER.test(answer))
         return "answer 应像澄清问句（含「哪/哪个/指的是」等）";
@@ -231,6 +236,34 @@ const GOLDEN_CASES: GoldenCase[] = [
       if (CLARIFY_ANSWER.test(answer)) return "answer 不应再澄清「哪个项目」";
       if (!/城管|城市管理|React|UniApp|TypeScript|Vite/i.test(answer))
         return "应延续上文城市管理平台主题，而非无关项目";
+      return null;
+    },
+  },
+  {
+    id: "G5c",
+    label: "实体替换续问（入职年份 · 云联智慧 · QU-03）",
+    history: [
+      { role: "user", content: "我那一年入职奥卡云的？" },
+      {
+        role: "assistant",
+        content: "你于 2021 年 6 月入职西安奥卡云科技有限公司。",
+      },
+    ],
+    question: "云联智慧呢",
+    assert: ({ steps, answer }) => {
+      if (!hasRetrievalStep(steps))
+        return "有上文时应走 plan_executor/retrieval，不应 clarify";
+      if (CLARIFY_ANSWER.test(answer))
+        return "answer 不应再澄清，应继承「入职年份」意图";
+      if (!/云联智慧/.test(answer))
+        return "answer 应提及云联智慧";
+      if (!/2016|2017|16年|17年/.test(answer))
+        return "answer 应给出云联智慧入职年份（语料约 2016–2017）";
+      const companyHits = ["友谊时光", "奖多多", "奥卡云"].filter((c) =>
+        answer.includes(c)
+      );
+      if (companyHits.length >= 2)
+        return "不应列举多家公司经历表，应单点答云联智慧入职年份";
       return null;
     },
   },
@@ -290,15 +323,12 @@ const runCrossSessionMemCase = async (
     };
   }
 
-  const recall = await runPipelineTurn(
-    [{ role: "user", content: recallQ }],
-    {
-      actorUserId,
-      corpusUserId,
-      displayName: "Golden 回归",
-      conversationId: `golden-gmem-b-r${runIndex}`,
-    }
-  );
+  const recall = await runPipelineTurn([{ role: "user", content: recallQ }], {
+    actorUserId,
+    corpusUserId,
+    displayName: "Golden 回归",
+    conversationId: `golden-gmem-b-r${runIndex}`,
+  });
   const latencyMs = Date.now() - started;
   const base = {
     steps: recall.steps,
@@ -393,7 +423,7 @@ const printOneRunBlock = (run: GoldenRunResult): void => {
 
   console.log(line);
   console.log(
-    `通过率：${passed.length}/${run.results.length}（目标 ≥5/7，G1～G5 核心 ≥4/5）`
+    `通过率：${passed.length}/${run.results.length}（目标 ≥6/8，G1～G5 核心 ≥4/5）`
   );
   console.log(
     `通过：${passed.length ? passed.map((r) => r.id).join("、") : "（无）"}`
@@ -448,7 +478,7 @@ const main = async (): Promise<void> => {
   const totalRuns = parseGoldenRuns();
   const corpusUserId = await resolveCorpusUserId();
   console.log(
-    `Golden G1～G5 + GMem 全链路回归（corpusUserId=${corpusUserId}，连跑 ${totalRuns} 遍）`
+    `Golden G1～G5c + GMem 全链路回归（corpusUserId=${corpusUserId}，连跑 ${totalRuns} 遍）`
   );
   console.log("运行中仅显示进度；问/答/评判与各遍汇总将在全部结束后统一展示…");
 
@@ -459,17 +489,17 @@ const main = async (): Promise<void> => {
 
   printMultiRunReport(runs, corpusUserId, totalRuns);
 
-  /** 与报告文案一致：每遍 ≥5/7，且 G1～G5 核心 ≥4/5；允许偶发 LLM 抖动（如 G5b） */
+  /** 与报告文案一致：每遍 ≥6/8，且 G1～G5 核心 ≥4/5；允许偶发 LLM 抖动（如 G5b/G5c） */
   const CORE_IDS = new Set(["G1", "G2", "G3", "G4", "G5"]);
   const runMeetsBar = (run: GoldenRunResult): boolean => {
     const passed = run.results.filter((r) => r.pass);
     const corePassed = passed.filter((r) => CORE_IDS.has(r.id)).length;
-    return passed.length >= 5 && corePassed >= 4;
+    return passed.length >= 6 && corePassed >= 4;
   };
   const failedRuns = runs.filter((run) => !runMeetsBar(run));
   if (failedRuns.length > 0) {
     console.error(
-      `\nGolden 未达标：${failedRuns.map((r) => `第${r.runIndex}遍`).join("、")}（目标每遍 ≥5/7 且 G1～G5 ≥4/5）`
+      `\nGolden 未达标：${failedRuns.map((r) => `第${r.runIndex}遍`).join("、")}（目标每遍 ≥6/8 且 G1～G5 ≥4/5）`
     );
     process.exit(1);
   }

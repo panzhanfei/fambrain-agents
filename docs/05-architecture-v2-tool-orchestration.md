@@ -243,7 +243,7 @@ flowchart LR
 
 ### 11.2 PathPlan 四桶 + Compose 一层
 
-Intake guard 末尾 **`compilePathPlan`** 产出：
+Intake LLM **直接产出**四桶 + `answerOrder`；pipeline **`legalizePathPlan`** 后按顺序派生 `compositeSlots`（旧 `compilePathPlan` 分桶推断已退出主路径）：
 
 ```typescript
 type PathPlan = {
@@ -253,6 +253,7 @@ type PathPlan = {
   dag: DagRun[];     // 仅 hybrid_multi_source（多源汇合；禁止场景 named DAG）
 };
 type ComposeMode = "qa" | "summarize" | "composite";
+// answerOrder: string[]  // 步 id 列表，决定回答/检索顺序
 ```
 
 | 桶 | 执行 | FC |
@@ -262,7 +263,7 @@ type ComposeMode = "qa" | "summarize" | "composite";
 | `tool` | `ToolOrchestrator` | 规则 / 工具输出 |
 | `dag` | `DagExecutor`（模板展开） | 节点级或整 DAG pass |
 
-**Compose 只做一次：** 全部 step 完成后，Analyst 按 `composeMode` 输出单答 / 多段 composite / 摘要；**不做**「每路径 LLM 混剪后再混剪」。
+**Compose 只做一次：** 全部 step 完成后，Analyst 按 `composeMode` 输出单答 / 多段 composite / 摘要；**回答顺序 = `answerOrder`**，不做 list→km 重排。
 
 ### 11.3 列举 + 外链（无场景 DAG）
 
@@ -270,8 +271,8 @@ type ComposeMode = "qa" | "summarize" | "composite";
 
 ```mermaid
 flowchart LR
-  IC[Intake retrievalPlan<br/>enum + external_link] --> PP[compilePathPlan]
-  PP --> L[list / km 分桶<br/>保留 Intake 顺序]
+  IC[Intake pathPlan<br/>list + km/external_link] --> Val[legalize + derive slots]
+  Val --> L[按 answerOrder 执行]
   L --> PE[PlanExecutor]
   PE --> T[extract_external_links_from_hits]
   PE --> FC[per-step FC]
@@ -356,11 +357,11 @@ pnpm --filter @fambrain/brain-service exec tsx --env-file=../../.env scripts/dia
 
 | 层 | 职责 | 禁止 |
 |----|------|------|
-| **主路径（LLM）** | 产出语义终稿：`intent` / **`retrievalPlan≥1`**（retrieve 时）/ `searchQuery` / `coreference` | 依赖代码猜口语、发明多槽 |
+| **主路径（LLM）** | 产出执行终稿：`intent` / **`pathPlan`≥1 + `answerOrder`**（retrieve 时）/ `composeMode` / `searchQuery` / `coreference` | 依赖代码猜口语、发明多槽、按 queryType 猜桶 |
 | **旁路·入口** | normalize（压连续重复码点）→ 单字/社交/UI 短路 | NFKC 改写标点导致与 history 对不上；盲预合并 |
 | **旁路·格式** | 非 JSON → 格式修复 **1** 次 | 把散文当 `coreference` 信号 |
-| **旁路·指代** | **仅 JSON peek** 未消解时拼接「上轮；本轮」再调 **1** 次 | 无限重试；无上文硬拼 |
-| **旁路·guard** | schema 合法化、facet 去重、link **harmonize**、PathPlan **只编译 plan**（空→clarify） | `filled_fallback` / continuation 补 prior / 口语二次规划 |
+| **旁路·指代** | **三信号** + **仅 JSON peek** 未消解时拼接「上轮；本轮」再调 **1** 次 | 无限重试；无上文硬拼；弱模旁路不可删 |
+| **旁路·guard** | toolId 白名单、link **harmonize**、list 页码、**派生** compositeSlots（空 pathPlan→clarify） | `filled_fallback` / continuation 补 prior / 口语二次规划 / retrievalPlan 编译猜桶 |
 
 ### 13.2 为何比「调用前合并」更合理
 

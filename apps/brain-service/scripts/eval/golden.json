@@ -79,6 +79,29 @@
       }
     },
     {
+      "id": "G5c",
+      "tier": "pipeline",
+      "label": "实体替换续问（入职年份 · 云联智慧 · QU-03）",
+      "history": [
+        {
+          "role": "user",
+          "content": "我那一年入职奥卡云的？"
+        },
+        {
+          "role": "assistant",
+          "content": "你于 2021 年 6 月入职西安奥卡云科技有限公司。"
+        }
+      ],
+      "question": "云联智慧呢",
+      "assert": {
+        "mustIncludeAnySteps": [["plan_executor", "retrieval"]],
+        "mustIncludeSteps": ["analyst"],
+        "answerMustNotRe": "哪|哪个|请说明|指的是|哪一段",
+        "answerRe": "2016|2017|云联智慧",
+        "answerMustIncludeAll": ["云联智慧"]
+      }
+    },
+    {
       "id": "K1",
       "tier": "km",
       "label": "姓名（Intake 改写 searchQuery）",
@@ -227,7 +250,9 @@
       {
         "question": "城管平台用了什么技术",
         "assert": {
-          "mustIncludeAnySteps": [["plan_executor", "retrieval", "repeat_respond_early"]],
+          "mustIncludeAnySteps": [
+            ["plan_executor", "retrieval", "repeat_respond_early"]
+          ],
           "answerRe": "城管|城市管理平台|技术|React|TypeScript"
         },
         "expectCacheHit": true

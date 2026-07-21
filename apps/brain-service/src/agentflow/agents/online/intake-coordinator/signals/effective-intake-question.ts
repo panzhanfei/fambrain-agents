@@ -103,10 +103,19 @@ export type CoreferenceMergeRetry = {
 /**
  * 首次 Intake **JSON** 解析后是否拼接再调 LLM（最多 1 次）。
  * 只认 parse 成功的决策；peek=null（散文）不触发。
- * 主信号：coreference=unresolved；次信号：clarify + 短续问（≤16）且未标 resolved。
+ * 主信号：coreference=unresolved；
+ * 次信号：clarify/userFact/chitchat + 短续问且未标 resolved；
+ * 三信号：短续问 retrieve 却 (a) 落到 enumeration，或 (b) plan 未含本轮实体词
+ *        → 不发明槽，只强制带 prior 再规划一次。
  */
 export const shouldRetryCoreferenceMerge = (
-  peek: Pick<IntakeRoutingDecision, "coreference" | "intent"> | null,
+  peek: (Pick<IntakeRoutingDecision, "coreference" | "intent"> &
+    Partial<
+      Pick<
+        IntakeRoutingDecision,
+        "queryType" | "searchQuery" | "retrievalPlan" | "pathPlan"
+      >
+    >) | null,
   userQuestion: string,
   history: DbChatTurn[]
 ): CoreferenceMergeRetry => {
@@ -137,8 +146,42 @@ export const shouldRetryCoreferenceMerge = (
       peek.intent === "recall_user_fact" ||
       peek.intent === "remember_user_fact" ||
       peek.intent === "chitchat");
+  const pathPlan = peek.pathPlan;
+  const planHasEnum =
+    (peek.retrievalPlan ?? []).some((p) => p.queryType === "enumeration") ||
+    (pathPlan?.list?.length ?? 0) > 0 ||
+    (pathPlan?.km ?? []).some((s) => s.queryType === "enumeration");
+  /** 短续问主体（去掉句末「呢/吗/标点」）——结构切分，非公司词表 */
+  const entityHint = current
+    .replace(/[呢嗎吗麽么呀啊吧哇哦噢欸？?！!。.\s]+$/u, "")
+    .trim();
+  /** 代词续问（那个/这个…）不靠「实体是否在 plan」判定，走 unresolved/主次信号 */
+  const deixisOnly = /^(那个|这个|它|上述|刚才|还有|啥|什么)/u.test(entityHint);
+  const pathPlanBlob = pathPlan
+    ? [
+        ...pathPlan.km.flatMap((s) => [s.label, s.searchQuery]),
+        ...pathPlan.list.flatMap((s) => [s.label, s.searchQuery]),
+        ...pathPlan.tool.flatMap((s) => [s.label, s.searchQuery]),
+      ].join(" ")
+    : "";
+  const planBlob = [
+    peek.searchQuery ?? "",
+    ...(peek.retrievalPlan ?? []).flatMap((p) => [p.label, p.searchQuery]),
+    pathPlanBlob,
+  ].join(" ");
+  const missingCurrentEntity =
+    short &&
+    peek.intent === "retrieve_and_answer" &&
+    entityHint.length >= 2 &&
+    !deixisOnly &&
+    !planBlob.includes(entityHint);
+  /** 三信号：enumeration 误路由，或实体替换后 plan 仍无本轮实体 */
+  const enumOrEntityMiss =
+    short &&
+    peek.intent === "retrieve_and_answer" &&
+    (peek.queryType === "enumeration" || planHasEnum || missingCurrentEntity);
 
-  if (!primary && !misroutedShort) {
+  if (!primary && !misroutedShort && !enumOrEntityMiss) {
     return { retry: false, prior, mergedQuestion: null };
   }
 

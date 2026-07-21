@@ -259,6 +259,10 @@ export const applyPathPlanGuard = (
     ...decision,
     pathPlan,
     composeMode,
+    answerOrder:
+      decision.answerOrder?.length
+        ? decision.answerOrder
+        : enrichedSlots.map((s) => String(s.id)),
     compositeSlots: enrichedSlots,
     routeMode: hasWork ? (isHybrid ? "dag" : "slots") : decision.routeMode,
     executionPlan: isHybrid

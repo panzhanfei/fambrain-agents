@@ -23,25 +23,28 @@ export type IntakeRouteMode = "skip" | "slots" | "list" | "dag";
 /** 为何走到当前 routeMode（写进日志 routeReason） */
 export type CompositeRouteReason =
   | "skip_non_retrieve"
+  | "intake_path_plan"
   | "intake_retrieval_plan";
 
 export type EnumerationListIntent = "preview" | "continue" | "exhaustive";
 
 export type IntakeRetrievalPlanGuardReason =
-    | "noop"
-    | "repaired_plan"
-    | "canonicalized";
+  | "noop"
+  | "repaired_plan"
+  | "canonicalized";
 
 /**
  * Intake 编排工单（写入 state.decision）。
- * 主契约：pathPlan + composeMode；routeMode/compositeSlots 为兼容派生。
+ * 主契约：pathPlan + answerOrder + composeMode；compositeSlots 由 pathPlan 派生。
  */
 export type RoutedIntakeDecision = IntakeRoutingDecision & {
   routeMode: IntakeRouteMode;
   /** 完整槽对象数组；slots 路由时 length ≥ 1 */
   compositeSlots: CompositeRetrievalSlot[];
-  /** 四桶执行计划（km / list / tool / dag） */
+  /** 四桶执行计划（km / list / tool / dag）；LLM 产出，代码合法化 */
   pathPlan: PathPlan;
+  /** 回答顺序（step id）；与 pathPlan 对齐 */
+  answerOrder: string[];
   /** 出稿模式：qa | summarize | composite */
   composeMode: ComposeMode;
   routeReason?: CompositeRouteReason;

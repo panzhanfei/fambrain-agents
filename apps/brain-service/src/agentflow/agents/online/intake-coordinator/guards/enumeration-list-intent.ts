@@ -18,7 +18,12 @@ import {
     type EnumerationControl,
     type EnumerationListKind,
 } from "../enumeration";
-import { compilePathPlan } from "@/agentflow/agents/online/intake-coordinator/path-plan";
+import {
+    deriveCompositeSlotsFromPathPlan,
+    deriveRetrievalPlanFromPathPlan,
+    type ListStep,
+    type PathPlan,
+} from "@/agentflow/agents/online/intake-coordinator/path-plan";
 import type {
     EnumerationListIntent,
     RoutedIntakeDecision,
@@ -47,7 +52,7 @@ const listSlotTemplate = (
     };
 };
 
-/** 合成单槽 list 路由（UI exact-match / 脚本用）；恒为 routeMode=slots */
+/** 合成单槽 list 路由（UI exact-match / 脚本用）；直接构造 pathPlan.list + answerOrder */
 export const buildEnumerationListDecision = (input: {
     userQuestion: string;
     listKind: EnumerationListKind;
@@ -56,7 +61,6 @@ export const buildEnumerationListDecision = (input: {
     pageSize: number;
     excludeHint?: string | null;
 }): RoutedIntakeDecision => {
-    const isProject = input.listKind === "project";
     const action: EnumerationControl["action"] =
         input.listIntent === "continue" ? "continue" : "exhaustive";
     const control: EnumerationControl = {
@@ -67,7 +71,34 @@ export const buildEnumerationListDecision = (input: {
     const slot = listSlotTemplate(input.listKind, control);
     slot.enumerationPage = input.page;
     slot.enumerationPageSize = input.pageSize;
-    const partial: RoutedIntakeDecision = {
+    const listStep: ListStep = {
+        id: String(slot.id),
+        pathKind: "list",
+        label: slot.label,
+        searchQuery: slot.searchQuery,
+        queryType: "enumeration",
+        topics: [...slot.topics],
+        identityField: null,
+        enumerationControl: control,
+        enumerationPage: input.page,
+        enumerationPageSize: input.pageSize,
+    };
+    const pathPlan: PathPlan = {
+        km: [],
+        list: [listStep],
+        tool: [],
+        dag: [],
+    };
+    const answerOrder = [listStep.id];
+    const compositeSlots = deriveCompositeSlotsFromPathPlan(
+        pathPlan,
+        answerOrder
+    );
+    const retrievalPlan = deriveRetrievalPlanFromPathPlan(
+        pathPlan,
+        answerOrder
+    );
+    return {
         intent: "retrieve_and_answer",
         searchQuery: slot.searchQuery,
         subTasks: [slot.label],
@@ -77,34 +108,23 @@ export const buildEnumerationListDecision = (input: {
         queryType: "enumeration",
         clarifyingQuestion: null,
         briefReply: null,
-        retrievalPlan: [
-            {
-                label: slot.label,
-                searchQuery: slot.searchQuery,
-                queryType: "enumeration",
-                topics: [...slot.topics],
-                enumerationControl: control,
-            },
-        ],
+        retrievalPlan,
+        pathPlan,
+        answerOrder,
+        composeMode: "qa",
         userFactKey: null,
         userFactLabel: null,
         userFactValue: null,
         routeMode: "slots",
-        compositeSlots: [slot],
-        pathPlan: { km: [], list: [], tool: [], dag: [] },
-        composeMode: "qa",
-        routeReason: "intake_retrieval_plan",
-        routePlanSource: "intake_retrieval_plan",
-        listIntent: input.listIntent === "preview" ? "exhaustive" : input.listIntent,
+        compositeSlots,
+        routeReason: "intake_path_plan",
+        routePlanSource: "intake_path_plan",
+        listIntent:
+            input.listIntent === "preview" ? "exhaustive" : input.listIntent,
         enumerationPage: input.page,
         enumerationPageSize: input.pageSize,
         enumerationListKind: input.listKind,
     };
-    const { pathPlan, composeMode } = compilePathPlan(
-        partial,
-        input.userQuestion
-    );
-    return { ...partial, pathPlan, composeMode };
 };
 
 const resolvePageForControl = async (

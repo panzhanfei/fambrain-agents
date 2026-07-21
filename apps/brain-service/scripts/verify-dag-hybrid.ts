@@ -40,6 +40,7 @@ const decision = (): RoutedIntakeDecision => ({
             },
         ],
     },
+    answerOrder: [],
     composeMode: "qa",
     routeReason: "intake_retrieval_plan",
     routePlanSource: "intake_retrieval_plan",

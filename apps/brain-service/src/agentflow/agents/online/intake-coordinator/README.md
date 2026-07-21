@@ -14,20 +14,20 @@ Intake 是 Pipeline 的**第一个 LLM 在线 Agent**（图内位于 **`prepareT
 |------|---------------|
 | 下游 KM / FC / Analyst 各自猜意图会冲突 | **单一决策点**：只在这里定 intent + searchQuery |
 | 纯 LLM 不稳定（闲聊乱称呼、指代误判） | **LLM 理解 + 轻量 guard**（指代/多槽语义终稿归 LLM；闲聊/schema 合法化/canonicalize） |
-| 多问并列难检索 | **retrievalPlan → composite 多槽**，每槽独立 KM |
+| 多问并列难检索 | **pathPlan + answerOrder → 派生 compositeSlots**，按序独立 KM/list |
 | 用户口述 QQ/微信不在简历里 | **userFact 分支**，走 Mem0，不经 KM |
 | 同句再问浪费算力 | **同问短路** 在 **`prepare-turn-start`** 节点（Intake 不再重复检） |
-| 短续问/单字噪声 | **intake-node**：normalize（压连续重复码点）后再判单字早短路；**JSON peek** 标 unresolved 时拼接上轮再调 **1** 次；散文只做 JSON 格式修复，不当指代触发 |
+| 短续问/单字噪声 | **intake-node**：normalize 后再判单字早短路；**三信号**指代拼接最多 **1** 次；散文只做 JSON 格式修复 |
 
-### 1.2 核心原则（档 B）
+### 1.2 核心原则（端到端 PathPlan）
 
-1. **主路径 = 任务规划** — LLM 产出语义终稿：`intent` + **`retrievalPlan≥1`**（retrieve 时）/ `searchQuery` + `coreference` 等；下游只信结构化字段。
-2. **旁路 = 兜底 + 纠偏** — normalize / 单字短路 / JSON 格式修复 / 指代拼接≤1 / schema 合法化 / **只编译 plan**（空→clarify）；**禁止**口语二次拆槽或盲预合并当规划。
-3. **宁可多检索，不要漏检索** — 简历/经历类问题默认 `retrieve_and_answer`。
+1. **主路径 = 执行终稿** — LLM 产出 `intent` + **`pathPlan` 四桶** + **`answerOrder`** + `composeMode` / `searchQuery` / `coreference`；下游只信结构化字段。
+2. **旁路 = 合法化 + 派生** — normalize / 单字短路 / JSON 格式修复 / 指代拼接≤1（**三信号**）/ toolId 白名单 / list 页码；按 `answerOrder` **派生** `compositeSlots`（及兼容用 `retrievalPlan`）。**禁止**口语二次拆槽或 `queryType` 猜桶。
+3. **宁可多检索，不要漏检索** — 简历/经历类问题默认 `retrieve_and_answer`；空 pathPlan → clarify。
 4. **结构化输出** — 只产 JSON；散文反问不算合法工单（可格式修复一轮）。
 5. **对外只暴露 `index.ts`** — 子目录是内部实现，外部 import 统一走 barrel。
 
-复盘顺序：**先看 LLM 工单 → 再看哪一层旁路改过字段**（见仓库 [`docs/04-pitfalls.md` §2.10](../../../../../../../docs/04-pitfalls.md#210-intake-档-b主路径规划--旁路纠偏-p0-31--2026-07)）。
+复盘顺序：**先看 LLM 工单（pathPlan+answerOrder）→ 再看哪一层旁路改过字段**（见仓库 [`docs/04-pitfalls.md` §2.10](../../../../../../../docs/04-pitfalls.md#210-intake-档-b主路径规划--旁路纠偏-p0-31--2026-07)）。
 
 ### 1.3 技术栈
 
@@ -64,22 +64,25 @@ intake-coordinator/
 ├── nodes/                 ← LangGraph 图节点（仅 intake）
 │   └── intake-node.ts     # 短路 → LLM →（JSON 修复）→（指代拼接≤1）→ pipeline
 │
+├── path-plan/             ← PathPlan 合法化 + 派生 slots（主路径）
+│   ├── from-llm.ts        # legalizePathPlan / deriveCompositeSlotsFromPathPlan
+│   ├── interface.ts
+│   └── compile-path-plan.ts  # 旧分桶编译（测试 / 兼容；主 pipeline 不再走）
+│
 ├── guards/                ← LLM 之后的规则兜底（不口语二次规划）
 │   ├── intake-continuation-guard.ts  # 恒 noop（指代靠 intake-node merge）
-│   ├── intake-link-lookup-guard.ts
+│   ├── intake-link-lookup-guard.ts   # 字段自相矛盾 harmonize
 │   ├── intake-chitchat-guard.ts
-│   ├── intake-retrieval-plan-guard.ts  # schema 合法化 + facet 去重 + canonicalize
-│   ├── composite-route-guard.ts
-│   └── enumeration-list-intent.ts
+│   ├── intake-retrieval-plan-guard.ts  # 旧 retrievalPlan 合法化（兼容 / 非主路径）
+│   ├── composite-route-guard.ts        # 旧 plan→slots（兼容 / 非主路径）
+│   └── enumeration-list-intent.ts      # UI exact-match → 直接造 pathPlan.list
 │
-├── composite/             ← 多问 / 分槽规划（routing、槽模板；信 LLM plan）
+├── composite/             ← 槽类型 / 模板 / 诊断（执行仍读派生 compositeSlots）
 │   ├── composite-routing.ts
 │   ├── composite-slot-queries.ts
 │   ├── identity-field-search.ts   # displayLabel + searchQuery（无口语 labels）
 │   ├── repair-retrieval-plan.ts   # normalize + dedupeByFacet
 │   └── enumeration-target.ts
-│
-├── path-plan/             ← PathPlan 四桶编译（P0-28）
 ```
 
 单元测试集中在仓库 `apps/brain-service/tests/intake-coordinator/`（见该目录 README）。
@@ -88,9 +91,9 @@ intake-coordinator/
 用户自述记忆见同级目录 [`../user-fact/`](../user-fact/README.md)。
 
 ### 推荐阅读顺序
-2. `contract/prompt.ts` — 字段含义 + Prompt 规则
-3. `guards/*` — 每条规则改什么
-4. `composite/*` — 多问怎么拆槽
+2. `contract/prompt.ts` — 字段含义 + Prompt 规则（pathPlan + answerOrder）
+3. `path-plan/from-llm.ts` — 合法化与派生 slots
+4. `pipeline/intake-pipeline.ts` — 主路径编排
 5. `llm/ollama-chat.ts` — LLM 输入输出
 6. [`../user-fact/`](../user-fact/README.md) — remember/recall Mem0
 
@@ -148,40 +151,41 @@ LLM 原始 JSON
     ▼ applyIntakeContinuationGuard()     恒 noop
     │
     ▼ clarify / chitchat / userFact 早退
-    │   无效 recall：有 plan→retrieve；无 plan→clarify
+    │   无效 recall：有 pathPlan→retrieve；空→clarify
     │
     ▼ applyIntakeLinkLookupGuard()       harmonize only（不发明拆槽）
     │
-    ▼ applyIntakeRetrievalPlanGuard()    合法化 / 去重 / canonicalize
+    ▼ legalizePathPlan + answerOrder + composeMode
+    │   retrieve 且四桶空 → clarify
     │
-    ▼ applyCompositeRouteGuard()         plan→slots；空 plan→clarify
+    ▼ fillListPagesInPathPlan(session)   list 步补页码
     │
-    ▼ applyEnumerationSlotGuard()
+    ▼ deriveCompositeSlotsFromPathPlan(answerOrder)
+    │   顺带派生 retrievalPlan（日志/cache）；hybrid dag → executionPlan
     │
     ▼ RoutedIntakeDecision → state.decision
 ```
 
-> 纯社交短路在 **`intake-node`**。凡 `retrieve_and_answer` 须 LLM 写齐 `retrievalPlan≥1`。
+> 纯社交短路在 **`intake-node`**。凡 `retrieve_and_answer` 须 LLM 写齐 **`pathPlan`（≥1 步）+ `answerOrder`**。旧 `retrievalPlan→compile 分桶` 主路径已删。
 
-**列举分页（2026-07）：** 不再用口语 regex / 全局 `routeMode=list`。Intake LLM 在 **retrievalPlan 项** 填 `enumerationControl`；混合问（tech + 全部列出）拆多槽，retrieval 按槽执行 KM 或 list API。UI 按钮 prompt 见 `enumeration/action-prompts.ts`（exact-match 短路）。
+**列举分页：** Intake LLM 在 **`pathPlan.list`** 填 `enumerationControl`；代码只补 session 页码。UI exact-match → `buildEnumerationListDecision` 直接造 list 步。
 
 详见坑点 [§2.5.9 GitHub 对外链接](../../../../../../../docs/04-pitfalls.md#259-简历-github--对外链接问法-p0-25--2026-07)（P0-25）。
 
-### 3.4 单问 / 多问统一（`routeMode=slots` · 2026-07）
+### 3.4 单问 / 多问统一（`routeMode=slots` · PathPlan 派生）
 
-早期文档曾写 `routeMode` 为 `single` / `slot` / `composite` 三档；**现已合并**：凡需 KM 检索 → **`routeMode=slots`**，`compositeSlots.length` **1～N**。单问只是 **1 槽的 slots**，多问是 **≥2 槽的 slots**，下游 KM / Analyst 共用同一套分槽并行 + merge 路径。
+凡需 KM/list 检索 → **`routeMode=slots`**（或 hybrid → `dag`），`compositeSlots` **按 `answerOrder` 派生**（1～N）。**禁止**编译层按 list→km→dag 重排回答顺序。
 
 ```text
-applyCompositeRouteGuard
+pathPlan + answerOrder
     │
-    ├─ resolveCompositeRoute() → slots.length ≥ 1
-    │       → applySlotsDecision(slots)     # 1～N 槽，routeMode=slots
+    ├─ deriveCompositeSlotsFromPathPlan → slots.length ≥ 1
+    │       → routeMode=slots（或 hybrid dag）
     │
-    └─ slots.length === 0
-            → clarify 早退（LLM 未写 retrievalPlan）
+    └─ 空 pathPlan → clarify 早退
 ```
 
-**为何合并：** 单问、多问共用 slots；cache / 日志只看 `compositeSlots.length`。单问也须 LLM 写 **1 项** plan。
+**为何：** 单问、多问共用派生 slots；cache / 日志看 `compositeSlots.length` 与 `answerOrder`。
 
 ### 3.5 单问 ↔ 多问结构对齐（`signals/query-signals.ts`）
 
@@ -413,7 +417,7 @@ pipeline:
 → routeAfterIntake → respondEarly
 ```
 
-### 5.4 有上下文指代（G5b）
+### 5.4 有上下文指代（G5b · 代词）
 
 ```text
 history:
@@ -431,6 +435,25 @@ history:
 
 pipeline:
   earlyExit=false → retrieval → analyst
+```
+
+### 5.4b 实体替换续问（G5c · 【实体】呢）
+
+```text
+history:
+  user: "我那一年入职奥卡云的？"
+  assistant: "你于 2021 年 6 月入职…"
+  user: "云联智慧呢"   # 或「友谊时光呢」等同形
+
+路径 A（首轮即对）:
+  coreference: resolved · default 单槽 · searchQuery 含「云联智慧 入职 年份」
+
+路径 B（首轮误标 enumeration，或 plan 仍写奥卡云漏新实体）:
+  shouldRetryCoreferenceMerge 三信号 → 拼接「上轮；本轮」再调 Intake
+  → 须含新实体 + 继承属性；禁止 enumeration 整表
+
+pipeline:
+  earlyExit=false → retrieval → analyst → 单点入职年份（非任职全表）
 ```
 
 ### 5.5 多问 slots×N（原 composite 多槽）
@@ -604,7 +627,7 @@ Pipeline 内主要调用点：
 | 9 | `我叫什么，我做过什么项目，我在那几家公司上过班，近两年在干什么？` | **slots×N**（多槽并行） |
 | 10 | 第 9 句原样再问 | 同问短路 |
 
-对应 eval 定义：`apps/brain-service/scripts/eval/golden.json`（G1～G5b、GMem、profileProbe）。
+对应 eval 定义：`apps/brain-service/scripts/eval/golden.json`（G1～G5c、GMem、profileProbe）。
 
 ---
 
@@ -615,7 +638,7 @@ pnpm --filter @fambrain/brain-service run verify:intake-chitchat
 pnpm --filter @fambrain/brain-service run verify:intake-coreference
 pnpm --filter @fambrain/brain-service run verify:composite-route
 pnpm --filter @fambrain/brain-service run verify:user-fact
-pnpm --filter @fambrain/brain-service run golden:regression   # G1～G5b + GMem
+pnpm --filter @fambrain/brain-service run golden:regression   # G1～G5c + GMem
 ```
 
 ---

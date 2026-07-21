@@ -1,6 +1,6 @@
 /**
  * IntakeCoordinator 对外 API；子目录经各自 index 聚合。
- * 档 B：LLM 产出语义终稿 retrievalPlan；代码只做纠正 + 编译（不发明多槽）。
+ * 端到端：LLM 产出 pathPlan + answerOrder；代码合法化并派生 compositeSlots。
  */
 
 export {
@@ -31,6 +31,7 @@ export {
   shouldShortCircuitIncompleteUtterance,
   buildMergedCoreferenceQuestion,
   normalizeIntakeUtterance,
+  surfaceForSingleCharSignal,
 } from "./signals";
 
 export { completeIntakeCoordinator } from "./llm";
@@ -100,9 +101,18 @@ export {
   emptyPathPlan,
   defaultComposeMode,
   expandHybridMultiSourceTemplate,
+  deriveCompositeSlotsFromPathPlan,
+  deriveRetrievalPlanFromPathPlan,
+  legalizePathPlan,
+  legalizeAnswerOrder,
+  legalizeComposeMode,
+  fillListPagesInPathPlan,
+  isPathPlanEmpty,
   type ComposeMode,
   type PathPlan,
   type PathKind,
+  type ListStep,
+  type KmStep,
   type StepResult,
   type DagTemplateId,
 } from "./path-plan";

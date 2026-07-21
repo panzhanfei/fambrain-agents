@@ -28,6 +28,7 @@ const baseDecision = (): RoutedIntakeDecision => ({
     routeMode: "skip",
     compositeSlots: [],
     pathPlan: emptyPathPlan(),
+    answerOrder: [],
     composeMode: "qa",
     routeReason: "intake_retrieval_plan",
     routePlanSource: "intake_retrieval_plan",

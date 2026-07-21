@@ -25,6 +25,7 @@ describe("summarize-route", () => {
             userFactValue: null,
             routeMode: "skip" as const,
             compositeSlots: [],
+            answerOrder: [],
             routeReason: null,
             routePlanSource: null,
         };
@@ -62,6 +63,7 @@ describe("summarize-route", () => {
             userFactValue: null,
             routeMode: "skip" as const,
             compositeSlots: [],
+            answerOrder: ["km-0"],
             routeReason: null,
             routePlanSource: null,
         };

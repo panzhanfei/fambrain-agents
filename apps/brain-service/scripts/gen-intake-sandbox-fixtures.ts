@@ -3,12 +3,9 @@
  * 用法：pnpm exec tsx scripts/gen-intake-sandbox-fixtures.ts
  */
 import {
-  applyCompositeRouteGuard,
   applyIntakeChitchatGuard,
   applyIntakeContinuationGuard,
   applyIntakeLinkLookupGuard,
-  applyIntakeRetrievalPlanGuard,
-  applyEnumerationSlotGuard,
   type RoutedIntakeDecision,
 } from "@/agentflow/agents/online/intake-coordinator/guards";
 import {
@@ -16,8 +13,17 @@ import {
   isClarifyEarlyExit,
   isRespondEarlyIntent,
 } from "@/agentflow/agents/online/intake-coordinator/pipeline/intake-pipeline";
-import { applyPathPlanGuard } from "@/agentflow/agents/online/intake-coordinator/path-plan";
-import { applyToolPlanGuard } from "@/agentflow/agents/online/tool-orchestrator";
+import {
+  deriveCompositeSlotsFromPathPlan,
+  deriveRetrievalPlanFromPathPlan,
+  emptyPathPlan,
+  executionPlanFromPathPlanDag,
+  fillListPagesInPathPlan,
+  isPathPlanEmpty,
+  legalizeAnswerOrder,
+  legalizeComposeMode,
+  legalizePathPlan,
+} from "@/agentflow/agents/online/intake-coordinator/path-plan";
 import { isUserFactIntent } from "@/agentflow/agents/online/user-fact";
 import type { IntakeRoutingDecision } from "@/agentflow/agents/online/intake-coordinator/contract";
 import type { DbChatTurn } from "@fambrain/brain-types";
@@ -50,6 +56,7 @@ const pick = (d: IntakeRoutingDecision | RoutedIntakeDecision) => {
     const r = d as RoutedIntakeDecision;
     base.routeMode = r.routeMode;
     base.composeMode = r.composeMode;
+    base.answerOrder = r.answerOrder ?? [];
     base.routeReason = r.routeReason;
     base.routePlanSource = r.routePlanSource;
     base.compositeSlots = (r.compositeSlots ?? []).map((s) => ({
@@ -182,19 +189,12 @@ const runChain = async (input: {
   if (isUserFactIntent(decision.intent)) {
     const factKey = decision.userFactKey?.trim() ?? "";
     if (decision.intent === "recall_user_fact" && !factKey) {
-      const plan = decision.retrievalPlan ?? [];
-      const hasUsablePlan = plan.some(
-        (p) =>
-          Boolean(p.searchQuery?.trim()) ||
-          p.queryType === "enumeration" ||
-          p.queryType === "identity" ||
-          Boolean(p.identityField) ||
-          Boolean(p.enumerationControl)
-      );
-      if (hasUsablePlan) {
+      const pathPlan = legalizePathPlan(decision.pathPlan);
+      if (!isPathPlanEmpty(pathPlan)) {
         decision = {
           ...decision,
           intent: "retrieve_and_answer",
+          pathPlan,
           userFactKey: null,
           userFactLabel: null,
           userFactValue: null,
@@ -203,9 +203,9 @@ const runChain = async (input: {
         };
         push(
           "4-remap",
-          "④ 无效 recall → 保留 plan 检索",
-          "pipeline/intake-pipeline.ts · invalid_recall_keep_retrieval_plan",
-          "缺 key 但已有 usable retrievalPlan → retrieve",
+          "④ 无效 recall → 保留 pathPlan 检索",
+          "pipeline/intake-pipeline.ts · invalid_recall_keep_path_plan",
+          "缺 key 但已有 usable pathPlan → retrieve",
           decision
         );
       } else {
@@ -218,6 +218,8 @@ const runChain = async (input: {
             "你想回忆哪一条个人设定？请说明关键词（例如昵称、偏好）。",
           briefReply: null,
           retrievalPlan: [],
+          pathPlan: emptyPathPlan(),
+          answerOrder: [],
           userFactKey: null,
           userFactLabel: null,
           userFactValue: null,
@@ -228,7 +230,7 @@ const runChain = async (input: {
           "4-clarify",
           "④ 无效 recall → clarify",
           "pipeline/intake-pipeline.ts · invalid_recall_to_clarify",
-          "无 plan 不发明 identity/name 槽",
+          "无 pathPlan 不发明 identity/name 槽",
           routed,
           true
         );
@@ -265,30 +267,40 @@ const runChain = async (input: {
     "5a",
     "⑤a 对外链接 guard",
     "guards/intake-link-lookup-guard.ts · applyIntakeLinkLookupGuard",
-    "harmonize / 保留混合 plan（不发明拆槽）",
+    "字段自相矛盾 harmonize（不发明 multipart）",
     decision
   );
 
-  decision = applyIntakeRetrievalPlanGuard(decision, input.userQuestion);
-  push(
-    "5",
-    "⑤ 检索计划 guard",
-    "guards/intake-retrieval-plan-guard.ts · applyIntakeRetrievalPlanGuard",
-    "schema 合法化 / facet 去重 / canonicalize（保留非空 searchQuery）",
-    decision
-  );
-
-  let routed = applyCompositeRouteGuard(decision, input.userQuestion);
-  push(
-    "6",
-    "⑥ 复合路由",
-    "guards/composite-route-guard.ts · applyCompositeRouteGuard",
-    "retrievalPlan → slots；空 plan → clarify",
-    routed,
-    routed.routeMode === "skip" || routed.intent === "clarify"
-  );
-
-  if (routed.routeMode === "skip" || routed.intent === "clarify") {
+  let pathPlan = legalizePathPlan(decision.pathPlan);
+  const needsPathPlan =
+    decision.intent === "retrieve_and_answer" ||
+    (decision.intent === "summarize_content" &&
+      decision.searchQuery.trim().length > 0);
+  if (needsPathPlan && isPathPlanEmpty(pathPlan)) {
+    decision = {
+      ...decision,
+      intent: "clarify",
+      searchQuery: "",
+      queryType: null,
+      clarifyingQuestion:
+        decision.clarifyingQuestion?.trim() ||
+        "请再说清楚你想了解哪一方面（例如某段经历、某个项目，或姓名/年龄等）？",
+      briefReply: null,
+      retrievalPlan: [],
+      pathPlan: emptyPathPlan(),
+      answerOrder: [],
+      composeMode: "qa",
+      confidence: Math.min(decision.confidence, 0.55),
+    };
+    const routed = buildEarlyExitRoutedDecision(decision);
+    push(
+      "6",
+      "⑥ 空 pathPlan → clarify",
+      "pipeline/intake-pipeline.ts · legalizePathPlan",
+      "retrieve 且四桶全空 → clarify（不发明槽）",
+      routed,
+      true
+    );
     return {
       id: input.id,
       title: input.title,
@@ -298,39 +310,65 @@ const runChain = async (input: {
     };
   }
 
-  routed = await applyEnumerationSlotGuard(routed, input.userQuestion, {
+  const answerOrder = legalizeAnswerOrder(decision.answerOrder, pathPlan);
+  const composeMode =
+    decision.intent === "summarize_content"
+      ? "summarize"
+      : legalizeComposeMode(decision.composeMode, pathPlan);
+  push(
+    "6",
+    "⑥ 合法化 PathPlan",
+    "path-plan/from-llm.ts · legalizePathPlan",
+    "toolId 白名单；answerOrder 结构修复",
+    { ...decision, pathPlan, answerOrder, composeMode }
+  );
+
+  pathPlan = await fillListPagesInPathPlan(pathPlan, {
     conversationId: "sandbox",
     corpusUserId: "sandbox",
   });
+  const compositeSlots = deriveCompositeSlotsFromPathPlan(pathPlan, answerOrder);
+  const retrievalPlan = deriveRetrievalPlanFromPathPlan(pathPlan, answerOrder);
+  const executionPlan = executionPlanFromPathPlanDag(
+    pathPlan,
+    input.userQuestion,
+    decision.searchQuery
+  );
+  const listSlots = compositeSlots.filter((s) => s.executor === "list_corpus");
+  const firstList = listSlots[0];
+  const routed: RoutedIntakeDecision = {
+    ...decision,
+    pathPlan,
+    answerOrder,
+    composeMode,
+    retrievalPlan,
+    compositeSlots,
+    routeMode: executionPlan ? "dag" : "slots",
+    routeReason: "intake_path_plan",
+    routePlanSource: "intake_path_plan",
+    executionPlan,
+    listIntent:
+      firstList?.enumerationControl?.action === "continue" ||
+      firstList?.enumerationControl?.action === "exhaustive"
+        ? firstList.enumerationControl.action
+        : firstList?.enumerationControl?.action === "preview"
+          ? "preview"
+          : null,
+    enumerationPage: firstList?.enumerationPage,
+    enumerationPageSize: firstList?.enumerationPageSize,
+    enumerationListKind: firstList?.enumerationControl?.listKind,
+  };
   push(
     "7",
-    "⑦ 列举分页",
-    "guards/enumeration-list-intent.ts · applyEnumerationSlotGuard",
-    "continue/exhaustive → executor=list_corpus",
+    "⑦ 派生 slots + 补页码",
+    "path-plan/from-llm.ts · deriveCompositeSlotsFromPathPlan",
+    "按 answerOrder 派生；list 步补 session 页码",
     routed
   );
 
-  routed = applyToolPlanGuard(routed, input.userQuestion);
   push(
     "8",
-    "⑧ 工具计划",
-    "tool-orchestrator/enrich-plan.ts · applyToolPlanGuard",
-    "挂 toolId / 可选 hybrid DAG",
-    routed
-  );
-
-  routed = applyPathPlanGuard(routed, input.userQuestion);
-  push(
-    "9",
-    "⑨ PathPlan 四桶",
-    "path-plan/compile-path-plan.ts · applyPathPlanGuard",
-    "编译 km/list/tool/dag + composeMode",
-    routed
-  );
-
-  push(
-    "10",
-    "⑩ 出口 → state.decision",
+    "⑧ 出口 → state.decision",
     "pipeline/intake-pipeline.ts · return",
     "写入 LangGraph state，routeAfterIntake 分流",
     routed
@@ -358,6 +396,9 @@ const base = (
   clarifyingQuestion: null,
   briefReply: null,
   retrievalPlan: [],
+  pathPlan: emptyPathPlan(),
+  answerOrder: [],
+  composeMode: "qa",
   userFactKey: null,
   userFactLabel: null,
   userFactValue: null,
@@ -393,7 +434,7 @@ const main = async () => {
       id: "elliptical-retrieve",
       title: "retrieve 但空 plan → clarify",
       dirtyWhy:
-        "档 B：已标 retrieve 但 retrievalPlan=[] → ⑥ clarify（不再补 prior / 发明槽）",
+        "已标 retrieve 但 pathPlan 空 → ⑥ clarify（不再补 prior / 发明槽）",
       userQuestion: "那前端呢？",
       history: [
         {
@@ -418,7 +459,7 @@ const main = async () => {
       id: "link-mislabel",
       title: "外链误标 enumeration",
       dirtyWhy:
-        "顶层 queryType=external_link，但 plan 项误标 enumeration + personal/resume",
+        "LLM 已给正确 pathPlan（external_link + extract tool）；⑤a 仅 harmonize",
       userQuestion: "开源项目的 GitHub 链接有哪些？",
       history: [],
       llm: base({
@@ -428,25 +469,32 @@ const main = async () => {
         topics: ["personal", "resume", "project"],
         subTasks: ["开源 GitHub"],
         confidence: 0.88,
-        retrievalPlan: [
-          {
-            label: "开源 GitHub 链接",
-            searchQuery: "开源 GitHub",
-            queryType: "enumeration",
-            topics: ["personal", "resume"],
-            enumerationControl: {
-              action: "preview",
-              listKind: "project",
-              excludeHint: null,
+        pathPlan: {
+          km: [
+            {
+              id: "km-links",
+              pathKind: "km",
+              label: "开源 GitHub 链接",
+              searchQuery: "个人简介 简历 开源 GitHub 对外链接",
+              queryType: "external_link",
+              topics: ["personal", "resume", "project"],
+              identityField: null,
+              toolId: "extract_external_links_from_hits",
+              dataSource: "corpus",
             },
-          },
-        ],
+          ],
+          list: [],
+          tool: [],
+          dag: [],
+        },
+        answerOrder: ["km-links"],
+        composeMode: "qa",
       }),
     },
     {
       id: "multipart-empty-plan",
       title: "多问但 plan 为空",
-      dirtyWhy: "档 B：retrieve + plan=[] → ⑥ clarify（须靠 LLM 填齐 plan）",
+      dirtyWhy: "retrieve + 空 pathPlan → ⑥ clarify（须靠 LLM 填齐 pathPlan）",
       userQuestion: "我叫什么？今年多大？做过哪些项目？",
       history: [],
       llm: base({
@@ -463,7 +511,7 @@ const main = async () => {
       id: "invalid-recall",
       title: "无效 recall（有 plan）",
       dirtyWhy:
-        "recall 无 key 但已有 identity plan → ④ keep plan 改 retrieve（不发明槽）",
+        "recall 无 key 但已有 identity pathPlan → ④ keep pathPlan 改 retrieve",
       userQuestion: "我叫什么名字？",
       history: [],
       llm: base({
@@ -472,21 +520,32 @@ const main = async () => {
         userFactLabel: "姓名",
         confidence: 0.7,
         subTasks: ["姓名"],
-        retrievalPlan: [
-          {
-            label: "姓名",
-            searchQuery: "个人简介 简历 姓名",
-            queryType: "identity",
-            topics: ["personal", "resume"],
-            identityField: "name",
-          },
-        ],
+        pathPlan: {
+          km: [
+            {
+              id: "km-name",
+              pathKind: "km",
+              label: "姓名",
+              searchQuery: "个人简介 简历 姓名",
+              queryType: "identity",
+              topics: ["personal", "resume"],
+              identityField: "name",
+              toolId: "extract_identity_from_hits",
+              dataSource: "corpus",
+            },
+          ],
+          list: [],
+          tool: [],
+          dag: [],
+        },
+        answerOrder: ["km-name"],
+        composeMode: "qa",
       }),
     },
     {
       id: "invalid-recall-empty",
       title: "无效 recall（无 plan）",
-      dirtyWhy: "recall 无 key 且 plan=[] → ④ clarify，不发明 name 槽",
+      dirtyWhy: "recall 无 key 且 pathPlan 空 → ④ clarify，不发明 name 槽",
       userQuestion: "我之前说过什么？",
       history: [],
       llm: base({
@@ -499,7 +558,7 @@ const main = async () => {
     {
       id: "age-ok",
       title: "正常单问年龄",
-      dirtyWhy: "干净 JSON；应 noop 居多，⑨ 出 km + compute_age tool",
+      dirtyWhy: "干净 pathPlan；⑥⑦ 出 km + compute_age toolId",
       userQuestion: "我今年多大？",
       history: [],
       llm: base({
@@ -509,16 +568,26 @@ const main = async () => {
         topics: ["personal", "resume"],
         subTasks: ["年龄"],
         confidence: 0.92,
-        retrievalPlan: [
-          {
-            label: "年龄",
-            searchQuery: "个人简介 简历 年龄 出生年份 出生日期",
-            queryType: "identity",
-            topics: ["personal", "resume"],
-            identityField: "age",
-            enumerationControl: null,
-          },
-        ],
+        pathPlan: {
+          km: [
+            {
+              id: "km-age",
+              pathKind: "km",
+              label: "年龄",
+              searchQuery: "个人简介 简历 年龄 出生年份 出生日期",
+              queryType: "identity",
+              topics: ["personal", "resume"],
+              identityField: "age",
+              toolId: "compute_age_from_hits",
+              dataSource: "compute",
+            },
+          ],
+          list: [],
+          tool: [],
+          dag: [],
+        },
+        answerOrder: ["km-age"],
+        composeMode: "qa",
       }),
     },
     {
@@ -550,7 +619,7 @@ const main = async () => {
     {
       id: "mixed-enum-link",
       title: "混合：列举 + GitHub",
-      dirtyWhy: "真混合 plan；⑤a 应 preserve，不收成单槽",
+      dirtyWhy: "真混合 pathPlan；answerOrder 保序 list→km",
       userQuestion: "列出全部项目，并给出开源项目的 GitHub 链接",
       history: [],
       llm: base({
@@ -560,33 +629,48 @@ const main = async () => {
         topics: ["project", "personal"],
         subTasks: ["列举所有项目", "开源 GitHub"],
         confidence: 0.9,
-        retrievalPlan: [
-          {
-            label: "列举所有项目名称",
-            searchQuery: "项目经历 全部项目 项目名称",
-            queryType: "enumeration",
-            topics: ["project"],
-            enumerationControl: {
-              action: "exhaustive",
-              listKind: "project",
-              excludeHint: null,
+        pathPlan: {
+          km: [
+            {
+              id: "km-links",
+              pathKind: "km",
+              label: "开源项目的 GitHub 与线上地址",
+              searchQuery:
+                "个人简介 简历 开源 对外链接 仓库地址 线上预览 URL GitHub",
+              queryType: "external_link",
+              topics: ["personal", "resume", "project"],
+              identityField: null,
+              toolId: "extract_external_links_from_hits",
+              dataSource: "corpus",
             },
-          },
-          {
-            label: "开源项目的 GitHub 与线上地址",
-            searchQuery:
-              "个人简介 简历 开源 对外链接 仓库地址 线上预览 URL GitHub",
-            queryType: "external_link",
-            topics: ["personal", "resume", "project"],
-            enumerationControl: null,
-          },
-        ],
+          ],
+          list: [
+            {
+              id: "list-projects",
+              pathKind: "list",
+              label: "列举所有项目名称",
+              searchQuery: "项目经历 全部项目 项目名称",
+              queryType: "enumeration",
+              topics: ["project"],
+              enumerationControl: {
+                action: "exhaustive",
+                listKind: "project",
+                excludeHint: null,
+                timeWindowYears: null,
+              },
+            },
+          ],
+          tool: [],
+          dag: [],
+        },
+        answerOrder: ["list-projects", "km-links"],
+        composeMode: "composite",
       }),
     },
     {
       id: "list-exhaustive",
       title: "穷举列举项目",
-      dirtyWhy: "enumerationControl.exhaustive → ⑦ executor=list_corpus",
+      dirtyWhy: "list exhaustive → ⑦ executor=list_corpus",
       userQuestion: "列出全部项目名称",
       history: [],
       llm: base({
@@ -596,19 +680,29 @@ const main = async () => {
         topics: ["project"],
         subTasks: ["项目经历"],
         confidence: 0.93,
-        retrievalPlan: [
-          {
-            label: "项目经历",
-            searchQuery: "项目经历 全部项目 项目名称",
-            queryType: "enumeration",
-            topics: ["project"],
-            enumerationControl: {
-              action: "exhaustive",
-              listKind: "project",
-              excludeHint: null,
+        pathPlan: {
+          km: [],
+          list: [
+            {
+              id: "list-projects",
+              pathKind: "list",
+              label: "项目经历",
+              searchQuery: "项目经历 全部项目 项目名称",
+              queryType: "enumeration",
+              topics: ["project"],
+              enumerationControl: {
+                action: "exhaustive",
+                listKind: "project",
+                excludeHint: null,
+                timeWindowYears: null,
+              },
             },
-          },
-        ],
+          ],
+          tool: [],
+          dag: [],
+        },
+        answerOrder: ["list-projects"],
+        composeMode: "qa",
       }),
     },
   ];

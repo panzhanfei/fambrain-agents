@@ -466,6 +466,8 @@ export const ChatShell = ({ initialConversations, viewer }: ChatShellProps) => {
   >(null);
   const [preferEmptySession, setPreferEmptySession] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const messagesRef = useRef<ChatMessage[]>([]);
+  messagesRef.current = messages;
   const [messagesLoading, setMessagesLoading] = useState(false);
   const [messagesError, setMessagesError] = useState<string | null>(null);
   const [messagesRetryTick, setMessagesRetryTick] = useState(0);
@@ -523,18 +525,25 @@ export const ChatShell = ({ initialConversations, viewer }: ChatShellProps) => {
       setStreamThinking("");
     });
   }, []);
-  const loadConversations = useCallback(async () => {
+  const loadConversations = useCallback(async (opts?: { silent?: boolean }) => {
     await Promise.resolve();
-    setListLoading(true);
+    const silent = Boolean(opts?.silent);
+    if (!silent) {
+      setListLoading(true);
+    }
     setListError(null);
     const result =
       await fetchJson<ConversationListItem[]>("/api/conversations");
-    setListLoading(false);
+    if (!silent) {
+      setListLoading(false);
+    }
     if (result.ok) {
       setConversations(result.data);
     } else {
       setListError(result.error);
-      setConversations([]);
+      if (!silent) {
+        setConversations([]);
+      }
     }
   }, []);
   const patchConversation = useCallback(
@@ -696,10 +705,15 @@ export const ChatShell = ({ initialConversations, viewer }: ChatShellProps) => {
         setMessagesError(null);
         return;
       }
-      if (sendBusy) {
+      // 流式回答中勿 refetch：sendBusy 会在首 token 提前解锁，但 streamingTurnId 仍在
+      if (sendBusy || streamingTurnId != null) {
         return;
       }
-      setMessagesLoading(true);
+      // 已有消息时后台同步，勿整页「加载消息中…」（会白屏闪缩）
+      const showFullPageLoader = messagesRef.current.length === 0;
+      if (showFullPageLoader) {
+        setMessagesLoading(true);
+      }
       setMessagesError(null);
       const [msgResult, traceResult] = await Promise.all([
         fetchJson<ChatMessage[]>(
@@ -710,7 +724,9 @@ export const ChatShell = ({ initialConversations, viewer }: ChatShellProps) => {
         ),
       ]);
       if (cancelled) return;
-      setMessagesLoading(false);
+      if (showFullPageLoader) {
+        setMessagesLoading(false);
+      }
       if (msgResult.ok) {
         const timingByMessageId = new Map<
           string,
@@ -749,7 +765,7 @@ export const ChatShell = ({ initialConversations, viewer }: ChatShellProps) => {
     return () => {
       cancelled = true;
     };
-  }, [activeConversationId, messagesRetryTick, sendBusy]);
+  }, [activeConversationId, messagesRetryTick, sendBusy, streamingTurnId]);
   /** 生成中跟随最新一行：外层列表滚到底，避免正文/思考长高后仍卡在旧位置 */
   useLayoutEffect(() => {
     if (messagesLoading) return;
@@ -886,7 +902,7 @@ export const ChatShell = ({ initialConversations, viewer }: ChatShellProps) => {
         setSendError(msg);
         pendingUserTempIdRef.current = null;
         setMessages((prev) => prev.filter((m) => m.id !== tempUserId));
-        await loadConversations();
+        await loadConversations({ silent: true });
         setMessagesRetryTick((n) => n + 1);
         return;
       }
@@ -894,7 +910,7 @@ export const ChatShell = ({ initialConversations, viewer }: ChatShellProps) => {
         setSendError("无法读取服务器流");
         pendingUserTempIdRef.current = null;
         setMessages((prev) => prev.filter((m) => m.id !== tempUserId));
-        await loadConversations();
+        await loadConversations({ silent: true });
         setMessagesRetryTick((n) => n + 1);
         return;
       }
@@ -1178,13 +1194,13 @@ export const ChatShell = ({ initialConversations, viewer }: ChatShellProps) => {
       if (streamFatal) {
         setSendError(streamFatal);
       }
-      void loadConversations();
+      void loadConversations({ silent: true });
       setMessagesRetryTick((n) => n + 1);
     } catch {
       setSendError("网络错误");
       pendingUserTempIdRef.current = null;
       setMessages((prev) => prev.filter((m) => m.id !== tempUserId));
-      await loadConversations();
+      await loadConversations({ silent: true });
       setMessagesRetryTick((n) => n + 1);
     } finally {
       if (sendBusyRef.current) {
@@ -1568,11 +1584,11 @@ export const ChatShell = ({ initialConversations, viewer }: ChatShellProps) => {
                 ))}
               </div>
             </div>
-          ) : messagesLoading ? (
+          ) : messagesLoading && messages.length === 0 ? (
             <div className="flex flex-1 items-center justify-center text-[14px] text-[#9ca3af]">
               加载消息中…
             </div>
-          ) : messagesError ? (
+          ) : messagesError && messages.length === 0 ? (
             <div className="flex flex-1 flex-col items-center justify-center gap-2 px-6 text-center text-[14px] text-red-600">
               <span>{messagesError}</span>
               <button

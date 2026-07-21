@@ -22,7 +22,7 @@
 
 **链路：** 用户提问 → **轮次开始** → 意图识别 → **PathPlan 执行**（km / list / tool / dag + per-step FC）→ **内容整理** → **Compose**（qa / composite / summarize）→ 回答 → **轮次结束**。跨轮 **两层 cache**（同问短路 + 检索结果 cache）见 [坑点 §2.2](./04-pitfalls.md)。
 
-**PathPlan 四桶（2026-07）：** Intake guard 链末尾 `compilePathPlan` 产出 `pathPlan` + `composeMode`。LangGraph：**纯 list** → `listRetriever`；**纯总结（无查库）** → `contentSummarizer`；**复合 / km / 需查库的总结** → `planExecutor` → `contentOrganizer` → `contentSummarizer` → `analyst`（Summarizer 在 qa/composite 时透传，summarize 时出终稿）。
+**PathPlan 四桶（2026-07 · 端到端）：** Intake LLM 直接产出 `pathPlan` + `answerOrder` + `composeMode`；pipeline **合法化并派生** `compositeSlots`（不再 `retrievalPlan→compilePathPlan` 猜桶）。LangGraph：**纯 list** → `listRetriever`；**纯总结（无查库）** → `contentSummarizer`；**复合 / km / 需查库的总结** → `planExecutor` → `contentOrganizer` → `contentSummarizer` → `analyst`。
 
 **架构双线（2026-06，目录 2026-07 对齐）：**
 
@@ -226,9 +226,9 @@ flowchart TD
 | 5 | Guard 链 | parse 后依次 guard（见下） | `pipeline/intake-pipeline.ts` | `runIntakePipeline()` |
 | 6 | 编排 | LangGraph 条件边 | `pipeline/graph/routes.ts` + `compile.ts` | `routeAfterIntake()` 等 |
 
-**Guard 链：** `intake-node` 短路 → Intake LLM（retrieve 须 `retrievalPlan≥1`）→ `runIntakePipeline`：continuation noop → early-exit → link harmonize → plan 合法化 → **composite 只编译 plan（空→clarify）** → enum / tool / PathPlan。
+**Guard 链：** `intake-node` 短路 → Intake LLM（retrieve 须 **`pathPlan`≥1 步 + `answerOrder`**）→ `runIntakePipeline`：continuation noop → early-exit → link harmonize → **legalize PathPlan** → fill list 页码 → **派生 compositeSlots**（空 pathPlan→clarify）。
 
-**档 B（P0-31）：** Intake **主路径** = LLM 任务规划（语义终稿）；**旁路** = normalize / JSON 修复 / 指代拼接≤1 / guard 纠偏与编译。勿把散文兜底或句长启发当成二次 Intake。
+**端到端 PathPlan：** Intake **主路径** = LLM 执行终稿（四桶 + 顺序）；**旁路** = normalize / JSON 修复 / **三信号**指代拼接≤1 / 白名单合法化与派生。勿把散文兜底或句长启发当成二次 Intake。旧 `retrievalPlan` 编译链已从主路径删除（仅兼容/日志派生）。
 
 **TurnTrace（运行轨迹入库）：** 每轮对答结束时 BFF 将 `timing` + `steps` + `pipeline_log` 写入 `TurnTrace`（键=助手 `messageId`）；进行中仍走 SSE；历史由 `GET /api/conversations/[id]/traces` 回放至运行日志面板。
 
@@ -236,9 +236,9 @@ flowchart TD
 
 **queryType 扩展：** 除 identity / enumeration / tech / default 外，Intake 产出 **`external_link`**（GitHub、仓库、对外 URL）；与 KM `queryProfile` 同名，**不走** enumeration projects fill。见 [km-retrieval-design §六](./km-retrieval-design.md#六queryprofile-参数表)。
 
-**单问 / 多问统一路由（2026-07）：** 凡 `retrieve_and_answer` 须 LLM **`retrievalPlan≥1`** → **`routeMode=slots`**（1～N 槽）。`applyCompositeRouteGuard` **只编译 plan**；空 plan → **clarify**（不 fallback 包 1 槽）。
+**单问 / 多问统一路由：** 凡 `retrieve_and_answer` 须 LLM **`pathPlan`≥1 步** → 按 `answerOrder` 派生 **`routeMode=slots`**（1～N）。空 pathPlan → **clarify**。
 
-**外链 / 混合 plan：** `applyIntakeLinkLookupGuard` 仅做 **harmonize**（顶层已 `external_link` 时误标 enumeration → link；保留 enum+link 混合 plan）。编号拆槽、stale 收束由 **LLM 写齐 plan**，代码不发明。⑤ retrievalPlan guard 只做 schema 合法化 / facet 去重 / canonicalize（**保留** LLM 非空 `searchQuery`）。详见 [坑点 §2.5.3](./04-pitfalls.md#253-p0-15--r6-3--composite-分槽检索-2026-06)、[§2.5.9](./04-pitfalls.md#259-简历-github--对外链接问法-p0-25--2026-07)、[§2.10](./04-pitfalls.md#210-intake-档-b主路径规划--旁路纠偏-p0-31--2026-07)。
+**外链 / 混合：** `applyIntakeLinkLookupGuard` 仅做 **harmonize**。编号拆槽、混合步序由 **LLM 写齐 pathPlan + answerOrder**，代码不发明、不重排。详见 [坑点 §2.8](./04-pitfalls.md#28-pathplan-统一编排-p0-28--2026-07)、[§2.10](./04-pitfalls.md#210-intake-档-b主路径规划--旁路纠偏-p0-31--2026-07)。
 
 ### 2.5 跨会话用户事实 userFact — P0-16 ✅
 
