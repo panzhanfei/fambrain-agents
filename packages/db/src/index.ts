@@ -22,4 +22,11 @@ export {
     getMessageRetrievalFeedbackSignal,
     aggregateFeedbackByPath,
 } from "./repos/retrieval-feedback";
+export {
+    upsertTurnTrace,
+    listTurnTracesForConversation,
+    getTurnTraceByMessage,
+    type UpsertTurnTraceInput,
+    type TurnTraceRow,
+} from "./repos/turn-traces";
 export { ChatRole, UserRole, UserStatus, PendingMemoryFactStatus, MemoryCandidateTarget, } from "./generated/prisma/client";

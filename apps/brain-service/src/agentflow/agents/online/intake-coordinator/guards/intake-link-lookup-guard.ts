@@ -1,46 +1,20 @@
 /**
- * 对外链接 guard：规范化 external_link 路由；
- * 保留 enumeration + external_link 混合 plan；过期多槽收束；编号多问拆实体槽。
- * 纠偏仅用结构化信号（sibling queryType / 顶层 queryType + topics），不调口语词表。
+ * 对外链接 guard：结构化纠偏（harmonize / 保留混合 plan）。
+ * 不发明 multipart plan、不按问句编号拆槽（由 LLM 写齐 retrievalPlan）。
  */
 import type {
   IntakeRetrievalPlanItem,
   IntakeRoutingDecision,
 } from "@/agentflow/agents/online/intake-coordinator/contract";
 import { EXTERNAL_LINK_SLOT } from "@/agentflow/agents/online/intake-coordinator/composite";
-import {
-  decisionRequestsExternalLink,
-  extractNumberedPlanUnits,
-  hasExplicitMultipartStructure,
-  hasStaleMultipartFromDecision,
-} from "../signals";
+import { decisionRequestsExternalLink } from "../signals";
 
 export type IntakeLinkLookupGuardReason =
   | "noop"
   | "single_external_link"
-  | "aggregate_external_link"
-  | "multipart_external_link"
   | "preserve_mixed_plan"
   | "harmonize_plan_query_types"
   | "harmonize_query_type";
-
-const buildEntityExternalLinkQuery = (label: string): string => {
-  const entity = label.trim();
-  if (!entity) return EXTERNAL_LINK_SLOT.searchQuery;
-  return `${entity} ${EXTERNAL_LINK_SLOT.searchQuery}`;
-};
-
-const buildExternalLinkPlan = (
-  userQuestion: string
-): IntakeRetrievalPlanItem[] => {
-  const units = extractNumberedPlanUnits(userQuestion);
-  return units.map((label) => ({
-    label,
-    searchQuery: buildEntityExternalLinkQuery(label),
-    queryType: "external_link" as const,
-    topics: [...EXTERNAL_LINK_SLOT.topics],
-  }));
-};
 
 const planHasMixedQueryTypes = (plan: IntakeRetrievalPlanItem[]): boolean => {
   const types = new Set(plan.map((p) => p.queryType));
@@ -85,8 +59,26 @@ export const harmonizeRetrievalPlanQueryTypes = (
         item.topics.length > 0 ? item.topics : [...EXTERNAL_LINK_SLOT.topics],
       enumerationControl: null,
       searchQuery: item.searchQuery.trim()
-        ? `${item.searchQuery.trim()} ${EXTERNAL_LINK_SLOT.searchQuery}`
+        ? item.searchQuery.trim()
         : EXTERNAL_LINK_SLOT.searchQuery,
+    };
+  });
+  return { plan: next, changed };
+};
+
+const fillEmptyExternalLinkQueries = (
+  plan: IntakeRetrievalPlanItem[]
+): { plan: IntakeRetrievalPlanItem[]; changed: boolean } => {
+  let changed = false;
+  const next = plan.map((item) => {
+    if (item.queryType !== "external_link") return item;
+    if (item.searchQuery.trim()) return item;
+    changed = true;
+    return {
+      ...item,
+      searchQuery: EXTERNAL_LINK_SLOT.searchQuery,
+      topics:
+        item.topics.length > 0 ? item.topics : [...EXTERNAL_LINK_SLOT.topics],
     };
   });
   return { plan: next, changed };
@@ -94,19 +86,14 @@ export const harmonizeRetrievalPlanQueryTypes = (
 
 export const applyIntakeLinkLookupGuard = (
   decision: IntakeRoutingDecision,
-  userQuestion: string
+  _userQuestion: string
 ): IntakeRoutingDecision & {
   linkLookupGuardReason?: IntakeLinkLookupGuardReason;
 } => {
-  /** 步骤 1：非 retrieve 意图 → 不处理外链 */
   if (decision.intent !== "retrieve_and_answer") {
     return { ...decision, linkLookupGuardReason: "noop" };
   }
 
-  /**
-   * 步骤 2：plan 内误标 enumeration 的链接项 → 改 external_link。
-   * 条件：顶层 queryType 已是 external_link；已有 enum+link 混合 plan 则不动。
-   */
   const rawPlan = decision.retrievalPlan ?? [];
   const { plan: harmonizedPlan, changed: planHarmonized } =
     harmonizeRetrievalPlanQueryTypes(rawPlan, decision.queryType);
@@ -122,10 +109,6 @@ export const applyIntakeLinkLookupGuard = (
       }
     : decision;
 
-  /**
-   * 步骤 3：decision/plan 未声明外链需求 → 仅返回步骤 2 的 harmonize 结果（或 noop）。
-   * 外链信号：queryType=external_link 或 retrievalPlan 含该类型。
-   */
   if (!decisionRequestsExternalLink(working)) {
     return {
       ...working,
@@ -137,56 +120,19 @@ export const applyIntakeLinkLookupGuard = (
 
   const plan = working.retrievalPlan ?? [];
 
-  /**
-   * 步骤 4：混合多问 plan（如 列举 + GitHub 链接）→ 保留多槽，不收成单槽。
-   */
   if (plan.length >= 2 && planHasMixedQueryTypes(plan)) {
+    const filled = fillEmptyExternalLinkQueries(plan);
     return {
       ...working,
-      retrievalPlan: plan,
+      retrievalPlan: filled.plan,
       linkLookupGuardReason: planHarmonized
         ? "harmonize_plan_query_types"
         : "preserve_mixed_plan",
     };
   }
 
-  /**
-   * 步骤 5：过期多槽 — LLM 留了多 plan，但当前问句并非多问结构 → 收成单槽外链检索。
-   */
-  if (hasStaleMultipartFromDecision(working, userQuestion)) {
-    return {
-      ...working,
-      queryType: "external_link",
-      searchQuery: EXTERNAL_LINK_SLOT.searchQuery,
-      topics: [...EXTERNAL_LINK_SLOT.topics],
-      subTasks: [EXTERNAL_LINK_SLOT.label],
-      retrievalPlan: [],
-      linkLookupGuardReason: "aggregate_external_link",
-    };
-  }
-
-  /**
-   * 步骤 6：当前问句带编号多问（1. xxx 2. yyy）→ 按实体拆多条 external_link plan。
-   */
-  if (hasExplicitMultipartStructure(userQuestion)) {
-    const numberedPlan = buildExternalLinkPlan(userQuestion);
-    if (numberedPlan.length >= 2) {
-      return {
-        ...working,
-        queryType: "external_link",
-        searchQuery: numberedPlan[0]!.searchQuery,
-        topics: [...EXTERNAL_LINK_SLOT.topics],
-        subTasks: numberedPlan.map((p) => p.label),
-        retrievalPlan: numberedPlan,
-        linkLookupGuardReason: "multipart_external_link",
-      };
-    }
-  }
-
-  /**
-   * 步骤 7：已判定外链但 queryType 未对齐 → 补 external_link + searchQuery/topics/subTasks。
-   */
   if (working.queryType !== "external_link") {
+    const filled = fillEmptyExternalLinkQueries(working.retrievalPlan ?? []);
     return {
       ...working,
       queryType: "external_link",
@@ -199,22 +145,33 @@ export const applyIntakeLinkLookupGuard = (
         working.subTasks.length > 0
           ? working.subTasks
           : [EXTERNAL_LINK_SLOT.label],
-      retrievalPlan: working.retrievalPlan ?? [],
+      retrievalPlan: filled.plan,
       linkLookupGuardReason: "harmonize_query_type",
     };
   }
 
-  /** 步骤 8：已是 external_link 但 searchQuery 空 → 填固定外链检索词 */
+  const filled = fillEmptyExternalLinkQueries(working.retrievalPlan ?? []);
   if (!working.searchQuery.trim()) {
     return {
       ...working,
       searchQuery: EXTERNAL_LINK_SLOT.searchQuery,
-      topics: [...EXTERNAL_LINK_SLOT.topics],
+      topics:
+        working.topics.length > 0
+          ? working.topics
+          : [...EXTERNAL_LINK_SLOT.topics],
+      retrievalPlan: filled.plan,
       linkLookupGuardReason: "single_external_link",
     };
   }
 
-  /** 步骤 9：无需再改；若步骤 2 harmonize 过则记 reason */
+  if (filled.changed) {
+    return {
+      ...working,
+      retrievalPlan: filled.plan,
+      linkLookupGuardReason: "single_external_link",
+    };
+  }
+
   return {
     ...working,
     linkLookupGuardReason: planHarmonized

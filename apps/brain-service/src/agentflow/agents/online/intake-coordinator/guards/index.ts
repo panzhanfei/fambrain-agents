@@ -20,7 +20,6 @@ export {
 } from "./intake-retrieval-plan-guard";
 export {
     applyCompositeRouteGuard,
-    decisionToRetrievalSlot,
     isCompositeProfileQuestion,
 } from "./composite-route-guard";
 export {

@@ -21,8 +21,10 @@ import type {
   AgentStreamEvent,
   AssistantMessageBlock,
   DbChatTurn,
+  PipelineLogEntry,
   PipelineStepName,
   PipelineTiming,
+  TurnStepEvent,
 } from "@fambrain/brain-types";
 import {
   drainPipelineLogQueue,
@@ -76,6 +78,18 @@ const retrievalPathsFromState = (state: PipelineGraphState): string[] => {
     .map((h) => h.path?.trim())
     .filter((p): p is string => Boolean(p));
   return [...new Set(paths)];
+};
+
+const upsertCollectedStep = (
+  steps: TurnStepEvent[],
+  event: TurnStepEvent
+): void => {
+  const idx = steps.findIndex((s) => s.name === event.name);
+  if (idx >= 0) {
+    steps[idx] = { ...steps[idx], ...event };
+    return;
+  }
+  steps.push(event);
 };
 
 /** FactChecker 打回且尚未 retry 时，stream 层需再 yield retrieval step */
@@ -134,9 +148,10 @@ const summarizePipelineOut = (
  * 返回最终 PipelineTiming 供 AgentPipelineResult 与「出去」日志使用。
  */
 const finishPipeline = function* (
-  timing: PipelineTimingTracker
+  timing: PipelineTimingTracker,
+  collectedLogs: PipelineLogEntry[]
 ): Generator<AgentStreamEvent, PipelineTiming> {
-  yield* flushPipelineLogs();
+  yield* flushPipelineLogs(collectedLogs);
   const tokenTracker = pipelineRunStorage.getStore()?.tokenTracker;
   const snapshot: PipelineTiming = {
     ...timing.snapshot(),
@@ -147,8 +162,11 @@ const finishPipeline = function* (
 };
 
 /** 把 AsyncLocalStorage 队列里积压的 Agent 日志批量 yield 为 pipeline_log SSE 事件 */
-function* flushPipelineLogs(): Generator<AgentStreamEvent> {
+function* flushPipelineLogs(
+  collectedLogs: PipelineLogEntry[]
+): Generator<AgentStreamEvent> {
   for (const entry of drainPipelineLogQueue()) {
+    collectedLogs.push(entry);
     yield { type: "pipeline_log", entry };
   }
 }
@@ -172,12 +190,18 @@ async function* runPipelineStreamInner(
   ensureBrainServiceRuntime();
   const userQuestion = lastUserQuestion(history);
   const timing = new PipelineTimingTracker();
+  const collectedLogs: PipelineLogEntry[] = [];
+  const collectedSteps: TurnStepEvent[] = [];
   const graph = getCompiledPipelineGraph();
   const input = buildInitialState(history, context, userQuestion);
   let finalState: PipelineGraphState = input;
   let activeStep: PipelineStepName | null = "prepare_turn_start";
   timing.markNodeStart("prepare_turn_start");
   setPipelineActiveNode("prepare_turn_start");
+  upsertCollectedStep(collectedSteps, {
+    name: "prepare_turn_start",
+    status: "running",
+  });
   yield { type: "step", name: "prepare_turn_start", status: "running" };
   const stream = await graph.stream(
     input as Parameters<typeof graph.stream>[0],
@@ -196,13 +220,18 @@ async function* runPipelineStreamInner(
     if (activeStep === name) {
       const durationMs = timing.markNodeEnd(name);
       setPipelineActiveNode(null);
+      upsertCollectedStep(collectedSteps, {
+        name,
+        status: "done",
+        ...(durationMs !== undefined ? { durationMs } : {}),
+      });
       yield {
         type: "step",
         name,
         status: "done",
         ...(durationMs !== undefined ? { durationMs } : {}),
       } as const;
-      yield* flushPipelineLogs();
+      yield* flushPipelineLogs(collectedLogs);
       activeStep = null;
     }
   };
@@ -211,6 +240,7 @@ async function* runPipelineStreamInner(
     if (activeStep !== name) {
       timing.markNodeStart(name);
       setPipelineActiveNode(name);
+      upsertCollectedStep(collectedSteps, { name, status: "running" });
       yield { type: "step", name, status: "running" } as const;
       activeStep = name;
     }
@@ -237,13 +267,13 @@ async function* runPipelineStreamInner(
     }
     if (nodeName === "prepareTurnStart") {
       yield* finishStep("prepare_turn_start");
-      yield* flushPipelineLogs();
+      yield* flushPipelineLogs(collectedLogs);
       yield* startStep("repeat_question_guard");
       continue;
     }
     if (nodeName === "repeatQuestionGuard") {
       yield* finishStep("repeat_question_guard");
-      yield* flushPipelineLogs();
+      yield* flushPipelineLogs(collectedLogs);
       if (finalState.repeatQuestionHit) {
         yield* startStep("repeat_respond_early");
       } else {
@@ -253,13 +283,13 @@ async function* runPipelineStreamInner(
     }
     if (nodeName === "preparePipelineMemory") {
       yield* finishStep("prepare_pipeline_memory");
-      yield* flushPipelineLogs();
+      yield* flushPipelineLogs(collectedLogs);
       if (finalState.error && finalState.exitEarly) {
         yield { type: "error", message: finalState.error };
         const answer =
           finalState.answer ?? "（准备对话上下文失败，请稍后重试）";
         timing.markFirstToken();
-        const pipelineTiming = yield* finishPipeline(timing);
+        const pipelineTiming = yield* finishPipeline(timing, collectedLogs);
         logAgentOut(
           "Pipeline",
           "出去",
@@ -271,6 +301,8 @@ async function* runPipelineStreamInner(
           repeatQuestionHit: false,
           retrievalCacheHit: false,
           timing: pipelineTiming,
+          logs: [...collectedLogs],
+          steps: [...collectedSteps],
         };
       }
       yield* startStep("intake");
@@ -278,20 +310,20 @@ async function* runPipelineStreamInner(
     }
     if (nodeName === "repeatRespondEarly") {
       yield* finishStep("repeat_respond_early");
-      yield* flushPipelineLogs();
+      yield* flushPipelineLogs(collectedLogs);
       yield* startStep("persist_turn_end");
       continue;
     }
     if (nodeName === "intake") {
       yield* finishStep("intake");
-      yield* flushPipelineLogs();
+      yield* flushPipelineLogs(collectedLogs);
       if (finalState.error) {
         yield { type: "error", message: finalState.error };
         const answer =
           finalState.answer ??
           "（模型调用失败：请确认本地 Ollama 已启动且模型已拉取）";
         timing.markFirstToken();
-        const pipelineTiming = yield* finishPipeline(timing);
+        const pipelineTiming = yield* finishPipeline(timing, collectedLogs);
         logAgentOut(
           "Pipeline",
           "出去",
@@ -303,6 +335,8 @@ async function* runPipelineStreamInner(
           repeatQuestionHit: finalState.repeatQuestionHit,
           retrievalCacheHit: finalState.retrievalCacheHit,
           timing: pipelineTiming,
+          logs: [...collectedLogs],
+          steps: [...collectedSteps],
         };
       }
       const decision = finalState.decision;
@@ -419,6 +453,11 @@ async function* runPipelineStreamInner(
     if (nodeName === "respondEarly") {
       if (activeStep) {
         const durationMs = timing.markNodeEnd(activeStep);
+        upsertCollectedStep(collectedSteps, {
+          name: activeStep,
+          status: "done",
+          ...(durationMs !== undefined ? { durationMs } : {}),
+        });
         yield {
           type: "step",
           name: activeStep,
@@ -432,12 +471,17 @@ async function* runPipelineStreamInner(
     }
     if (nodeName === "persistTurnEnd") {
       yield* finishStep("persist_turn_end");
-      yield* flushPipelineLogs();
+      yield* flushPipelineLogs(collectedLogs);
       continue;
     }
   }
   if (activeStep) {
     const durationMs = timing.markNodeEnd(activeStep);
+    upsertCollectedStep(collectedSteps, {
+      name: activeStep,
+      status: "done",
+      ...(durationMs !== undefined ? { durationMs } : {}),
+    });
     yield {
       type: "step",
       name: activeStep,
@@ -455,7 +499,7 @@ async function* runPipelineStreamInner(
     timing.markFirstToken();
     yield* emitAssistant(answer);
   }
-  const pipelineTiming = yield* finishPipeline(timing);
+  const pipelineTiming = yield* finishPipeline(timing, collectedLogs);
   logAgentOut(
     "Pipeline",
     "出去",
@@ -476,5 +520,7 @@ async function* runPipelineStreamInner(
     compositeFacetCacheHits: finalState.compositeFacetCacheHits,
     timing: pipelineTiming,
     retrievalPaths: retrievalPathsFromState(finalState),
+    logs: [...collectedLogs],
+    steps: [...collectedSteps],
   };
 }

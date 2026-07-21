@@ -143,7 +143,7 @@ export const applyToolPlanGuard = (
                 })
             ),
             executionPlan: buildHybridExecutionPlan(userQuestion, decision),
-            routeReason: decision.routeReason ?? "slots_default",
+            routeReason: decision.routeReason ?? "intake_retrieval_plan",
         };
     }
 

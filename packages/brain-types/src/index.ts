@@ -64,6 +64,23 @@ export type PipelineLogEntry = {
     preview?: string;
 };
 
+/** 单轮 step 事件（与 SSE `step` / 运行日志面板对齐） */
+export type TurnStepEvent = {
+    name: PipelineStepName;
+    status: "running" | "done";
+    durationMs?: number;
+};
+
+/** 持久化 / 历史回放用的一轮轨迹快照 */
+export type TurnTraceSnapshot = {
+    timing?: PipelineTiming;
+    entries: PipelineLogEntry[];
+    steps: TurnStepEvent[];
+    status: "done" | "error";
+    userQuestion?: string;
+    error?: string;
+};
+
 import type { AssistantMessageBlock } from "./message-blocks";
 export type AgentStreamEvent = {
     type: "step";
@@ -116,4 +133,8 @@ export type AgentPipelineResult = {
     timing?: PipelineTiming;
     /** 本轮 KM 命中的 corpus path，供反馈与 Phase D */
     retrievalPaths?: string[];
+    /** 本轮 Agent 日志（入库 / 历史回放） */
+    logs?: PipelineLogEntry[];
+    /** 本轮 step 轨迹（入库 / 历史回放） */
+    steps?: TurnStepEvent[];
 };

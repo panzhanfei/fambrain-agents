@@ -51,6 +51,7 @@ model User {
   conversations Conversation[]
   pendingMemoryFacts PendingMemoryFact[]
   retrievalFeedbacks RetrievalFeedback[]
+  turnTraces TurnTrace[]
 }
 
 enum PendingMemoryFactStatus {
@@ -124,8 +125,32 @@ model Conversation {
   updatedAt DateTime  @updatedAt
 
   messages Message[]
+  turnTraces TurnTrace[]
 
   @@index([userId, pinned, updatedAt])
+}
+
+/// 单轮 Pipeline 轨迹（耗时 + step + agent log）；以助手 messageId 为稳定键
+model TurnTrace {
+  id             String   @id @default(cuid())
+  userId         String
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  conversationId String
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  /// 助手消息 id（历史回放主键）
+  messageId      String   @unique
+  userMessageId  String?
+  userQuestion   String?
+  status         String   @default("done")
+  timing         Json?
+  entries        Json
+  steps          Json
+  error          String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([conversationId, createdAt])
+  @@index([userId, conversationId])
 }
 
 /// 单轮消息（同属一个 Conversation）

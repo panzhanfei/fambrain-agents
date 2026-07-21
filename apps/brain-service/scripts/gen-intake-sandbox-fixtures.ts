@@ -9,7 +9,6 @@ import {
   applyIntakeLinkLookupGuard,
   applyIntakeRetrievalPlanGuard,
   applyEnumerationSlotGuard,
-  applyPureSocialUtteranceGuard,
   type RoutedIntakeDecision,
 } from "@/agentflow/agents/online/intake-coordinator/guards";
 import {
@@ -19,7 +18,6 @@ import {
 } from "@/agentflow/agents/online/intake-coordinator/pipeline/intake-pipeline";
 import { applyPathPlanGuard } from "@/agentflow/agents/online/intake-coordinator/path-plan";
 import { applyToolPlanGuard } from "@/agentflow/agents/online/tool-orchestrator";
-import { IDENTITY_FIELD_SEARCH } from "@/agentflow/agents/online/intake-coordinator/composite";
 import { isUserFactIntent } from "@/agentflow/agents/online/user-fact";
 import type { IntakeRoutingDecision } from "@/agentflow/agents/online/intake-coordinator/contract";
 import type { DbChatTurn } from "@fambrain/brain-types";
@@ -119,15 +117,6 @@ const runChain = async (input: {
     decision
   );
 
-  decision = applyPureSocialUtteranceGuard(decision, input.userQuestion);
-  push(
-    "1b",
-    "①b 纯社交短路",
-    "guards/intake-chitchat-guard.ts · applyPureSocialUtteranceGuard",
-    "纯「你好/谢谢」强制 chitchat；否则 noop",
-    decision
-  );
-
   decision = applyIntakeContinuationGuard(
     decision,
     input.userQuestion,
@@ -135,9 +124,9 @@ const runChain = async (input: {
   );
   push(
     "2a",
-    "②a 续问/指代 repair",
+    "②a continuation（恒 noop）",
     "guards/intake-continuation-guard.ts · applyIntakeContinuationGuard",
-    "短续问或误 clarify → retrieve；补 searchQuery",
+    "指代归 LLM + node merge；本 guard 不改写",
     decision
   );
 
@@ -147,7 +136,7 @@ const runChain = async (input: {
       "2",
       "② clarify 早退",
       "pipeline/intake-pipeline.ts · isClarifyEarlyExit",
-      "仍 clarify → respondEarly",
+      "信 LLM clarify → respondEarly",
       routed,
       true
     );
@@ -193,49 +182,64 @@ const runChain = async (input: {
   if (isUserFactIntent(decision.intent)) {
     const factKey = decision.userFactKey?.trim() ?? "";
     if (decision.intent === "recall_user_fact" && !factKey) {
-      const identityPlan =
-        (decision.retrievalPlan ?? []).find(
-          (p) => p.queryType === "identity" || Boolean(p.identityField)
-        ) ?? null;
-      const field = identityPlan?.identityField ?? "name";
-      const fieldSpec = IDENTITY_FIELD_SEARCH[field];
-      decision = {
-        ...decision,
-        intent: "retrieve_and_answer",
-        queryType: "identity",
-        searchQuery: identityPlan?.searchQuery?.trim() || fieldSpec.searchQuery,
-        topics: identityPlan?.topics?.length
-          ? identityPlan.topics
-          : ["personal", "resume"],
-        subTasks:
-          decision.subTasks.length > 0
-            ? decision.subTasks
-            : [fieldSpec.displayLabel],
-        retrievalPlan: identityPlan
-          ? [identityPlan]
-          : [
-              {
-                label: fieldSpec.displayLabel,
-                searchQuery: fieldSpec.searchQuery,
-                queryType: "identity",
-                topics: ["personal", "resume"],
-                identityField: field,
-                enumerationControl: null,
-              },
-            ],
-        userFactKey: null,
-        userFactLabel: null,
-        userFactValue: null,
-        clarifyingQuestion: null,
-        briefReply: null,
-      };
-      push(
-        "4-remap",
-        "④ 无效 recall → identity retrieve",
-        "pipeline/intake-pipeline.ts · invalid_recall remap",
-        "缺 userFactKey 的 recall 改走语料 identity",
-        decision
+      const plan = decision.retrievalPlan ?? [];
+      const hasUsablePlan = plan.some(
+        (p) =>
+          Boolean(p.searchQuery?.trim()) ||
+          p.queryType === "enumeration" ||
+          p.queryType === "identity" ||
+          Boolean(p.identityField) ||
+          Boolean(p.enumerationControl)
       );
+      if (hasUsablePlan) {
+        decision = {
+          ...decision,
+          intent: "retrieve_and_answer",
+          userFactKey: null,
+          userFactLabel: null,
+          userFactValue: null,
+          clarifyingQuestion: null,
+          briefReply: null,
+        };
+        push(
+          "4-remap",
+          "④ 无效 recall → 保留 plan 检索",
+          "pipeline/intake-pipeline.ts · invalid_recall_keep_retrieval_plan",
+          "缺 key 但已有 usable retrievalPlan → retrieve",
+          decision
+        );
+      } else {
+        decision = {
+          ...decision,
+          intent: "clarify",
+          searchQuery: "",
+          queryType: null,
+          clarifyingQuestion:
+            "你想回忆哪一条个人设定？请说明关键词（例如昵称、偏好）。",
+          briefReply: null,
+          retrievalPlan: [],
+          userFactKey: null,
+          userFactLabel: null,
+          userFactValue: null,
+          confidence: Math.min(decision.confidence, 0.55),
+        };
+        const routed = buildEarlyExitRoutedDecision(decision);
+        push(
+          "4-clarify",
+          "④ 无效 recall → clarify",
+          "pipeline/intake-pipeline.ts · invalid_recall_to_clarify",
+          "无 plan 不发明 identity/name 槽",
+          routed,
+          true
+        );
+        return {
+          id: input.id,
+          title: input.title,
+          userQuestion: input.userQuestion,
+          dirtyWhy: "",
+          steps,
+        };
+      }
     } else {
       const routed = buildEarlyExitRoutedDecision(decision);
       push(
@@ -261,7 +265,7 @@ const runChain = async (input: {
     "5a",
     "⑤a 对外链接 guard",
     "guards/intake-link-lookup-guard.ts · applyIntakeLinkLookupGuard",
-    "外链纠偏 / 混合 plan 保留 / stale 收束",
+    "harmonize / 保留混合 plan（不发明拆槽）",
     decision
   );
 
@@ -270,7 +274,7 @@ const runChain = async (input: {
     "5",
     "⑤ 检索计划 guard",
     "guards/intake-retrieval-plan-guard.ts · applyIntakeRetrievalPlanGuard",
-    "多问补 plan / expand identity / repair / canonicalize",
+    "schema 合法化 / facet 去重 / canonicalize（保留非空 searchQuery）",
     decision
   );
 
@@ -279,9 +283,20 @@ const runChain = async (input: {
     "6",
     "⑥ 复合路由",
     "guards/composite-route-guard.ts · applyCompositeRouteGuard",
-    "retrievalPlan → compositeSlots + routeMode=slots",
-    routed
+    "retrievalPlan → slots；空 plan → clarify",
+    routed,
+    routed.routeMode === "skip" || routed.intent === "clarify"
   );
+
+  if (routed.routeMode === "skip" || routed.intent === "clarify") {
+    return {
+      id: input.id,
+      title: input.title,
+      userQuestion: input.userQuestion,
+      dirtyWhy: "",
+      steps,
+    };
+  }
 
   routed = await applyEnumerationSlotGuard(routed, input.userQuestion, {
     conversationId: "sandbox",
@@ -353,9 +368,9 @@ const main = async () => {
   const scenarios = [
     {
       id: "clarify-continue",
-      title: "续问误 clarify",
+      title: "续问标 clarify（信 LLM）",
       dirtyWhy:
-        "有上文却标 clarify；短句「那前端呢？」应改 retrieve 并用 prior 补检索词",
+        "档 B：pipeline 不再把 clarify→retrieve；②a noop → ② clarify 早退（消解靠 node merge）",
       userQuestion: "那前端呢？",
       history: [
         {
@@ -372,6 +387,31 @@ const main = async () => {
         clarifyingQuestion: "你指的是哪个项目的前端？",
         confidence: 0.55,
         topics: ["project"],
+      }),
+    },
+    {
+      id: "elliptical-retrieve",
+      title: "retrieve 但空 plan → clarify",
+      dirtyWhy:
+        "档 B：已标 retrieve 但 retrievalPlan=[] → ⑥ clarify（不再补 prior / 发明槽）",
+      userQuestion: "那前端呢？",
+      history: [
+        {
+          role: "user" as const,
+          content: "城管平台用了什么技术栈？",
+        },
+        {
+          role: "assistant" as const,
+          content: "城管平台后端主要使用 Java……",
+        },
+      ],
+      llm: base({
+        intent: "retrieve_and_answer",
+        searchQuery: "那前端呢？",
+        queryType: "default",
+        topics: ["project"],
+        confidence: 0.7,
+        retrievalPlan: [],
       }),
     },
     {
@@ -406,8 +446,7 @@ const main = async () => {
     {
       id: "multipart-empty-plan",
       title: "多问但 plan 为空",
-      dirtyWhy:
-        "档 B：subTasks≥2 且 plan=[] 时 ⑤ 不再发明槽；⑥ 编译为单槽 default（须靠 LLM 填齐 plan）",
+      dirtyWhy: "档 B：retrieve + plan=[] → ⑥ clarify（须靠 LLM 填齐 plan）",
       userQuestion: "我叫什么？今年多大？做过哪些项目？",
       history: [],
       llm: base({
@@ -422,8 +461,9 @@ const main = async () => {
     },
     {
       id: "invalid-recall",
-      title: "无效 recall（姓名误标）",
-      dirtyWhy: "recall_user_fact 无 userFactKey；④ remap 成 identity retrieve",
+      title: "无效 recall（有 plan）",
+      dirtyWhy:
+        "recall 无 key 但已有 identity plan → ④ keep plan 改 retrieve（不发明槽）",
       userQuestion: "我叫什么名字？",
       history: [],
       llm: base({
@@ -441,6 +481,19 @@ const main = async () => {
             identityField: "name",
           },
         ],
+      }),
+    },
+    {
+      id: "invalid-recall-empty",
+      title: "无效 recall（无 plan）",
+      dirtyWhy: "recall 无 key 且 plan=[] → ④ clarify，不发明 name 槽",
+      userQuestion: "我之前说过什么？",
+      history: [],
+      llm: base({
+        intent: "recall_user_fact",
+        userFactKey: null,
+        confidence: 0.5,
+        retrievalPlan: [],
       }),
     },
     {
@@ -470,16 +523,14 @@ const main = async () => {
     },
     {
       id: "chitchat",
-      title: "纯问候早退",
+      title: "纯问候（node 短路；pipeline 信 LLM）",
       dirtyWhy:
-        "LLM 误判 retrieve；①b 改 chitchat → ③b 早退（Web 上 0a 更早拦）",
+        "生产上 intake-node 纯社交已跳过 LLM；进 pipeline 后不再 ①b 覆盖（本例 LLM 已标 chitchat）",
       userQuestion: "你好",
       history: [],
       llm: base({
-        intent: "retrieve_and_answer",
-        searchQuery: "你好",
-        queryType: "default",
-        confidence: 0.4,
+        intent: "chitchat",
+        confidence: 1,
       }),
     },
     {

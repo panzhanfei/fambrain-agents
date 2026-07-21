@@ -4,11 +4,10 @@
  *   pnpm --filter @fambrain/brain-service run verify:intake-chitchat
  *   CHITCHAT_RUNS=10 pnpm --filter @fambrain/brain-service run verify:intake-chitchat
  */
-import type { DbChatTurn } from "@fambrain/brain-types";
 import {
     applyIntakeChitchatGuard,
     applyPureSocialUtteranceGuard,
-    completeIntakeCoordinator,
+    buildPureChitchatDecision,
     DEFAULT_CHITCHAT_BRIEF_REPLY,
     isPureSocialUtterance,
     runIntakePipeline,
@@ -117,17 +116,20 @@ assertSync("signals：纯社交句识别", () => {
 await bootstrapBrainServiceRuntime();
 
 const runs = parseRuns();
-console.log(`\n— Intake live × ${runs}（「你好」）—`);
-
-const history: DbChatTurn[] = [{ role: "user", content: "你好" }];
+console.log(`\n— 入口短路 live × ${runs}（「你好」，对齐 intake-node）—`);
 
 for (let i = 1; i <= runs; i++) {
     try {
-        const raw = await completeIntakeCoordinator(history);
+        if (!isPureSocialUtterance("你好")) {
+            throw new Error("「你好」应命中 isPureSocialUtterance");
+        }
+        /** 与 intake-node 一致：短路后直接 pipeline（不调 LLM） */
         const { decision, earlyExit } = await runIntakePipeline({
-            intakeRaw: raw,
+            intakeRaw: JSON.stringify(
+                applyIntakeChitchatGuard(buildPureChitchatDecision())
+            ),
             userQuestion: "你好",
-            intakeHistory: history,
+            intakeHistory: [{ role: "user", content: "你好" }],
         });
         const reply = decision.briefReply ?? "";
         if (decision.intent !== "chitchat") {

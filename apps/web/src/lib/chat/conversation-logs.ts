@@ -1,14 +1,10 @@
 import type {
     PipelineLogEntry,
-    PipelineStepName,
     PipelineTiming,
+    TurnStepEvent,
 } from "@fambrain/brain-types";
 
-export type TurnStepEvent = {
-    name: PipelineStepName;
-    status: "running" | "done";
-    durationMs?: number;
-};
+export type { TurnStepEvent };
 
 export type ConversationTurnLog = {
     turnId: string;

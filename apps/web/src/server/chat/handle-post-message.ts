@@ -1,110 +1,147 @@
-import type { AgentPipelineContext, AgentPipelineResult, DbChatTurn, AssistantMessageBlock, } from "@fambrain/brain-types";
+import type {
+  AgentPipelineContext,
+  AgentPipelineResult,
+  DbChatTurn,
+  AssistantMessageBlock,
+} from "@fambrain/brain-types";
 import { encodeSseEvent, sseResponse } from "@/lib/chat/sse";
-import { appendAssistantMessage, appendUserMessage, maybeUpdateConversationTitle, } from "@fambrain/db";
+import {
+  appendAssistantMessage,
+  appendUserMessage,
+  maybeUpdateConversationTitle,
+  upsertTurnTrace,
+} from "@fambrain/db";
 import { streamAgentPipeline } from "./brain-service-client";
+
 type UiRole = "user" | "assistant";
 const mapRole = (role: string): UiRole => {
-    return role === "user" ? "user" : "assistant";
+  return role === "user" ? "user" : "assistant";
 };
-const streamEventName = (ev: {
-    type: string;
-}): string => {
-    return ev.type;
+const streamEventName = (ev: { type: string }): string => {
+  return ev.type;
 };
+
 export const createPostMessageStreamResponse = (options: {
-    conversationId: string;
-    userContent: string;
-    conversationTitle: string;
-    history: DbChatTurn[];
-    pipelineContext: AgentPipelineContext;
-    authToken: string;
+  conversationId: string;
+  userContent: string;
+  conversationTitle: string;
+  history: DbChatTurn[];
+  pipelineContext: AgentPipelineContext;
+  authToken: string;
 }): Response => {
-    const readable = new ReadableStream<Uint8Array>({
-        async start(controller) {
-            const send = (event: string, payload: unknown) => {
-                controller.enqueue(encodeSseEvent(event, payload));
-            };
-            let userRow: Awaited<ReturnType<typeof appendUserMessage>>;
-            try {
-                userRow = await appendUserMessage(options.conversationId, options.userContent);
-                await maybeUpdateConversationTitle(options.conversationId, options.conversationTitle, options.userContent);
-                send("meta", {
-                    userMessage: {
-                        id: userRow.id,
-                        role: mapRole(userRow.role),
-                        content: userRow.content,
-                    },
-                });
-                const historyWithUser: DbChatTurn[] = [
-                    ...options.history,
-                    { role: "user", content: options.userContent },
-                ];
-                const gen = streamAgentPipeline(historyWithUser, options.pipelineContext, options.authToken);
-                let pipelineResult: AgentPipelineResult | undefined;
-                while (true) {
-                    const next = await gen.next();
-                    if (next.done) {
-                        pipelineResult = next.value;
-                        break;
-                    }
-                    const ev = next.value;
-                    send(streamEventName(ev), ev);
-                }
-                const finalContent = pipelineResult?.answer?.trim() ||
-                    "（模型未返回助手文本：请确认 Ollama 已启动且模型已拉取）";
-                send("ready", {
-                    answer: finalContent,
-                    timing: pipelineResult?.timing,
-                });
-                const assistantRow = await appendAssistantMessage(
-                    options.conversationId,
-                    finalContent,
-                    pipelineResult?.retrievalPaths?.length || pipelineResult?.blocks?.length
-                        ? {
-                            ...(pipelineResult?.retrievalPaths?.length
-                                ? { retrievalPaths: pipelineResult.retrievalPaths }
-                                : {}),
-                            ...(pipelineResult?.blocks?.length
-                                ? { blocks: pipelineResult.blocks }
-                                : {}),
-                        }
-                    :   undefined
-                );
-                send("done", {
-                    userMessage: {
-                        id: userRow.id,
-                        role: mapRole(userRow.role),
-                        content: userRow.content,
-                    },
-                    assistantMessage: {
-                        id: assistantRow.id,
-                        role: mapRole(assistantRow.role),
-                        content: assistantRow.content,
-                        retrievalPaths: pipelineResult?.retrievalPaths,
-                        blocks: pipelineResult?.blocks,
-                    },
-                    timing: pipelineResult?.timing,
-                });
-            }
-            catch (e) {
-                console.error(e);
-                const msg = e instanceof Error ? e.message : "模型流式调用失败，请确认本地 Ollama 可用";
-                try {
-                    send("error", { error: msg });
-                }
-                catch {
-                    //
-                }
-            }
-            finally {
-                try {
-                    controller.close();
-                }
-                catch {
-                    //
-                }
-            }
-        },
-    });
-    return sseResponse(readable);
+  const readable = new ReadableStream<Uint8Array>({
+    async start(controller) {
+      const send = (event: string, payload: unknown) => {
+        controller.enqueue(encodeSseEvent(event, payload));
+      };
+      let userRow: Awaited<ReturnType<typeof appendUserMessage>>;
+      try {
+        userRow = await appendUserMessage(
+          options.conversationId,
+          options.userContent
+        );
+        await maybeUpdateConversationTitle(
+          options.conversationId,
+          options.conversationTitle,
+          options.userContent
+        );
+        send("meta", {
+          userMessage: {
+            id: userRow.id,
+            role: mapRole(userRow.role),
+            content: userRow.content,
+          },
+        });
+        const historyWithUser: DbChatTurn[] = [
+          ...options.history,
+          { role: "user", content: options.userContent },
+        ];
+        const gen = streamAgentPipeline(
+          historyWithUser,
+          options.pipelineContext,
+          options.authToken
+        );
+        let pipelineResult: AgentPipelineResult | undefined;
+        while (true) {
+          const next = await gen.next();
+          if (next.done) {
+            pipelineResult = next.value;
+            break;
+          }
+          const ev = next.value;
+          send(streamEventName(ev), ev);
+        }
+        const finalContent =
+          pipelineResult?.answer?.trim() ||
+          "（模型未返回助手文本：请确认 Ollama 已启动且模型已拉取）";
+        send("ready", {
+          answer: finalContent,
+          timing: pipelineResult?.timing,
+        });
+        const assistantRow = await appendAssistantMessage(
+          options.conversationId,
+          finalContent,
+          pipelineResult?.retrievalPaths?.length ||
+            pipelineResult?.blocks?.length
+            ? {
+                ...(pipelineResult?.retrievalPaths?.length
+                  ? { retrievalPaths: pipelineResult.retrievalPaths }
+                  : {}),
+                ...(pipelineResult?.blocks?.length
+                  ? { blocks: pipelineResult.blocks as AssistantMessageBlock[] }
+                  : {}),
+              }
+            : undefined
+        );
+        try {
+          await upsertTurnTrace({
+            userId: options.pipelineContext.actorUserId,
+            conversationId: options.conversationId,
+            messageId: assistantRow.id,
+            userMessageId: userRow.id,
+            userQuestion: options.userContent,
+            status: "done",
+            timing: pipelineResult?.timing ?? null,
+            entries: pipelineResult?.logs ?? [],
+            steps: pipelineResult?.steps ?? [],
+          });
+        } catch (traceErr) {
+          console.error("upsertTurnTrace failed", traceErr);
+        }
+        send("done", {
+          userMessage: {
+            id: userRow.id,
+            role: mapRole(userRow.role),
+            content: userRow.content,
+          },
+          assistantMessage: {
+            id: assistantRow.id,
+            role: mapRole(assistantRow.role),
+            content: assistantRow.content,
+            retrievalPaths: pipelineResult?.retrievalPaths,
+            blocks: pipelineResult?.blocks,
+          },
+          timing: pipelineResult?.timing,
+        });
+      } catch (e) {
+        console.error(e);
+        const msg =
+          e instanceof Error
+            ? e.message
+            : "模型流式调用失败，请确认本地 Ollama 可用";
+        try {
+          send("error", { error: msg });
+        } catch {
+          //
+        }
+      } finally {
+        try {
+          controller.close();
+        } catch {
+          //
+        }
+      }
+    },
+  });
+  return sseResponse(readable);
 };

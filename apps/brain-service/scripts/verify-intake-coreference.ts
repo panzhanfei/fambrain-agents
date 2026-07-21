@@ -46,14 +46,21 @@ const clarifyJson = JSON.stringify({
 const retrieveWithEntityJson = JSON.stringify({
     intent: "retrieve_and_answer",
     searchQuery: "西安奥卡云 城市管理平台 技术栈",
-    subTasks: [],
+    subTasks: ["城管平台技术栈"],
     topics: ["project"],
     language: "zh",
     confidence: 0.88,
     queryType: "tech",
     clarifyingQuestion: null,
     briefReply: null,
-    retrievalPlan: [],
+    retrievalPlan: [
+        {
+            label: "城管平台技术栈",
+            searchQuery: "西安奥卡云 城市管理平台 技术栈",
+            queryType: "tech",
+            topics: ["project"],
+        },
+    ],
 });
 
 console.log("verify-intake-coreference\n— 指代重试判定 / 单字短路（无 LLM） —");

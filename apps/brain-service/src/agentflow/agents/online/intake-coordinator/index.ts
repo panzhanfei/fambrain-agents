@@ -59,7 +59,6 @@ export {
   applyEnumerationSlotGuard,
   buildEnumerationListDecision,
   applyCompositeRouteGuard,
-  decisionToRetrievalSlot,
   isCompositeProfileQuestion,
   type CompositeRouteReason,
   type EnumerationListIntent,
@@ -69,7 +68,6 @@ export {
 } from "./guards";
 
 export {
-  buildSingleQuestionPlanItem,
   looksLikeMultiPartQuestion,
   resolveCompositeRoute,
   resolveEffectiveQueryType,

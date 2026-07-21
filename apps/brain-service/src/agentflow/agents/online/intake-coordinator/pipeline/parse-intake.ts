@@ -44,25 +44,22 @@ export const clarifyFallbackFromProse = (
   };
 };
 
-/** Intake JSON 解析失败时的弱默认：单槽 retrieve，不发明多问 plan */
+/** Intake JSON 解析失败：clarify，不瞎 retrieve / 不发明空 plan */
 export const defaultIntakeDecision = (
-  userQuestion: string
-): IntakeRoutingDecision => {
-  const searchQuery = userQuestion.trim() || "查询";
-  return {
-    intent: "retrieve_and_answer",
-    searchQuery,
-    subTasks: [],
-    topics: [],
-    language: "zh",
-    confidence: 0.4,
-    queryType: "default",
-    clarifyingQuestion: null,
-    briefReply: null,
-    retrievalPlan: [],
-    userFactKey: null,
-    userFactLabel: null,
-    userFactValue: null,
-    coreference: "none",
-  };
-};
+  _userQuestion: string
+): IntakeRoutingDecision => ({
+  intent: "clarify",
+  searchQuery: "",
+  subTasks: [],
+  topics: [],
+  language: "zh",
+  confidence: 0.4,
+  queryType: null,
+  clarifyingQuestion: "刚才没听清，请再说一次你想了解什么？",
+  briefReply: null,
+  retrievalPlan: [],
+  userFactKey: null,
+  userFactLabel: null,
+  userFactValue: null,
+  coreference: "none",
+});

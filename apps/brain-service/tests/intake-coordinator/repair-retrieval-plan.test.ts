@@ -69,16 +69,25 @@ describe("dedupePlanByFacet", () => {
 });
 
 describe("normalizePlanItemFromSchema", () => {
-    it("fills tenure searchQuery from identityField catalog", () => {
-        const item = normalizePlanItemFromSchema({
+    it("keeps non-empty LLM searchQuery; fills catalog when empty", () => {
+        const kept = normalizePlanItemFromSchema({
             label: "从业年限",
             searchQuery: "随便",
             queryType: "identity",
             topics: [],
             identityField: "tenure",
         });
-        expect(item.searchQuery).toMatch(/时间线|工作经历/);
-        expect(item.identityField).toBe("tenure");
+        expect(kept.searchQuery).toBe("随便");
+        expect(kept.identityField).toBe("tenure");
+
+        const filled = normalizePlanItemFromSchema({
+            label: "从业年限",
+            searchQuery: "  ",
+            queryType: "identity",
+            topics: [],
+            identityField: "tenure",
+        });
+        expect(filled.searchQuery).toMatch(/时间线|工作经历/);
     });
 
     it("promotes identityField on default queryType to identity", () => {
@@ -177,12 +186,25 @@ describe("repairRetrievalPlanItems", () => {
 });
 
 describe("canonicalizePlanItem identityField", () => {
-    it("keeps tenure searchQuery (not generic identity template)", () => {
+    it("keeps LLM searchQuery and topics when non-empty", () => {
         const item = canonicalizePlanItem({
             label: "从业年限",
             searchQuery: "个人简介 简历 工作经历 时间线 任职 时间段",
             queryType: "identity",
             topics: ["personal", "resume"],
+            identityField: "tenure",
+        });
+        expect(item.searchQuery).toMatch(/时间线|工作经历/);
+        expect(item.topics).toEqual(["personal", "resume"]);
+        expect(item.identityField).toBe("tenure");
+    });
+
+    it("fills tenure template when searchQuery empty", () => {
+        const item = canonicalizePlanItem({
+            label: "从业年限",
+            searchQuery: "",
+            queryType: "identity",
+            topics: [],
             identityField: "tenure",
         });
         expect(item.searchQuery).toMatch(/时间线|工作经历/);

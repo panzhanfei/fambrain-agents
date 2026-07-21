@@ -82,6 +82,8 @@ export const handlePipelineStream = async (req: IncomingMessage, res: ServerResp
             retrievalCacheHit: pipelineResult?.retrievalCacheHit,
             retrievalPaths: pipelineResult?.retrievalPaths,
             timing: pipelineResult?.timing,
+            logs: pipelineResult?.logs,
+            steps: pipelineResult?.steps,
         });
     }
     catch (e) {

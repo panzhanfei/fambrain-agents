@@ -10,7 +10,6 @@ export type {
 } from "./interface";
 
 export {
-    buildSingleQuestionPlanItem,
     looksLikeMultiPartQuestion,
     normalizePlanItems,
     resolveCompositeRoute,

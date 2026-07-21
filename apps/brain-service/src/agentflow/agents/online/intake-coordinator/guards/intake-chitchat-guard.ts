@@ -50,6 +50,7 @@ export const applyIntakeChitchatGuard = (
 /**
  * 纯问候/感谢句强制 chitchat（覆盖 LLM 误判 retrieve）。
  * remember/recall 等显式 userFact intent 不覆盖。
+ * 生产入口：`intake-node` 用 `isPureSocialUtterance` 跳过 LLM；本函数供 verify / 兜底导出。
  */
 export const applyPureSocialUtteranceGuard = (
     decision: IntakeRoutingDecision,

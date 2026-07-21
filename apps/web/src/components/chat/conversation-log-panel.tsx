@@ -16,6 +16,7 @@ const STEP_LABELS: Record<PipelineStepName, string> = {
     intake: "理解问题",
     user_fact: "读取记忆",
     retrieval: "检索知识库",
+    plan_executor: "执行计划",
     fact_checker: "核查证据",
     content_summarizer: "生成摘要",
     content_organizer: "整理证据",

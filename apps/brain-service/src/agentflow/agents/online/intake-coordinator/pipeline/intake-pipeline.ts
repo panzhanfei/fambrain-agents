@@ -1,10 +1,13 @@
 /**
- * Intake 编排：LLM → parse → guard 链 → RoutedIntakeDecision。
+ * Intake 编排（LLM 之后）：parse → early-exit → legalize → compile → RoutedIntakeDecision。
  * 每步打结构化日志，供 Web 运行日志 / 控制台复盘。
  *
  * 复盘沙盘（逐步看 decision 变化）：Cursor Canvas「intake-pipeline-sandbox」
  * 字段词典：Cursor Canvas「intake-field-dictionary」
  * 类型：IntakeRoutingDecision（LLM）→ RoutedIntakeDecision（本文件出口）→ state.decision
+ *
+ * 档 B：LLM 写出完整 retrievalPlan；代码只合法化 + 编译；空 plan → clarify。
+ * 纯社交短路在 intake-node；continuation 恒 noop。
  */
 import {
   applyCompositeRouteGuard,
@@ -13,7 +16,6 @@ import {
   applyEnumerationSlotGuard,
   applyIntakeContinuationGuard,
   applyIntakeLinkLookupGuard,
-  applyPureSocialUtteranceGuard,
   type RoutedIntakeDecision,
 } from "@/agentflow/agents/online/intake-coordinator/guards";
 import {
@@ -23,17 +25,12 @@ import {
 } from "./parse-intake";
 import { applyToolPlanGuard } from "@/agentflow/agents/online/tool-orchestrator";
 import type { IntakeRoutingDecision } from "@/agentflow/agents/online/intake-coordinator/contract";
-import { IDENTITY_FIELD_SEARCH } from "@/agentflow/agents/online/intake-coordinator/composite";
 import {
   applyPathPlanGuard,
   defaultComposeMode,
   emptyPathPlan,
 } from "@/agentflow/agents/online/intake-coordinator/path-plan";
 import { isUserFactIntent } from "@/agentflow/agents/online/user-fact";
-import {
-  historySupportsContinuation,
-  isShortContinuationUtterance,
-} from "@/agentflow/agents/online/intake-coordinator/signals";
 import { logAgentOut } from "@fambrain/brain-shared/agent-log";
 import type { DbChatTurn } from "@fambrain/brain-types";
 import type { CompositeSessionKey } from "@fambrain/infra";
@@ -122,33 +119,30 @@ export type RunIntakePipelineInput = {
 export type RunIntakePipelineResult = {
   decision: RoutedIntakeDecision;
   parseUsedFallback: boolean;
-  /** true：clarify/chitchat 等在 ⑤ 之前早退；无效 recall remap 后继续检索则 false */
+  /** true：clarify/chitchat/userFact 等早退；继续检索则为 false */
   earlyExit: boolean;
 };
 
 /**
- * Intake 规则主流程（LLM 之后）：parse → guard 链 → RoutedIntakeDecision。
+ * Intake 规则主流程（LLM 之后）：parse → early-exit → legalize → compile。
  *
- * 步骤一览（Δ = 常变字段；与 Canvas 沙盘步骤 id 对齐）：
- *   ①   parse+兜底     Δ intent/searchQuery/clarifyingQuestion（失败才变）
- *   ①b  纯社交         Δ intent→chitchat, briefReply 注入
- *   ②a  续问 repair    Δ intent→retrieve, searchQuery, queryType, clarifyingQuestion=null
- *   ②   clarify 早退   → Routed skip + empty pathPlan；earlyExit
- *   ③   闲聊           Δ briefReply=固定话术
- *   ③b  非检索早退     → 同 ② 包装；earlyExit
- *   ④   userFact       合法→早退；无效 recall→Δ intent/retrievalPlan identity（继续）
- *   ⑤a  外链           Δ retrievalPlan.queryType / searchQuery / topics
- *   ⑤   检索计划       schema 合法化/去重/canonicalize（不发明槽）
- *   ⑥   复合路由       + routeMode/compositeSlots（信 retrievalPlan 编译）
- *   ⑦   列举           Δ slot.executor=list_corpus, listIntent/page
- *   ⑧   工具           + enrichedPlan/toolId；或 routeMode=dag+executionPlan
- *   ⑨   PathPlan       + pathPlan 四桶, composeMode；slot enrich
- *   ⑩   出口           return → state.decision → routeAfterIntake
+ * 步骤一览：
+ *   ①   parse+兜底（失败 → clarify）
+ *   ②a  continuation（恒 noop）
+ *   ②   clarify 早退
+ *   ③   闲聊 briefReply
+ *   ③b  非检索早退
+ *   ④   userFact；无效 recall：有 plan→retrieve；无 plan→clarify
+ *   ⑤a  外链 harmonize
+ *   ⑤   检索计划合法化/去重/canonicalize
+ *   ⑥   复合路由：plan→slots；空 plan→clarify 早退
+ *   ⑦⑧⑨ 列举 / 工具 / PathPlan
+ *   ⑩   出口
  */
 export const runIntakePipeline = async (
   input: RunIntakePipelineInput
 ): Promise<RunIntakePipelineResult> => {
-  /** ① 解析 + 兜底：JSON/Zod → IntakeRoutingDecision；失败则散文 clarify 或 default retrieve */
+  /** ① 解析 + 兜底：失败 → 散文 clarify 或 defaultClarify */
   const parsed = parseIntakeDecision(input.intakeRaw);
   const proseClarify =
     parsed === null ? clarifyFallbackFromProse(input.intakeRaw) : null;
@@ -156,70 +150,26 @@ export const runIntakePipeline = async (
   let decision =
     parsed ?? proseClarify ?? defaultIntakeDecision(input.userQuestion);
 
-  /**
-   * ①+ 解析失败落到 default retrieve，且当前为无上文短续问：
-   * 禁止带着指代原文去查库 → 改 clarify（与 G5 / 档 B 一致）。
-   */
-  if (
-    parseUsedFallback &&
-    decision.intent === "retrieve_and_answer" &&
-    isShortContinuationUtterance(input.userQuestion) &&
-    !historySupportsContinuation(input.intakeHistory)
-  ) {
-    decision = {
-      ...decision,
-      intent: "clarify",
-      searchQuery: "",
-      queryType: null,
-      clarifyingQuestion:
-        decision.clarifyingQuestion?.trim() ||
-        "你指的是哪一段经历或哪个项目？请补充具体名称。",
-      briefReply: null,
-      retrievalPlan: [],
-      confidence: Math.min(decision.confidence, 0.55),
-    };
-  }
-
   logAgentOut("IntakeCoordinator", "解析LLM输出", {
     parseOk: parsed !== null,
     ...(parsed === null
       ? {
           fallbackReason: proseClarify
             ? "JSON 解析失败，散文含问号 → clarifyFallbackFromProse"
-            : "JSON 解析或 Zod 校验失败，使用 defaultIntakeDecision",
+            : "JSON 解析或 Zod 校验失败，使用 defaultIntakeDecision(clarify)",
         }
       : {}),
     ...summarizeDecision(decision),
   });
 
-  /** ①b 纯问候/感谢：覆盖 LLM 误判 retrieve（入口未短路时的兜底） */
-  const afterPureSocial = applyPureSocialUtteranceGuard(
-    decision,
-    input.userQuestion
-  );
-  if (afterPureSocial.intent !== decision.intent) {
-    logAgentOut("IntakeCoordinator", "guard_纯社交短路", {
-      fromIntent: decision.intent,
-      toIntent: afterPureSocial.intent,
-    });
-  }
-  decision = afterPureSocial;
-
-  /** ②a 续问/指代：省略主语或误 clarify → retrieve（在 clarify 早退之前） */
-  const afterContinuation = applyIntakeContinuationGuard(
+  /** ②a continuation：恒 noop（指代归 LLM + node merge） */
+  decision = applyIntakeContinuationGuard(
     decision,
     input.userQuestion,
     input.intakeHistory
   );
-  if (afterContinuation.continuationGuardReason !== "noop") {
-    logAgentOut("IntakeCoordinator", "guard_续问指代", {
-      reason: afterContinuation.continuationGuardReason,
-      ...summarizeDecision(afterContinuation),
-    });
-  }
-  decision = afterContinuation;
 
-  /** ② 指代/澄清：仅 clarify intent */
+  /** ② clarify 早退 */
   if (decision.intent === "clarify") {
     const clarifyEarlyExit = isClarifyEarlyExit(decision);
     logAgentOut("IntakeCoordinator", "LLM指代决策", {
@@ -258,13 +208,13 @@ export const runIntakePipeline = async (
     return { decision: routed, parseUsedFallback, earlyExit: true };
   }
 
-  /** ④ 用户记忆：remember/recall → userFact；无效 recall 无 key → 下方 remap 后继续 ⑤ */
+  /** ④ 用户记忆：remember/recall → userFact；无效 recall 见下 */
   if (isUserFactIntent(decision.intent)) {
     const factKey = decision.userFactKey?.trim() ?? "";
     /**
-     * 无效 recall（缺 userFactKey）：纠正 intent，不发明用户口语语义。
-     * 档 B：若 LLM 已给出可用 retrievalPlan → 原样保留，只改成 retrieve_and_answer。
-     * 仅当 plan 为空时，才回退单槽 identity/name（schema 兜底，非口语猜题）。
+     * 无效 recall（缺 userFactKey）：
+     * - 已有可用 retrievalPlan → 改成 retrieve，保留 plan（不发明槽）
+     * - plan 为空 → clarify 早退（不再发明 identity/name）
      */
     if (decision.intent === "recall_user_fact" && !factKey) {
       const plan = decision.retrievalPlan ?? [];
@@ -292,40 +242,33 @@ export const runIntakePipeline = async (
           ...summarizeDecision(decision),
         });
       } else {
-        const field = "name" as const;
-        const fieldSpec = IDENTITY_FIELD_SEARCH[field];
         decision = {
           ...decision,
-          intent: "retrieve_and_answer",
-          queryType: "identity",
-          searchQuery: fieldSpec.searchQuery,
-          topics: ["personal", "resume"],
-          subTasks:
-            decision.subTasks.length > 0
-              ? decision.subTasks
-              : [fieldSpec.displayLabel],
-          retrievalPlan: [
-            {
-              label: fieldSpec.displayLabel,
-              searchQuery: fieldSpec.searchQuery,
-              queryType: "identity",
-              topics: ["personal", "resume"],
-              identityField: field,
-              enumerationControl: null,
-            },
-          ],
+          intent: "clarify",
+          searchQuery: "",
+          queryType: null,
+          clarifyingQuestion:
+            decision.clarifyingQuestion?.trim() ||
+            "你想回忆哪一条个人设定？请说明关键词（例如昵称、偏好）。",
+          briefReply: null,
+          retrievalPlan: [],
           userFactKey: null,
           userFactLabel: null,
           userFactValue: null,
-          clarifyingQuestion: null,
-          briefReply: null,
+          confidence: Math.min(decision.confidence, 0.55),
         };
         logAgentOut("IntakeCoordinator", "guard_用户记忆", {
           matched: false,
-          remapped: "invalid_recall_to_identity_retrieve",
-          identityField: field,
+          remapped: "invalid_recall_to_clarify",
           ...summarizeDecision(decision),
         });
+        const routed = buildEarlyExitRoutedDecision(decision);
+        logAgentOut("IntakeCoordinator", "最终路由", {
+          earlyExit: true,
+          reason: "clarify",
+          ...summarizeDecision(routed),
+        });
+        return { decision: routed, parseUsedFallback, earlyExit: true };
       }
     } else {
       logAgentOut("IntakeCoordinator", "guard_用户记忆", {
@@ -345,7 +288,7 @@ export const runIntakePipeline = async (
     }
   }
 
-  /** ⑤a 对外链接：纠正 GitHub/URL 问法误标 enumeration */
+  /** ⑤a 对外链接：纠正误标 enumeration 等（信 queryType / plan 结构） */
   const afterLinkLookup = applyIntakeLinkLookupGuard(
     decision,
     input.userQuestion
@@ -368,7 +311,7 @@ export const runIntakePipeline = async (
   });
   decision = afterPlan;
 
-  /** ⑥ 复合路由：plan → compositeSlots；定 routeMode（skip / slots / list / dag） */
+  /** ⑥ 复合路由：plan → compositeSlots；空 plan → clarify 早退 */
   const routed = applyCompositeRouteGuard(decision, input.userQuestion);
   logAgentOut("IntakeCoordinator", "guard_复合路由", {
     routeMode: routed.routeMode,
@@ -386,7 +329,16 @@ export const runIntakePipeline = async (
     })),
   });
 
-  /** ⑦ 列举分页：按槽 executor=list_corpus（LLM enumerationControl 或 UI exact-match） */
+  if (routed.routeMode === "skip" || isClarifyEarlyExit(routed)) {
+    logAgentOut("IntakeCoordinator", "最终路由", {
+      earlyExit: true,
+      reason: routed.intent,
+      ...summarizeDecision(routed),
+    });
+    return { decision: routed, parseUsedFallback, earlyExit: true };
+  }
+
+  /** ⑦ 列举分页：按槽 executor=list_corpus */
   const sessionKey: CompositeSessionKey = input.session ?? {
     conversationId: "_",
     corpusUserId: "_",
@@ -414,7 +366,7 @@ export const runIntakePipeline = async (
     });
   }
 
-  /** ⑧ 工具计划：dataSource / toolId（不再整轮互斥切 dag） */
+  /** ⑧ 工具计划：dataSource / toolId */
   const withToolPlan = applyToolPlanGuard(withListIntent, input.userQuestion);
   if (
     withToolPlan.routeMode === "dag" ||
@@ -440,7 +392,7 @@ export const runIntakePipeline = async (
     routeMode: withPathPlan.routeMode,
   });
 
-  /** ⑩ 出口：decision 写入 state，由 routeAfterIntake → planExecutor */
+  /** ⑩ 出口 */
   logAgentOut("IntakeCoordinator", "最终路由", {
     ...summarizeDecision(withPathPlan),
     composeMode: withPathPlan.composeMode,

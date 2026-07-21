@@ -22,12 +22,20 @@ export { IDENTITY_FIELD_SEARCH };
 /** 结构化 facet key：同 key 合并，时间窗不同则并存 */
 export const planFacetKey = (item: IntakeRetrievalPlanItem): string => {
   const tw = item.enumerationControl?.timeWindowYears;
-  return [
+  const base = [
     item.queryType,
     item.identityField ?? "",
     item.enumerationControl?.listKind ?? "",
     tw != null && tw > 0 ? `y${tw}` : "",
   ].join("|");
+  /**
+   * 实体级 external_link（编号多问拆槽）：同 queryType 但不同 label 须并存。
+   * 不把 label 口语当意图，只作结构化去重维度。
+   */
+  if (item.queryType === "external_link") {
+    return `${base}|${item.label.trim().slice(0, 80)}`;
+  }
+  return base;
 };
 
 const preferAction = (
@@ -118,11 +126,12 @@ export const normalizePlanItemFromSchema = (
   if (queryType === "identity" && identityField) {
     const field = identityField as IntakeIdentityField;
     const spec = IDENTITY_FIELD_SEARCH[field];
+    const llmQuery = item.searchQuery.trim();
     return {
       ...item,
       queryType: "identity",
       label: item.label.trim() || spec.displayLabel,
-      searchQuery: spec.searchQuery,
+      searchQuery: llmQuery || spec.searchQuery,
       topics:
         item.topics.length > 0
           ? [...item.topics]
@@ -163,11 +172,12 @@ export const normalizePlanItemFromSchema = (
     }
     const template = listKind === "project" ? PROJECTS_SLOT : EMPLOYERS_SLOT;
     const tw = item.enumerationControl?.timeWindowYears;
+    const llmQuery = item.searchQuery.trim();
     return {
       ...item,
       queryType: "enumeration",
       label: item.label.trim() || template.label,
-      searchQuery: template.searchQuery,
+      searchQuery: llmQuery || template.searchQuery,
       topics: item.topics.length > 0 ? [...item.topics] : [...template.topics],
       identityField: null,
       enumerationControl: {

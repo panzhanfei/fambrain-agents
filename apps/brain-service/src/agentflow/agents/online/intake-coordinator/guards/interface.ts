@@ -23,9 +23,7 @@ export type IntakeRouteMode = "skip" | "slots" | "list" | "dag";
 /** 为何走到当前 routeMode（写进日志 routeReason） */
 export type CompositeRouteReason =
   | "skip_non_retrieve"
-  | "intake_retrieval_plan"
-  | "query_type_template"
-  | "slots_default";
+  | "intake_retrieval_plan";
 
 export type EnumerationListIntent = "preview" | "continue" | "exhaustive";
 

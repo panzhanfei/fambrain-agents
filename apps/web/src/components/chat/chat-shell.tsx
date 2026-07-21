@@ -44,6 +44,7 @@ const STEP_TIMING_LABELS: Record<PipelineStepName, string> = {
   intake: "理解问题",
   user_fact: "读取记忆",
   retrieval: "检索知识库",
+  plan_executor: "执行计划",
   fact_checker: "核查证据",
   content_summarizer: "生成摘要",
   content_organizer: "整理证据",
@@ -700,24 +701,49 @@ export const ChatShell = ({ initialConversations, viewer }: ChatShellProps) => {
       }
       setMessagesLoading(true);
       setMessagesError(null);
-      const result = await fetchJson<ChatMessage[]>(
-        `/api/conversations/${activeConversationId}/messages`
-      );
+      const [msgResult, traceResult] = await Promise.all([
+        fetchJson<ChatMessage[]>(
+          `/api/conversations/${activeConversationId}/messages`
+        ),
+        fetchJson<ConversationLogBundle>(
+          `/api/conversations/${activeConversationId}/traces`
+        ),
+      ]);
       if (cancelled) return;
       setMessagesLoading(false);
-      if (result.ok) {
+      if (msgResult.ok) {
+        const timingByMessageId = new Map<
+          string,
+          MessageTiming | undefined
+        >();
+        if (traceResult.ok) {
+          for (const turn of traceResult.data.turns) {
+            if (turn.timing) {
+              timingByMessageId.set(turn.turnId, turn.timing);
+            }
+          }
+          setConversationLogsById((prev) => {
+            const next = new Map(prev);
+            next.set(activeConversationId, {
+              conversationId: activeConversationId,
+              turns: traceResult.data.turns,
+            });
+            return next;
+          });
+        }
         setMessages((prev) => {
-          const timingById = new Map(
+          const liveTimingById = new Map(
             prev.filter((m) => m.timing).map((m) => [m.id, m.timing] as const)
           );
-          return result.data.map((m) => ({
+          return msgResult.data.map((m) => ({
             ...m,
-            timing: timingById.get(m.id),
+            timing:
+              liveTimingById.get(m.id) ?? timingByMessageId.get(m.id),
           }));
         });
       } else {
         setMessages([]);
-        setMessagesError(result.error);
+        setMessagesError(msgResult.error);
       }
     })();
     return () => {
@@ -1072,8 +1098,14 @@ export const ChatShell = ({ initialConversations, viewer }: ChatShellProps) => {
             applyTurnTiming(serverTiming, clientTotalMs);
           const tid = activeTurnIdRef.current;
           if (tid) {
+            const assistantId =
+              p.assistantMessage &&
+              typeof p.assistantMessage.id === "string"
+                ? p.assistantMessage.id
+                : null;
             patchActiveTurnLog(convId, tid, (turn) => ({
               ...turn,
+              ...(assistantId ? { turnId: assistantId } : {}),
               status: "done",
               timing: timing ?? turn.timing,
             }));

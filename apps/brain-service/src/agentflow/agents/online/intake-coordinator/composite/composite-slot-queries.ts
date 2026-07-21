@@ -112,8 +112,7 @@ export const facetTemplateForQueryType = (
 };
 
 /**
- * 对齐检索 hits 缓存 key：有模板则用模板 searchQuery/topics，
- * label 仍保留用户/LLM 原 label（展示用）。
+ * 合法化 plan 项：有模板时补齐空 searchQuery / topics；**保留** LLM 非空 searchQuery。
  */
 export const canonicalizePlanItem = (
     item: IntakeRetrievalPlanItem
@@ -130,12 +129,13 @@ export const canonicalizePlanItem = (
             identityField: item.identityField ?? null,
         };
     }
+    const llmQuery = item.searchQuery.trim();
     return {
         ...item,
         label: item.label,
-        searchQuery: template.searchQuery,
+        searchQuery: llmQuery || template.searchQuery,
         queryType: template.queryType,
-        topics: [...template.topics],
+        topics: item.topics.length > 0 ? [...item.topics] : [...template.topics],
         enumerationControl: item.enumerationControl ?? null,
         identityField: item.identityField ?? template.identityField ?? null,
     };

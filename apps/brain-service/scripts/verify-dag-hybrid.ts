@@ -41,7 +41,7 @@ const decision = (): RoutedIntakeDecision => ({
         ],
     },
     composeMode: "qa",
-    routeReason: "slots_default",
+    routeReason: "intake_retrieval_plan",
     routePlanSource: "intake_retrieval_plan",
     userFactKey: null,
     userFactLabel: null,

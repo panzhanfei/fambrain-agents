@@ -314,8 +314,8 @@ pnpm --filter @fambrain/brain-service run verify:dag-hybrid
 
 | 层 | 职责 | 禁止 |
 |----|------|------|
-| **Intake LLM** | 合并语义相同子问、拆独立槽；填齐 `queryType` / `identityField` / `enumerationControl`（含 `timeWindowYears`） | — |
-| **代码兜底** | Zod 合法化（非法类型/别名）；按 facet key **去重**；空 plan → default 壳 | 口语 `labels.includes` / 问句 regex 猜意图 |
+| **Intake LLM** | 合并语义相同子问、拆独立槽；**`retrieve_and_answer` 必填 `retrievalPlan≥1`**；填齐 `queryType` / `identityField` / `enumerationControl`（含 `timeWindowYears`） | — |
+| **代码兜底** | Zod 合法化（非法类型/别名）；按 facet key **去重**；**空 plan → clarify**（不包 1 槽 default 壳） | 口语 `labels.includes` / 问句 regex 猜意图；`filled_fallback` / subTasks 拆 plan |
 | **执行层** | `identityField` → `toolId`；`listKind` → 目录扫描；语料结构抽取（日期/URL/表头） | 写死年份/公司/项目名 |
 
 ### 12.2 关键能力
@@ -356,11 +356,11 @@ pnpm --filter @fambrain/brain-service exec tsx --env-file=../../.env scripts/dia
 
 | 层 | 职责 | 禁止 |
 |----|------|------|
-| **主路径（LLM）** | 产出语义终稿：`intent` / `retrievalPlan` / `searchQuery` / `coreference` | 依赖代码猜口语、发明多槽 |
+| **主路径（LLM）** | 产出语义终稿：`intent` / **`retrievalPlan≥1`**（retrieve 时）/ `searchQuery` / `coreference` | 依赖代码猜口语、发明多槽 |
 | **旁路·入口** | normalize（压连续重复码点）→ 单字/社交/UI 短路 | NFKC 改写标点导致与 history 对不上；盲预合并 |
 | **旁路·格式** | 非 JSON → 格式修复 **1** 次 | 把散文当 `coreference` 信号 |
 | **旁路·指代** | **仅 JSON peek** 未消解时拼接「上轮；本轮」再调 **1** 次 | 无限重试；无上文硬拼 |
-| **旁路·guard** | schema 合法化、facet 去重、elliptical / link 纠偏、PathPlan 编译 | `filled_fallback` / 口语二次规划 |
+| **旁路·guard** | schema 合法化、facet 去重、link **harmonize**、PathPlan **只编译 plan**（空→clarify） | `filled_fallback` / continuation 补 prior / 口语二次规划 |
 
 ### 13.2 为何比「调用前合并」更合理
 

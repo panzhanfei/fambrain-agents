@@ -68,6 +68,8 @@ export async function* streamAgentPipeline(history: DbChatTurn[], context: Agent
                 retrievalCacheHit?: boolean;
                 retrievalPaths?: AgentPipelineResult["retrievalPaths"];
                 timing?: AgentPipelineResult["timing"];
+                logs?: AgentPipelineResult["logs"];
+                steps?: AgentPipelineResult["steps"];
             };
             return {
                 answer: payload.answer ?? "",
@@ -75,6 +77,8 @@ export async function* streamAgentPipeline(history: DbChatTurn[], context: Agent
                 retrievalCacheHit: payload.retrievalCacheHit,
                 retrievalPaths: payload.retrievalPaths,
                 timing: payload.timing,
+                logs: payload.logs,
+                steps: payload.steps,
             };
         }
         yield JSON.parse(msg.data) as AgentStreamEvent;

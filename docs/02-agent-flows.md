@@ -211,7 +211,7 @@ flowchart TD
   H[DbChatTurn 历史] --> LLM["ChatOllama.invoke<br/>SystemMessage + 历史"]
   LLM --> RAW[原始 JSON 字符串]
   RAW --> PARSE["parseIntakeDecision()"]
-  PARSE -->|失败| DEF["defaultIntakeDecision()"]
+  PARSE -->|失败| DEF["defaultIntakeDecision()<br/>clarify"]
   PARSE --> OK[IntakeRoutingDecision]
   DEF --> OK
   OK --> PIPE["LangGraph compile.ts"]
@@ -222,21 +222,23 @@ flowchart TD
 | 1 | 拼 prompt | 系统指令定义 intent / searchQuery 等 | `IntakeCoordinator/prompt.ts` | `prompt` |
 | 2 | 调模型 | 一次 `invoke`；模型见 `OLLAMA_MODEL_INTAKE_COORDINATOR` | `IntakeCoordinator/ollama-chat.ts` | `completeIntakeCoordinator()` |
 | 3 | 解析 JSON | 抠 JSON → **Zod parse**；`userFact*` 缺省视为 `null`（勿误 fallback 检索） | `intake-coordinator/pipeline/parse-intake.ts`, `schema.ts` | `parseIntakeDecision()`, `intakeRoutingSchema` |
-| 4 | 兜底 | 解析失败 → `defaultIntakeDecision()` | `pipeline/parse-intake.ts` | `defaultIntakeDecision()` |
+| 4 | 兜底 | 解析失败 → `defaultIntakeDecision()`（**clarify**，不瞎 retrieve） | `pipeline/parse-intake.ts` | `defaultIntakeDecision()` |
 | 5 | Guard 链 | parse 后依次 guard（见下） | `pipeline/intake-pipeline.ts` | `runIntakePipeline()` |
 | 6 | 编排 | LangGraph 条件边 | `pipeline/graph/routes.ts` + `compile.ts` | `routeAfterIntake()` 等 |
 
-**Guard 链（`runIntakePipeline`，compile intake 节点内）：** **纯社交短路**（`你好` / `谢谢` / `hi` → 跳过 LLM · **P0-29**）→ **UI 列举按钮 exact-match**（`ENUMERATION_ACTION_PROMPTS` → 跳过 LLM · P0-26）→ **normalize 问句后 Intake LLM** →（非 JSON 则 **格式修复 1 次**）→（**仅 JSON peek** 且 `coreference=unresolved` / 短续问误路由时拼接「上轮；本轮」再调 **1 次** · **P0-31**）→ **`applyPureSocialUtteranceGuard`**（LLM 误判 retrieve 时覆盖 · P0-29）→ **`applyIntakeContinuationGuard`**（省略续问 / 历史含 URL → retrieve，**在 clarify 早退之前** · P0-25）→ **LLM 指代/澄清**（clarify 可早退）→ chitchat → userFact 早退 → **`applyIntakeLinkLookupGuard`**（`queryType=external_link` 时纠正 stale multipart / 分槽 · P0-25）→ **retrievalPlan guard**（schema 合法化 + **facet 去重**，**不**口语二次拆槽 · **P0-30**）→ **`applyCompositeRouteGuard`**（P0-15）→ **`applyEnumerationSlotGuard`**（per-slot `enumerationControl` + `executor` · P0-26）→ **`applyToolPlanGuard`** → **`applyPathPlanGuard`**（编译 **PathPlan** + `composeMode` · P0-28）。详见 [坑点 §2.8](./04-pitfalls.md#28-pathplan-统一编排-p0-28) · [§2.9](./04-pitfalls.md#29-intake-去硬编码与复合履历-p0-30--2026-07) · [§2.10](./04-pitfalls.md#210-intake-档-b主路径规划--旁路纠偏-p0-31--2026-07) · [架构 v2 §12–13](./05-architecture-v2-tool-orchestration.md#12-intake-llm-主导--schema-兜底2026-07--去问句硬编码)。
+**Guard 链：** `intake-node` 短路 → Intake LLM（retrieve 须 `retrievalPlan≥1`）→ `runIntakePipeline`：continuation noop → early-exit → link harmonize → plan 合法化 → **composite 只编译 plan（空→clarify）** → enum / tool / PathPlan。
 
 **档 B（P0-31）：** Intake **主路径** = LLM 任务规划（语义终稿）；**旁路** = normalize / JSON 修复 / 指代拼接≤1 / guard 纠偏与编译。勿把散文兜底或句长启发当成二次 Intake。
+
+**TurnTrace（运行轨迹入库）：** 每轮对答结束时 BFF 将 `timing` + `steps` + `pipeline_log` 写入 `TurnTrace`（键=助手 `messageId`）；进行中仍走 SSE；历史由 `GET /api/conversations/[id]/traces` 回放至运行日志面板。
 
 **P0-30 补充字段：** `identityField` 含 **`tenure`**（从业年限 → `compute_tenure_from_hits`）；`enumerationControl.timeWindowYears`（近 N 年列举过滤）。合并/拆分以 Intake LLM 为准；规则见 `.cursor/rules/no-scene-hardcoding.mdc`。
 
 **queryType 扩展：** 除 identity / enumeration / tech / default 外，Intake 产出 **`external_link`**（GitHub、仓库、对外 URL）；与 KM `queryProfile` 同名，**不走** enumeration projects fill。见 [km-retrieval-design §六](./km-retrieval-design.md#六queryprofile-参数表)。
 
-**单问 / 多问统一路由（2026-07）：** 检索路径不再分 `single` / `slot` / `composite` 三种 **routeMode**，一律 **`routeMode=slots`**，`compositeSlots.length` 为 1～N。KM `retrieval-node` 与 Analyst 仅按槽数分支（1 槽 vs ≥2 槽）。`applyCompositeRouteGuard` 保证 0 槽时 fallback 为 1 槽。
+**单问 / 多问统一路由（2026-07）：** 凡 `retrieve_and_answer` 须 LLM **`retrievalPlan≥1`** → **`routeMode=slots`**（1～N 槽）。`applyCompositeRouteGuard` **只编译 plan**；空 plan → **clarify**（不 fallback 包 1 槽）。
 
-**单问 ↔ 多问结构对齐：** `query-signals.ts` 提供 **`hasExplicitMultipartStructure`**（当前问句是否真有多并列）与 **`hasStaleMultipartFromDecision`**（LLM plan/subTasks≥2 但问句无并列 → **过期 plan**）。`applyIntakeLinkLookupGuard` 据此 **收束**（泛化单句 + inherited 多槽 plan → 1 槽 `EXTERNAL_LINK_SLOT`）或 **展开**（编号 `1.` `2.` 行 → 按实体多槽）。⑤ retrievalPlan guard 只做 schema 合法化 / facet 去重 / canonicalize（**档 B：不** `filled_fallback` 发明多槽）。详见 [坑点 §2.5.3](./04-pitfalls.md#253-p0-15--r6-3--composite-分槽检索-2026-06)、[§2.5.9](./04-pitfalls.md#259-简历-github--对外链接问法-p0-25--2026-07)。
+**外链 / 混合 plan：** `applyIntakeLinkLookupGuard` 仅做 **harmonize**（顶层已 `external_link` 时误标 enumeration → link；保留 enum+link 混合 plan）。编号拆槽、stale 收束由 **LLM 写齐 plan**，代码不发明。⑤ retrievalPlan guard 只做 schema 合法化 / facet 去重 / canonicalize（**保留** LLM 非空 `searchQuery`）。详见 [坑点 §2.5.3](./04-pitfalls.md#253-p0-15--r6-3--composite-分槽检索-2026-06)、[§2.5.9](./04-pitfalls.md#259-简历-github--对外链接问法-p0-25--2026-07)、[§2.10](./04-pitfalls.md#210-intake-档-b主路径规划--旁路纠偏-p0-31--2026-07)。
 
 ### 2.5 跨会话用户事实 userFact — P0-16 ✅
 

@@ -21,8 +21,8 @@ Intake 是 Pipeline 的**第一个 LLM 在线 Agent**（图内位于 **`prepareT
 
 ### 1.2 核心原则（档 B）
 
-1. **主路径 = 任务规划** — LLM 产出语义终稿：`intent` + `retrievalPlan` / `searchQuery` + `coreference` 等；下游只信结构化字段。
-2. **旁路 = 兜底 + 纠偏** — normalize / 单字短路 / JSON 格式修复 / 指代拼接≤1 / schema 合法化 / PathPlan 编译；**禁止**口语二次拆槽或盲预合并当规划。
+1. **主路径 = 任务规划** — LLM 产出语义终稿：`intent` + **`retrievalPlan≥1`**（retrieve 时）/ `searchQuery` + `coreference` 等；下游只信结构化字段。
+2. **旁路 = 兜底 + 纠偏** — normalize / 单字短路 / JSON 格式修复 / 指代拼接≤1 / schema 合法化 / **只编译 plan**（空→clarify）；**禁止**口语二次拆槽或盲预合并当规划。
 3. **宁可多检索，不要漏检索** — 简历/经历类问题默认 `retrieve_and_answer`。
 4. **结构化输出** — 只产 JSON；散文反问不算合法工单（可格式修复一轮）。
 5. **对外只暴露 `index.ts`** — 子目录是内部实现，外部 import 统一走 barrel。
@@ -65,7 +65,7 @@ intake-coordinator/
 │   └── intake-node.ts     # 短路 → LLM →（JSON 修复）→（指代拼接≤1）→ pipeline
 │
 ├── guards/                ← LLM 之后的规则兜底（不口语二次规划）
-│   ├── intake-continuation-guard.ts  # 未合并 elliptical / 误 clarify 兜底
+│   ├── intake-continuation-guard.ts  # 恒 noop（指代靠 intake-node merge）
 │   ├── intake-link-lookup-guard.ts
 │   ├── intake-chitchat-guard.ts
 │   ├── intake-retrieval-plan-guard.ts  # schema 合法化 + facet 去重 + canonicalize
@@ -143,33 +143,25 @@ routeAfterIntake()                        pipeline/graph/routes.ts
 ```text
 LLM 原始 JSON
     │
-    ▼ parseIntakeDecision() / defaultIntakeDecision()
-    │   contract/schema.ts + pipeline/parse-intake.ts
+    ▼ parseIntakeDecision() / defaultIntakeDecision(clarify)
     │
-    ▼ applyIntakeContinuationGuard()     guards/intake-continuation-guard.ts
-    │   短省略续问 / 历史含 URL → retrieve（在 clarify 早退之前）
+    ▼ applyIntakeContinuationGuard()     恒 noop
     │
-    ▼ LLM指代决策（透传 + 日志）       pipeline/intake-pipeline.ts
-    │   clarify → pipeline 早退（跳过 plan/composite）
+    ▼ clarify / chitchat / userFact 早退
+    │   无效 recall：有 plan→retrieve；无 plan→clarify
     │
-    ▼ applyIntakeChitchatGuard()         guards/intake-chitchat-guard.ts
-    │   chitchat/out_of_scope → pipeline 早退
+    ▼ applyIntakeLinkLookupGuard()       harmonize only（不发明拆槽）
     │
-    ▼ isUserFactIntent → pipeline 早退
-    │   （解析在 ../user-fact/nodes/user-fact-node.ts）
+    ▼ applyIntakeRetrievalPlanGuard()    合法化 / 去重 / canonicalize
     │
-    ▼ applyIntakeLinkLookupGuard()       guards/intake-link-lookup-guard.ts
-    │   queryType=external_link：stale multipart → 单槽；编号行 → 分实体槽
+    ▼ applyCompositeRouteGuard()         plan→slots；空 plan→clarify
     │
-    ▼ applyIntakeRetrievalPlanGuard()    guards/intake-retrieval-plan-guard.ts
-    │
-    ▼ applyCompositeRouteGuard()         guards/composite-route-guard.ts
-    │
-    ▼ applyEnumerationSlotGuard()       guards/enumeration-list-intent.ts
-    │   plan.enumerationControl → 槽 executor=list_corpus|km_retrieve（可混搭）
+    ▼ applyEnumerationSlotGuard()
     │
     ▼ RoutedIntakeDecision → state.decision
 ```
+
+> 纯社交短路在 **`intake-node`**。凡 `retrieve_and_answer` 须 LLM 写齐 `retrievalPlan≥1`。
 
 **列举分页（2026-07）：** 不再用口语 regex / 全局 `routeMode=list`。Intake LLM 在 **retrievalPlan 项** 填 `enumerationControl`；混合问（tech + 全部列出）拆多槽，retrieval 按槽执行 KM 或 list API。UI 按钮 prompt 见 `enumeration/action-prompts.ts`（exact-match 短路）。
 
@@ -183,40 +175,42 @@ LLM 原始 JSON
 applyCompositeRouteGuard
     │
     ├─ resolveCompositeRoute() → slots.length ≥ 1
-    │       → applySlotsDecision(slots)     # 1～N 槽，routeMode 恒为 slots
+    │       → applySlotsDecision(slots)     # 1～N 槽，routeMode=slots
     │
     └─ slots.length === 0
-            → decisionToRetrievalSlot()     # 包装为 1 槽 slots_default
+            → clarify 早退（LLM 未写 retrievalPlan）
 ```
 
-**为何合并：** 单问、多问原先在 KM / cache / Analyst 分叉（single vs composite），重复逻辑多；统一后 cache key、日志、verify 脚本只需看 `compositeSlots.length`。
+**为何合并：** 单问、多问共用 slots；cache / 日志只看 `compositeSlots.length`。单问也须 LLM 写 **1 项** plan。
 
 ### 3.5 单问 ↔ 多问结构对齐（`signals/query-signals.ts`）
 
-LLM 的 `retrievalPlan` / `subTasks` 可能**与当前问句不一致**（尤其多轮会话 inherited plan）。guard 用**结构信号**对齐，**不用** github/开源 等意图词表：
+LLM 的 `retrievalPlan` / `subTasks` 可能**与当前问句不一致**（尤其多轮 inherited plan）。**由 LLM 在本轮写齐 plan**；`query-signals.ts` 仅提供结构诊断，guard **不**据此收束/展开：
 
-| 函数 | 判断什么 | 典型用途 |
-|------|----------|----------|
-| `hasExplicitMultipartStructure(q)` | ≥2 编号行，或 ≥2 问号/并列 | 当前问句是否**真**多问 |
-| `hasStaleMultipartFromDecision(d, q)` | plan≥2 或 subTasks≥2，但问句**无**并列结构 | **过期 plan** → 应收束 |
-| `extractNumberedPlanUnits(q)` | 从 `1.` `2.` 行提取子问 label | 按实体拆槽 |
+| 函数 | 判断什么 | 用途 |
+|------|----------|------|
+| `hasExplicitMultipartStructure(q)` | ≥2 编号行，或 ≥2 问号/并列 | 诊断：当前问句是否**真**多问 |
+| `hasStaleMultipartFromDecision(d, q)` | plan≥2 或 subTasks≥2，但问句**无**并列结构 | 诊断：可能 **stale inherited plan**（复盘 / verify） |
+| `extractNumberedPlanUnits(q)` | 从 `1.` `2.` 行提取子问 label | 诊断 / 测试辅助 |
 | `decisionRequestsExternalLink(d)` | LLM 已标 `external_link` | link guard 入口，不在 guard 猜意图 |
 
-**`applyIntakeLinkLookupGuard` 收束 / 展开：**
+**`applyIntakeLinkLookupGuard`（仅结构化 harmonize）：**
 
-| 问句 | LLM 输出 | guard 结果 | `linkLookupGuardReason` |
-|------|----------|------------|-------------------------|
-| 「开源两个项目 github 都给我」（单句） | plan 2 项（物联网、工具库） | **收束 1 槽** + `EXTERNAL_LINK_SLOT` | `aggregate_external_link` |
-| 同上 + 正文含 `1. … 2. …` 两行 | plan 空或任意 | **展开 2 槽**，每槽 entity + 对外链接 canonical query | `multipart_external_link` |
-| 单句 external_link | queryType 已对 | 补全 searchQuery / topics | `single_external_link` / `harmonize_query_type` |
+| 问句 / decision | LLM 输出 | guard 结果 | reason |
+|------|----------|------------|--------|
+| 顶层 `external_link` + plan 项误标 enumeration（topics 含 personal） | 1 项 | 改回 `external_link` | `harmonize_plan_query_types` |
+| enumeration + external_link 混合 plan | ≥2 项 | **保留**多槽 | `preserve_mixed_plan` |
+| 已是 external_link 但某项 searchQuery 空 | ≥1 项 | 补模板检索词 | `single_external_link` |
 
-⑤ `applyIntakeRetrievalPlanGuard`：schema 合法化 + facet 去重 + canonicalize；**不**发明多槽（档 B）。stale multipart 收束仍在 link lookup 等专用 guard。
+编号拆槽 / 过期 plan 收束：**由 LLM 写齐 plan**，代码不再发明。
+
+⑤ `applyIntakeRetrievalPlanGuard`：schema 合法化 + facet 去重 + canonicalize（保留非空 searchQuery）。
 
 **验证：**
 
 ```bash
-pnpm --filter @fambrain/brain-service run verify:intake-link-lookup   # 收束 + 展开 + 续问
-pnpm --filter @fambrain/brain-service run verify:composite-route        # 1 槽 / N 槽 slots 路由
+pnpm --filter @fambrain/brain-service run verify:intake-link-lookup
+pnpm --filter @fambrain/brain-service run verify:intake-coreference
 ```
 
 ### 3.3 Web 运行日志里 Intake 的标签
@@ -269,7 +263,7 @@ Intake 产出两层结构：**LLM 层** `IntakeRoutingDecision` → **编排层*
 | **queryType** | identity \| enumeration \| tech \| **external_link** \| default \| null | 检索问法类型 | 与 KM `queryProfile` 对齐；GitHub/URL 用 **external_link**（**禁止** enumeration）；不检索时为 null |
 | **clarifyingQuestion** | string \| null | 澄清追问（只问一个） | 仅 intent=clarify 时填 |
 | **briefReply** | string \| null | 极短直接回复（≤80 字） | chitchat / clarify；retrieve / summarize 必须为 null |
-| **retrievalPlan** | IntakeRetrievalPlanItem[] | 多问并列时每项一次检索 | 单问常为 `[]`；≥2 项 → **slots 多槽**（与 1 槽同属 `routeMode=slots`） |
+| **retrievalPlan** | IntakeRetrievalPlanItem[] | 检索执行计划 | **`retrieve_and_answer` 必填 ≥1 项**（单问 1 项，多问 N 项）；空 `[]` → composite **clarify**；chitchat/clarify/userFact 可为 `[]` |
 | **userFactKey** | string \| null | 记忆字段 slug | qq / wechat / phone / email / dingtalk… |
 | **userFactLabel** | string \| null | 展示名 | 「QQ号」「微信号」 |
 | **userFactValue** | string \| null | remember 时的值 | recall 时为 null |
@@ -324,10 +318,8 @@ Intake 产出两层结构：**LLM 层** `IntakeRoutingDecision` → **编排层*
 
 | 值 | 含义 |
 |----|------|
-| `skip_non_retrieve` | chitchat / userFact / clarify 等不检索 |
-| `intake_retrieval_plan` | 来自 LLM 的 retrievalPlan（档 B 主路径） |
-| `query_type_template` | queryType 模板槽 |
-| `slots_default` | 单问 fallback 包装为 1 槽 |
+| `skip_non_retrieve` | chitchat / userFact / clarify / 空 plan |
+| `intake_retrieval_plan` | 来自 LLM 的 retrievalPlan（唯一编译来源） |
 
 ### 4.4 `CompositeRetrievalSlot`（检索槽）
 
@@ -498,13 +490,12 @@ prepareTurnStart 节点内 findRepeatAnswerInHistory → 直接返回答案
 LLM 返回非 JSON / Zod 校验失败
 
 优先：散文含反问 → clarifyFallbackFromProse
-否则 defaultIntakeDecision(userQuestion):
-  intent: retrieve_and_answer
-  searchQuery: userQuestion（原句）
-  queryType: default
-  retrievalPlan: []   ← 档 B：不发明多槽；后续编译为 1 槽
+否则 defaultIntakeDecision():
+  intent: clarify
+  clarifyingQuestion: 「刚才没听清…」
+  retrievalPlan: []
 
-无上文短续问 + 解析失败落到 default retrieve → 再纠正为 clarify
+→ pipeline clarify 早退（不发明 retrieve / 不包 1 槽）
 ```
 
 ---
@@ -529,7 +520,7 @@ LLM 返回非 JSON / Zod 校验失败
 | 文件 | 职责 |
 |------|------|
 | `intake-pipeline.ts` | LLM 之后：parse → guard 链 → `RoutedIntakeDecision`；分步打日志 |
-| `parse-intake.ts` | 解析 LLM JSON；解析失败时 `defaultIntakeDecision` 兜底 |
+| `parse-intake.ts` | 解析 LLM JSON；解析失败 → `defaultIntakeDecision`（**clarify**，不发明 retrieve） |
 
 ### nodes/
 
@@ -543,18 +534,18 @@ LLM 返回非 JSON / Zod 校验失败
 
 | 文件 | 职责 |
 |------|------|
-| `intake-continuation-guard.ts` | elliptical / 误 clarify → retrieve（指代重试后多为 noop） |
-| `intake-link-lookup-guard.ts` | `external_link`：stale multipart 收单槽、编号行分实体（P0-25） |
-| `intake-chitchat-guard.ts` | chitchat 注入服务端固定 briefReply；单字残缺话术 |
-| `intake-retrieval-plan-guard.ts` | schema 合法化 + facet 去重 + canonicalize（不发明槽） |
-| `composite-route-guard.ts` | plan → routeMode + compositeSlots |
+| `intake-continuation-guard.ts` | 恒 noop（指代归 LLM + node merge） |
+| `intake-link-lookup-guard.ts` | `external_link` harmonize；不发明 multipart 拆槽 |
+| `intake-chitchat-guard.ts` | chitchat 注入 briefReply；`applyPureSocialUtteranceGuard` 供 node/verify |
+| `intake-retrieval-plan-guard.ts` | schema 合法化 + facet 去重 + canonicalize（保留非空 searchQuery） |
+| `composite-route-guard.ts` | plan → slots；空 plan → clarify |
 | `enumeration-list-intent.ts` | 列举分页 intent（preview / continue / exhaustive） |
 
 ### composite/
 
 | 文件 | 职责 |
 |------|------|
-| `composite-routing.ts` | 结构信号 helpers；`resolveCompositeRoute()` 信 LLM plan / queryType 模板 |
+| `composite-routing.ts` | `resolveCompositeRoute()`：仅编译 LLM `retrievalPlan` → slots |
 | `composite-slot-queries.ts` | 槽模板；planItem → slot；canonicalizePlanItem |
 | `enumeration-target.ts` | 列举问是「公司」还是「项目」 |
 

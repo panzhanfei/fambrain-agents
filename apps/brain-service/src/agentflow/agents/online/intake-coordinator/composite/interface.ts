@@ -33,10 +33,9 @@ export type CompositeRetrievalSlot = {
     enumerationPageSize?: number;
 };
 
-/** 槽从何而来（档 B：仅 LLM plan / queryType 模板 / none） */
+/** 槽从何而来（档 B：仅 LLM plan / none） */
 export type CompositeRoutePlanSource =
     | "intake_retrieval_plan"
-    | "query_type_template"
     | "none";
 
 export type ResolvedCompositeRoute = {

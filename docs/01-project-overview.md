@@ -205,7 +205,7 @@ pnpm run dev
 | `runPersistTurnEnd` | `agentflow/agents/online/persist-turn-end/` | 图末节点：Mem0/LangMem **写**、Learning 候选 |
 | `getCompiledPipelineGraph` | `pipeline/graph/compile.ts` + `routes.ts` | **prepareTurnStart** → Intake → … → **persistTurnEnd** → END |
 | `userFactNode` / `routeUserFactFromIntake` | `user-fact/nodes/user-fact-node.ts`、`user-fact/user-fact.ts` | P0-16：跨会话 remember/recall；绕过 KM / FC / Analyst |
-| `parseIntakeDecision` / `defaultIntakeDecision` | `intake-coordinator/pipeline/parse-intake.ts` | 解析 Intake 路由 JSON |
+| `parseIntakeDecision` / `defaultIntakeDecision` | `intake-coordinator/pipeline/parse-intake.ts` | 解析 Intake 路由 JSON；失败 → **clarify**（不发明 retrieve） |
 | `runListRetrieverNode` | `agentflow/agents/online/corpus-lister/nodes/` | 纯 list 短路径：目录扫盘分页，跳过 planExecutor/FC |
 | `runRetrievalNode` | `knowledge-manager/nodes/retrieval-node.ts` | planExecutor 内：km hybrid + composite 混槽 list |
 | `isPureListDecision` | `corpus-lister/pure-list-route.ts` | routeAfterIntake → listRetriever 判定 |
@@ -234,6 +234,7 @@ pnpm run dev
 | `verify:confidence-tier` | `apps/brain-service/scripts/` | 置信分档单测 + KM live tier |
 | `verify:analyst-empty-hits` | `apps/brain-service/scripts/` | P0-12 / D5-5：空 hits skip LLM + insufficientEvidence |
 | `verify:intake-coreference` | `apps/brain-service/scripts/` | Intake 多轮指代（JSON peek + 拼接≤1）/ 单字 normalize / repeat · **P0-31** |
+| TurnTrace | `packages/db` + `GET .../traces` | 每轮 Pipeline timing/steps/logs 入库；SSE 直播 + 历史回放 |
 | `verify:intake-chitchat` | `apps/brain-service/scripts/` | P0-13：chitchat briefReply 模板兜底 + live ×10 |
 | `verify:intake-link-lookup` | `apps/brain-service/scripts/` | P0-25：GitHub/对外链接 `external_link` guard + stale multipart 单测 |
 | `verify:composite-route` | `apps/brain-service/scripts/` | P0-15/R6-3：composite 路由 guard + merge + 单问年龄 slot 单测 |
@@ -256,7 +257,7 @@ pnpm run dev
 | `compute_tenure_from_hits` | `tools/lib/compute-tenure.ts` | P0-30：从业年限（简历时间线最早起点） |
 | `diagnose-long-composite-career-query` | `apps/brain-service/scripts/` | P0-30：超长复合履历回归 |
 | brain-service 单元测试 | `apps/brain-service/tests/` | 勿再写 `src/**/*.test.ts` |
-| `isPureSocialUtterance` / `applyPureSocialUtteranceGuard` | `intake-coordinator/signals/`、`guards/intake-chitchat-guard.ts` | P0-29：纯问候/感谢跳过或覆盖 LLM |
+| `isPureSocialUtterance` / `applyPureSocialUtteranceGuard` | `intake-coordinator/signals/`、`guards/intake-chitchat-guard.ts` | P0-29：入口跳过 LLM；guard 函数供 verify（pipeline 不再覆盖） |
 | `applyEnumerationSlotGuard` | `intake-coordinator/guards/enumeration-list-intent.ts` | P0-26 per-slot 列举 executor |
 | `configureLangSmithTracing` | `packages/brain-config/langsmith.ts` | 启动时启用 tracing；`stream.ts` 附加 conversationId 等 metadata |
 | `verify:langchain-tools` | `apps/brain-service/scripts/` | Tool 注册 + retrieve / Mem0 / vault invoke 冒烟 |

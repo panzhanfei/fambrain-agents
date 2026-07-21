@@ -6,7 +6,6 @@
 import { readFile } from "node:fs/promises";
 import { getRetrievalFromCache } from "@fambrain/infra";
 import { applyCompositeRouteGuard } from "../src/agentflow/agents/online/intake-coordinator";
-import { defaultIntakeDecision } from "../src/agentflow/agents/online/intake-coordinator/pipeline/parse-intake";
 import { retrieveKnowledge } from "../src/agentflow/agents/online/knowledge-manager/recall/retrieve";
 import { listCorpusUserIds } from "../src/agentflow/agents/offline/knowledge-indexer/list-corpus-users";
 
@@ -50,9 +49,32 @@ const main = async () => {
   const corpus = await corpusAgeFields(corpusUserId);
   console.log(JSON.stringify(corpus, null, 2));
 
-  console.log("\n— 2. 路由（Intake default + composite guard）—");
+  console.log("\n— 2. 路由（模拟 LLM 写齐 age plan + composite）—");
   const routed = applyCompositeRouteGuard(
-    defaultIntakeDecision(USER_QUESTION),
+    {
+      intent: "retrieve_and_answer",
+      searchQuery: "个人简介 简历 年龄 出生年份 出生日期",
+      subTasks: ["年龄"],
+      topics: ["personal", "resume"],
+      language: "zh",
+      confidence: 0.9,
+      queryType: "identity",
+      clarifyingQuestion: null,
+      briefReply: null,
+      retrievalPlan: [
+        {
+          label: "年龄",
+          searchQuery: "个人简介 简历 年龄 出生年份 出生日期",
+          queryType: "identity",
+          topics: ["personal", "resume"],
+          identityField: "age",
+        },
+      ],
+      userFactKey: null,
+      userFactLabel: null,
+      userFactValue: null,
+      coreference: "none",
+    },
     USER_QUESTION
   );
   console.log(
