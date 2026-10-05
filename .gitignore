@@ -70,3 +70,10 @@ yarn-error.log*
 **/next-env.d.ts
 
 /packages/db/src/generated/
+
+# python
+**/.venv/
+**/__pycache__/
+**/.pytest_cache/
+**/.ruff_cache/
+**/*.pyc

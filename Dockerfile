@@ -7,7 +7,6 @@ WORKDIR /app
 FROM base AS deps
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml .npmrc ./
 COPY apps/web/package.json apps/web/
-COPY apps/brain-service/package.json apps/brain-service/
 COPY packages/brain-types/package.json packages/brain-types/
 COPY packages/brain-config/package.json packages/brain-config/
 COPY packages/brain-shared/package.json packages/brain-shared/

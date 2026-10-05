@@ -138,15 +138,10 @@ else
 fi
 
 # --- 应用进程 ---
-pnpm --filter @fambrain/brain-service dev &
+(cd "$ROOT/apps/brain" && uv run fambrain-api) &
 BRAIN_SERVICE_PID=$!
 
 WORKER_PID=""
-if truthy "${PIPELINE_QUEUE_ENABLED:-0}"; then
-  echo "[dev] PIPELINE_QUEUE_ENABLED=1 → 启动 BullMQ worker"
-  pnpm --filter @fambrain/brain-service dev:worker &
-  WORKER_PID=$!
-fi
 
 pnpm --filter @fambrain/web dev &
 WEB_PID=$!

@@ -8,6 +8,8 @@
 
 流程与编排见 [02-agent-flows.md](./02-agent-flows.md)。
 
+Python 后端在 `apps/brain`（FastAPI + PostgreSQL，默认端口 3011）。对话主链、检索、列举和用户事实已经能按同一份 golden.json 评测；现网 Web 仍打到 Node。见 [07-python-backend.md](./07-python-backend.md)。
+
 ## 现状（2026-08）
 
 | 项 | 口径 |
@@ -94,13 +96,15 @@ pnpm run dev
 
 | 命令 | 说明 |
 |------|------|
-| `pnpm run dev` | **一键本地开发**：Qdrant + Redis（可选 Docker 自动起）+ Web + Brain Service；`PIPELINE_QUEUE_ENABLED=1` 时另起 worker |
+| `pnpm run dev` | **一键本地开发**：Qdrant + Redis（可选 Docker 自动起）+ Web + Python Brain |
 | `pnpm run dev:web` | 仅 Web BFF |
-| `pnpm run dev:brain-service` | 仅 Brain HTTP（默认 `:3001`） |
-| `pnpm run dev:brain-worker` | 仅 BullMQ pipeline worker |
+| `pnpm run dev:brain` | 仅 Python Brain HTTP（端口 `BRAIN_SERVICE_PORT`，现有 `.env` 为 `:3001`） |
+| `pnpm test:brain` | Python pytest |
+| `pnpm eval:brain` | 跑 `apps/brain/eval/golden.json` |
+| `pnpm run dev:brain-worker` | Taskiq worker |
 | `pnpm run build` / `pnpm run start` | 构建 standalone / 生产启动（`apps/web`） |
 | `pnpm run pack:deploy` | 本地构建并打 tar 部署包 |
-| `pnpm run docker:up` | Docker 一键启动 web + brain-service + qdrant + redis |
+| `pnpm run docker:up` | Docker 一键启动 web + Python Brain + qdrant + redis |
 | `pnpm run lint` | ESLint |
 | `pnpm run db:generate` | 生成 Prisma Client |
 | `pnpm run db:migrate` | 开发环境迁移 |
@@ -110,36 +114,12 @@ pnpm run dev
 | `pnpm run qdrant:server` | 单独 `docker compose up -d qdrant` |
 | `pnpm run redis:server` | 单独 `docker compose up -d redis` |
 | `pnpm run index:corpus` | **知识入库师**：全量扫描 `corpus/*.md` → embed → 写入 Qdrant（语料变更后手动重跑） |
-| `cd apps/brain-service && pnpm run corpus-worker` | 原文库语料队列 worker（需 `CORPUS_QUEUE_ENABLED` + Redis） |
-| `pnpm gate:engineering` | **分层门禁合一**：unit → eval（全量）→ load → e2e；报表落 `reports/`（分项覆盖，GATE 按段合并） |
-| `cd apps/brain-service && pnpm run e2e:inprocess:vault` | 进程内「我的原文库」list 旁路 E2E |
-| `cd apps/brain-service && pnpm run e2e:api:vault` | HTTP E2E vault CRUD（`E2E_USER`/`E2E_PASSWORD`/`E2E_BASE_URL`；需 web+brain） |
-| `cd apps/brain-service && pnpm run e2e:api:chat` | HTTP E2E **对话主链**（姓名/年龄/手机） |
-| `cd apps/brain-service && pnpm run e2e:api:file-hitl` | HTTP E2E 文件 HITL（缺 jobId 400、workspace 顶替、PDF 附件总结 save_offer） |
-| `cd apps/brain-service && pnpm run e2e:gate` | E2E 门禁：vault + 对话主链 + 文件 HITL + Playwright |
-| `cd apps/web && pnpm run test:e2e` | Playwright：vault UI + 对话主链 + save_offer 弹窗（需先 `test:e2e:install` 与本地服务） |
-| `cd apps/brain-service && pnpm run load:chat` | 压测：health + 队列 + **Web 对话全链路**（`LOAD_SKIP_CHAT=1` 可跳过对话段） |
-| `cd apps/brain-service && pnpm run golden:regression` | 在线 Agent **G1～G5c + GMem**（`GOLDEN_RUNS=3`） |
-| `cd apps/brain-service && pnpm run eval:run` | Eval **全量**写入 `reports/eval-report.*`；`--case` / `*-only` **不覆盖**全量报表 |
-| `cd apps/brain-service && pnpm run eval:run -- --vault-only` | vault_workspace golden probe（不写全量 GATE eval 段） |
-| `pnpm run parse:documents -- <path...>` | **文档解析师**：CLI 批量解析（**自动分类**，无需 userId；语料归属见 `.env` `FAMBRAIN_CORPUS_USER_ID`） |
-| `cd apps/brain-service && pnpm run verify:memory` | LangMem→Prisma + prompt block（可 `MEM0_ENABLED=false`） |
-| `cd apps/brain-service && pnpm run verify:user-memory-extract` | 静默用户记忆 schema 合法化（无 Ollama） |
-| `cd apps/brain-service && pnpm run verify:langchain-tools` | LangChain StructuredTool 注册 + invoke 冒烟 |
-| `cd apps/brain-service && pnpm run verify:user-fact` | P0-16：remember/recall + Mem0→Qdrant（需 Ollama+Qdrant） |
-| `cd apps/brain-service && pnpm run verify:doc-parser` | DocParser 格式与路径单测 |
-| `pnpm run summarize:document -- <file.md>` | 内容摘要师（跟 `CHAT_PROVIDER`） |
-| `pnpm run experiment:mcp-vault` | MCP stdio 服务（列 vault） |
-| `pnpm run experiment:recall-compare -- <userId> "query"` | Recall vs 向量检索 |
-| `pnpm run experiment:vercel-ai -- "prompt"` | Vercel AI 流式 demo |
-| `pnpm run experiment:bind-tools -- "问法"` | LangChain **bindTools** ReAct 实验（不进主链） |
-| `cd apps/brain-service && pnpm run verify:content-summarizer` | 摘要师 Zod 单测 |
-| `cd apps/brain-service && pnpm run verify:vault-list` | vault 列举单测 |
-| `pnpm test:all` | **全仓库**：依赖树校验 + Vitest 单元测试（50+ 用例） |
-| `pnpm test:unit` | Vitest 单元测试（`apps/brain-service/tests/**` 集中目录 + `packages/*` 纯逻辑） |
+| `pnpm gate:engineering` | 分层门禁：Python 单测 → golden；报表落 `reports/` |
+| `cd apps/web && pnpm run test:e2e` | Playwright（需先 `test:e2e:install` 与本地服务） |
+| `pnpm test:all` | **全仓库**：依赖树校验 + Vitest 单元测试 |
+| `pnpm test:unit` | Vitest 单元测试（`packages/*` 纯逻辑） |
 | `pnpm check:deps` / `pnpm fambrain-check-deps` | 校验 workspace `exports` / `scripts` 入口文件是否存在 |
 | `pnpm check:deps -- --scan-imports` | 额外扫描脚本入口内的相对 import 断链 |
-| `pnpm check:deps -- --package @fambrain/brain-service` | 仅检查指定包 |
 
 ## 环境变量
 
@@ -204,14 +184,7 @@ pnpm run dev
 | 路径 | 职责 |
 |------|------|
 | `apps/web/` | Next.js UI + BFF；`.next` 产物在此目录 |
-| `apps/brain-service/` | Brain HTTP 服务入口；Agent 业务在 `src/agentflow/` |
-| `apps/brain-service/src/agentflow/pipeline/graph/` | LangGraph 骨架：`state.ts`、`routes.ts`、`compile.ts` |
-| `apps/brain-service/src/agentflow/pipeline/runtime/` | SSE 运行时：`stream.ts`、`pipeline-timing.ts`、`initial-state.ts` |
-| `apps/brain-service/src/agentflow/agents/online/` | 在线 Agent（Intake / KM / **tool-orchestrator** / Analyst …）；图节点在各包 `index.ts` |
-| `apps/brain-service/src/agentflow/agents/sideline/file/` | 文件平级图：工作台 CRUD + 写回闸门 HITL |
-| `apps/brain-service/src/agentflow/agents/offline/` | 离线：knowledge-indexer、doc-parser |
-| `apps/brain-service/src/agentflow/tools/` | **catalog** + **invoke**（生产）；`local/` 实现；`mcp/` weather 生产、vault 实验；LangChain StructuredTool 仅实验 |
-| `apps/brain-service/src/agentflow/utils/` | 跨 Agent 通用工具（JSON 解析、Zod 辅助） |
+| `apps/brain/` | Brain HTTP（FastAPI）。对话、检索、入库、附件抽取都在这里。说明见 [07](./07-python-backend.md) |
 | `packages/auth/` | JWT、登录注册、会话 |
 | `packages/brain-types/` | `DbChatTurn`、`AgentPipelineContext` 等共享类型 |
 | `packages/brain-config/` | Ollama / OpenAI 兼容 Chat / Qdrant 环境配置 |
@@ -222,11 +195,17 @@ pnpm run dev
 | `data/doc/users/<userId>/corpus/` | 可检索履历 Markdown（过渡期既有 md **只读于 HITL**）；新编辑走 `vault/originals/workspace/*.txt` 语料化到 `personal/imports/workspace/`。静默自学 **不写** corpus（默认关） |
 | `data/doc/users/<userId>/vault/originals/workspace/` | **用户可编辑原文库**（`.txt` + 文件夹）；系统语料化同步 md/向量 |
 
-**约定：** `@fambrain/brain-service` 不直接访问数据库；编排层不把中间 Agent 输出写入 `messages`。
+**约定：** 网页把会话写在 Prisma；Brain 只通过 HTTP 返回最终 assistant 正文，中间检索不写 `messages`。
 
 **架构演进（2026-07 / 2026-08）：** **PathPlan + planFanOut（LangGraph Send）** 统一有序 `pathPlan.steps[]`（kind=km|list|mem|tool|summarize|dag|vault_workspace）。vault HITL 不在主图：`fileHandoff` 写信封，平级图 `agents/sideline/file`。在线 Chat 走 `completeChat`/`streamChat`（`CHAT_PROVIDER`）；**不接入 Dify**；P0-34 猜意图抬升已清。详见 [架构 v2](./05-architecture-v2-tool-orchestration.md)、[控制面](./06-architecture-control-plane.md)、[坑点 §2.8](./04-pitfalls.md#28-pathplan-统一编排-p0-28--2026-07)、[流程 · 原文库](./02-agent-flows.md)。
 
-## P0 已落地能力（代码索引）
+## 代码索引
+
+Node 版 `apps/brain-service` 已删除。对话主链在 `apps/brain/packages/agentflow`（`pipeline/execute.py`），检索在 `apps/brain/packages/corpus`，记忆在 `apps/brain/packages/memory`，HTTP 在 `apps/brain/apps/api`。评测：`pnpm eval:brain`（`apps/brain/eval/golden.json`）。网页账号仍在 `packages/db` 的 SQLite。
+
+旧的 verify / e2e / golden 脚本随 Node 服务一起移除。历史设计见 [02](./02-agent-flows.md)、[05](./05-architecture-v2-tool-orchestration.md)、[07](./07-python-backend.md)。
+
+## 旧代码索引（已随 Node 服务删除）
 
 | 技能点 | 代码位置 | 用途 |
 |--------|----------|------|

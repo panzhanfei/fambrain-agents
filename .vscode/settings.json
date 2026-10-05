@@ -2,5 +2,14 @@
   "typescript.tsdk": "node_modules/typescript/lib",
   "typescript.enablePromptUseWorkspaceTsdk": true,
   "eslint.workingDirectories": [{ "mode": "auto" }],
-  "nodeTdd.activateOnStartup": false
+  "nodeTdd.activateOnStartup": false,
+  "python.defaultInterpreterPath": "${workspaceFolder}/apps/brain/.venv/bin/python",
+  "python.analysis.extraPaths": [
+    "${workspaceFolder}/apps/brain/packages/agentflow/src",
+    "${workspaceFolder}/apps/brain/packages/kernel/src",
+    "${workspaceFolder}/apps/brain/packages/corpus/src",
+    "${workspaceFolder}/apps/brain/packages/memory/src",
+    "${workspaceFolder}/apps/brain/apps/api/src",
+    "${workspaceFolder}/apps/brain/apps/worker/src"
+  ]
 }

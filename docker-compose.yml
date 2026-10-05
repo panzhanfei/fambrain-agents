@@ -25,18 +25,21 @@ services:
 
   brain-service:
     build:
-      context: .
-      dockerfile: Dockerfile.brain-service
+      context: ./apps/brain
+      dockerfile: Dockerfile
     env_file: .env
     ports:
       - "${BRAIN_SERVICE_PORT:-3001}:${BRAIN_SERVICE_PORT:-3001}"
     environment:
+      FAMBRAIN_HOST: 0.0.0.0
       BRAIN_SERVICE_PORT: ${BRAIN_SERVICE_PORT:-3001}
+      DATABASE_URL: file:/data/prisma/dev.db
       JWT_SECRET: ${JWT_SECRET:-fambrain-docker-dev-secret-change-me!!}
       QDRANT_URL: http://qdrant:6333
       REDIS_URL: redis://redis:6379
       REDIS_ENABLED: "1"
     volumes:
+      - fambrain-db:/data/prisma
       - fambrain-doc:/app/data/doc
     depends_on:
       - qdrant
@@ -59,7 +62,43 @@ services:
     command: ["redis-server", "--save", "", "--appendonly", "no"]
     restart: unless-stopped
 
+  # Python 后端。默认 compose 不启动；docker compose --profile python up -d postgres brain
+  postgres:
+    profiles: ["python"]
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: fambrain
+      POSTGRES_PASSWORD: fambrain
+      POSTGRES_DB: fambrain
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - fambrain-postgres:/var/lib/postgresql/data
+    restart: unless-stopped
+
+  brain:
+    profiles: ["python"]
+    build:
+      context: ./apps/brain
+      dockerfile: Dockerfile
+    env_file: .env
+    ports:
+      - "${BRAIN_PY_PORT:-3011}:3011"
+    environment:
+      FAMBRAIN_HOST: 0.0.0.0
+      FAMBRAIN_DATABASE_URL: postgresql+psycopg://fambrain:fambrain@postgres:5432/fambrain
+      BRAIN_PY_PORT: ${BRAIN_PY_PORT:-3011}
+      QDRANT_URL: http://qdrant:6333
+      REDIS_URL: redis://redis:6379
+      REDIS_ENABLED: "1"
+    depends_on:
+      - postgres
+      - qdrant
+      - redis
+    restart: unless-stopped
+
 volumes:
   fambrain-db:
   fambrain-doc:
   fambrain-qdrant:
+  fambrain-postgres:

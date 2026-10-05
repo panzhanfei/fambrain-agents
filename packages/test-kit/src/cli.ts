@@ -4,7 +4,7 @@
  *
  *   pnpm check:deps
  *   pnpm fambrain-check-deps --json
- *   pnpm fambrain-check-deps --package @fambrain/brain-service --scan-imports
+ *   pnpm fambrain-check-deps --package @fambrain/web --scan-imports
  */
 import path from "node:path";
 import { fileURLToPath } from "node:url";

@@ -9,7 +9,6 @@ export default defineConfig({
         globals: false,
         environment: "node",
         include: [
-            "apps/brain-service/tests/**/*.test.ts",
             "packages/*/src/**/*.test.ts",
             "packages/test-kit/src/**/*.test.ts",
         ],
@@ -18,7 +17,7 @@ export default defineConfig({
     },
     resolve: {
         alias: {
-            "@": path.resolve(root, "apps/brain-service/src"),
+            "@": path.resolve(root, "apps/web/src"),
         },
     },
 });

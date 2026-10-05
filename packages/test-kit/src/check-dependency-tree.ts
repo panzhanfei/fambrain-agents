@@ -134,7 +134,7 @@ const resolveImportSpecifier = (
     if (specifier.startsWith("@/")) {
         const brainSrc = path.join(
             path.dirname(path.dirname(path.dirname(fromFile))),
-            "apps/brain-service/src"
+            "apps/web/src"
         );
         base = path.join(brainSrc, specifier.slice(2));
     } else {

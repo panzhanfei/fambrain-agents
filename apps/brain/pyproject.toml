@@ -1,0 +1,50 @@
+[project]
+name = "fambrain-brain"
+version = "0.1.0"
+description = "FamBrain Python backend workspace"
+requires-python = ">=3.13"
+dependencies = [
+    "fambrain-api",
+    "fambrain-worker",
+]
+
+[tool.uv.workspace]
+members = [
+    "apps/api",
+    "apps/worker",
+    "packages/kernel",
+    "packages/corpus",
+    "packages/memory",
+    "packages/agentflow",
+]
+
+[tool.uv.sources]
+fambrain-api = { workspace = true }
+fambrain-worker = { workspace = true }
+fambrain-kernel = { workspace = true }
+fambrain-corpus = { workspace = true }
+fambrain-memory = { workspace = true }
+fambrain-agentflow = { workspace = true }
+
+[tool.uv]
+package = false
+
+[dependency-groups]
+dev = [
+    "pytest>=8.3",
+    "pytest-asyncio>=0.25",
+    "ruff>=0.11",
+]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+pythonpath = ["."]
+
+[tool.ruff]
+line-length = 120
+target-version = "py313"
+src = ["apps", "packages", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP"]

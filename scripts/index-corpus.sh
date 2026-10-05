@@ -50,4 +50,4 @@ else
 fi
 
 cd "$ROOT"
-exec pnpm --filter @fambrain/brain-service index:corpus
+exec uv run --directory "$ROOT/apps/brain" python scripts/index_corpus.py

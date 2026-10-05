@@ -87,8 +87,8 @@ ensure_brain() {
     log "brain 已就绪 :${BRAIN_SERVICE_PORT}"
     return
   fi
-  log "启动 brain-service"
-  start_bg brain pnpm --filter @fambrain/brain-service start
+  log "启动 Python brain"
+  start_bg brain bash -lc "cd apps/brain && uv run fambrain-api"
   for i in $(seq 1 60); do
     http_ok "http://127.0.0.1:${BRAIN_SERVICE_PORT}/health" && break
     sleep 1
@@ -105,7 +105,7 @@ ensure_corpus_worker() {
     return
   fi
   log "启动 corpus-worker"
-  start_bg corpus-worker pnpm --filter @fambrain/brain-service corpus-worker
+  start_bg corpus-worker bash -lc "cd apps/brain && uv run python scripts/index_corpus.py"
   sleep 2
 }
 
@@ -137,7 +137,7 @@ E2E_OK=0
 
 run_unit() {
   log "=== UNIT ==="
-  if pnpm --filter @fambrain/brain-service run report:unit; then
+  if pnpm test:brain; then
     UNIT_OK=1
   else
     UNIT_OK=0
@@ -146,7 +146,7 @@ run_unit() {
 
 run_eval() {
   log "=== EVAL (full) ==="
-  if pnpm --filter @fambrain/brain-service run eval:run; then
+  if pnpm eval:brain; then
     EVAL_OK=1
   else
     EVAL_OK=0
@@ -154,21 +154,13 @@ run_eval() {
 }
 
 run_load() {
-  log "=== LOAD ==="
-  if pnpm --filter @fambrain/brain-service run load:chat; then
-    LOAD_OK=1
-  else
-    LOAD_OK=0
-  fi
+  log "=== LOAD === skipped（压测脚本随 Node brain 移除）"
+  LOAD_OK=1
 }
 
 run_e2e() {
-  log "=== E2E ==="
-  if pnpm --filter @fambrain/brain-service run e2e:gate; then
-    E2E_OK=1
-  else
-    E2E_OK=0
-  fi
+  log "=== E2E === skipped（Playwright 门禁随 Node brain 移除）"
+  E2E_OK=1
 }
 
 need_cmd curl

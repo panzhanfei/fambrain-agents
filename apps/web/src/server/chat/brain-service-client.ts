@@ -68,7 +68,7 @@ async function* parseSseStream(
 }
 
 /**
- * 调用 @fambrain/brain-service HTTP 服务，复用与进程内 runAgentStream 相同的事件流。
+ * 调用 Python Brain HTTP 服务（BRAIN_SERVICE_URL）。
  */
 export async function* streamAgentPipeline(
   history: DbChatTurn[],
