@@ -32,16 +32,10 @@ const nextConfig: NextConfig = {
     transpilePackages: [
         "@fambrain/brain-types",
         "@fambrain/brain-config",
-        "@fambrain/brain-shared",
-        "@fambrain/corpus",
         "@fambrain/db",
         "@fambrain/auth",
     ],
-    serverExternalPackages: [
-        "@prisma/client",
-        "better-sqlite3",
-        "@langchain/community",
-    ],
+    serverExternalPackages: ["@prisma/client", "better-sqlite3"],
     poweredByHeader: false,
     headers: async () => [
         {

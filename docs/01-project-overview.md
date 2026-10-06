@@ -187,9 +187,7 @@ pnpm run dev
 | `apps/brain/` | Brain HTTP（FastAPI）。对话、检索、入库、附件抽取都在这里。说明见 [07](./07-python-backend.md) |
 | `packages/auth/` | JWT、登录注册、会话 |
 | `packages/brain-types/` | `DbChatTurn`、`AgentPipelineContext` 等共享类型 |
-| `packages/brain-config/` | Ollama / OpenAI 兼容 Chat / Qdrant 环境配置 |
-| `packages/corpus/` | 语料路径、Qdrant 入库/检索（dense+sparse hybrid）、vault workspace |
-| `packages/brain-shared/` | agent-log、`chat/`（completeChat / streamChat）、ollama-native-stream |
+| `packages/brain-config/` | Brain 地址与 Chat / Qdrant 环境配置 |
 | `apps/web/src/server/chat/handle-post-message.ts` | 存用户消息 → 调 Orchestrator → SSE → 存 assistant |
 | `apps/web/src/app/api/conversations/[id]/messages/route.ts` | GET 历史；POST 鉴权后委托 BFF |
 | `data/doc/users/<userId>/corpus/` | 可检索履历 Markdown（过渡期既有 md **只读于 HITL**）；新编辑走 `vault/originals/workspace/*.txt` 语料化到 `personal/imports/workspace/`。静默自学 **不写** corpus（默认关） |

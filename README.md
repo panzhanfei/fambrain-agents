@@ -60,8 +60,8 @@ apps/web/             Next.js UI + BFF（output: standalone）
 apps/brain/           Brain HTTP（FastAPI，监听 BRAIN_SERVICE_PORT；见 docs/07）
 packages/db/          Prisma + 会话（网页登录仍用这份 SQLite）
 packages/auth/        JWT / 登录注册 / 会话
-packages/brain-*/     types / config / shared / memory（网页编译用）
-packages/corpus/      语料路径 + Qdrant 入库/检索（TypeScript 副本；Python 在 apps/brain/packages/corpus）
+packages/brain-types/ 网页与 BFF 共用的对话类型
+packages/brain-config/ Brain 地址与 Chat / Qdrant 环境配置
 ```
 
 语料目录：`data/doc/users/<userId>/corpus/` · SQLite：`packages/db/prisma/dev.db` · 向量：本机 Qdrant（语料 dense+sparse，Mem0 dense-only）

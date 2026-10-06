@@ -29,8 +29,8 @@ apps/brain/
 ├── apps/api/                 # fambrain_api：HTTP
 ├── apps/worker/              # fambrain_worker：Taskiq，语料入库
 ├── packages/kernel/          # 配置、Postgres、认证、Redis（对应 packages/auth、db、brain-config、infra）
-├── packages/corpus/          # 路径、文档类型、Qdrant hybrid、切分入库（对应 packages/corpus）
-├── packages/memory/          # 结构化事实 + Qdrant 记忆（对应 packages/brain-memory）
+├── packages/corpus/          # 路径、文档类型、Qdrant hybrid、切分入库
+├── packages/memory/          # 结构化事实 + Qdrant 记忆
 ├── packages/agentflow/       # Intake、PathPlan 执行、工具
 ├── scripts/run_eval.py
 ├── alembic/

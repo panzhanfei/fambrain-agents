@@ -9,7 +9,6 @@ COPY package.json pnpm-lock.yaml pnpm-workspace.yaml .npmrc ./
 COPY apps/web/package.json apps/web/
 COPY packages/brain-types/package.json packages/brain-types/
 COPY packages/brain-config/package.json packages/brain-config/
-COPY packages/brain-shared/package.json packages/brain-shared/
 COPY packages/db/package.json packages/db/
 COPY packages/auth/package.json packages/auth/
 RUN pnpm install --frozen-lockfile
