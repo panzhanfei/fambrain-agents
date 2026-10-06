@@ -4,6 +4,8 @@
   "eslint.workingDirectories": [{ "mode": "auto" }],
   "nodeTdd.activateOnStartup": false,
   "python.defaultInterpreterPath": "${workspaceFolder}/apps/brain/.venv/bin/python",
+  "pylint.args": ["--max-line-length=120"],
+  "cSpell.words": ["ollama", "qdrant"],
   "python.analysis.extraPaths": [
     "${workspaceFolder}/apps/brain/packages/agentflow/src",
     "${workspaceFolder}/apps/brain/packages/kernel/src",
