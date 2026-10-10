@@ -7,8 +7,8 @@ from fambrain_kernel.config import get_settings
 
 DENSE_VECTOR_NAME = "dense"
 SPARSE_VECTOR_NAME = "sparse"
-DENSE_VECTOR_SIZE = 768
-EMBEDDING_MODEL = "nomic-embed-text"
+DENSE_VECTOR_SIZE = 1024
+EMBEDDING_MODEL = "bge-m3"
 
 
 def corpus_collection_name(corpus_user_id: str) -> str:

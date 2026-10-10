@@ -58,7 +58,7 @@ def index_user_corpus(corpus_user_id: str, *, batch_size: int = 16) -> dict:
         base = get_settings().resolved_qdrant_url
         for start in range(0, len(chunks), batch_size):
             batch = chunks[start : start + batch_size]
-            vectors = embed_texts([chunk.body for chunk in batch])
+            vectors = embed_texts([chunk.body for chunk in batch], timeout=180)
             points = []
             for chunk, dense in zip(batch, vectors, strict=False):
                 sparse = text_to_sparse_vector(chunk.path, chunk.title, chunk.body)

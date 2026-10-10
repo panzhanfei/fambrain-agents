@@ -38,12 +38,14 @@ services:
       QDRANT_URL: http://qdrant:6333
       REDIS_URL: redis://redis:6379
       REDIS_ENABLED: "1"
+      DOCLING_SERVE_URL: http://docling:5001
     volumes:
       - fambrain-db:/data/prisma
       - fambrain-doc:/app/data/doc
     depends_on:
       - qdrant
       - redis
+      - docling
     restart: unless-stopped
 
   qdrant:
@@ -52,6 +54,15 @@ services:
       - "${QDRANT_PORT:-6333}:6333"
     volumes:
       - fambrain-qdrant:/qdrant/storage
+    restart: unless-stopped
+
+  # PDF / Office → markdown。本机是 Intel Mac + Python 3.13，没有 torch 轮子，所以 Docling 跑在容器里。
+  docling:
+    image: quay.io/docling-project/docling-serve-cpu:latest
+    ports:
+      - "${DOCLING_PORT:-5001}:5001"
+    environment:
+      DOCLING_SERVE_ENABLE_UI: "0"
     restart: unless-stopped
 
   redis:
@@ -77,9 +88,11 @@ services:
       QDRANT_URL: http://qdrant:6333
       REDIS_URL: redis://redis:6379
       REDIS_ENABLED: "1"
+      DOCLING_SERVE_URL: http://docling:5001
     depends_on:
       - qdrant
       - redis
+      - docling
     restart: unless-stopped
 
 volumes:

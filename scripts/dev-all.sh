@@ -95,6 +95,19 @@ else
   echo "[dev] Qdrant 已就绪 (docker compose)"
 fi
 
+# --- Docling（PDF / Office）。容器没起来时解析会报未就绪 ---
+DOCLING_PORT="${DOCLING_PORT:-5001}"
+if curl -sf "http://127.0.0.1:${DOCLING_PORT}/health" >/dev/null 2>&1; then
+  echo "[dev] 复用已在运行的 Docling"
+elif command -v docker >/dev/null 2>&1; then
+  echo "[dev] 正在通过 Docker 启动 Docling..."
+  if ! docker compose up -d docling; then
+    echo "[dev] Docling 没能启动。PDF / Office 解析不可用。" >&2
+  fi
+else
+  echo "[dev] Docling 未就绪且未安装 Docker。PDF / Office 解析不可用。" >&2
+fi
+
 # --- Redis（REDIS_URL 或 REDIS_ENABLED=1 时启用；否则 memory fallback）---
 REDIS_STARTED_BY_DEV=0
 set +e

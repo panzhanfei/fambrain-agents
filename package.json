@@ -13,6 +13,7 @@
     "eval:brain": "cd apps/brain && uv run python scripts/run_eval.py",
     "dev:brain-worker": "cd apps/brain && uv run taskiq worker fambrain_worker.broker:broker",
     "qdrant:server": "docker compose up -d qdrant",
+    "docling:server": "docker compose up -d docling",
     "redis:server": "docker compose up -d redis",
     "build": "pnpm --filter @fambrain/db generate && pnpm --filter @fambrain/web build",
     "start": "pnpm --filter @fambrain/web start",

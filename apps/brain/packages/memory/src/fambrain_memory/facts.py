@@ -39,6 +39,27 @@ def remember_fact(corpus_user_id: str, key: str, value: str, label: str | None =
         return
 
 
+def reindex_fact_memories() -> dict:
+    """Drop the memory collection and embed each stored fact again."""
+    from fambrain_memory.qdrant_store import add_user_memory, reset_memory_collection
+
+    reset_memory_collection()
+    written = 0
+    for user_id, bucket in _load().items():
+        if not isinstance(bucket, dict):
+            continue
+        for key, item in bucket.items():
+            if not isinstance(item, dict):
+                continue
+            value = item.get("value")
+            if not isinstance(value, str) or not value.strip():
+                continue
+            label = item.get("label") if isinstance(item.get("label"), str) else key
+            add_user_memory(user_id, f"{label}是{value}", {"userFactKey": key})
+            written += 1
+    return {"count": written}
+
+
 def recall_fact(corpus_user_id: str, key: str) -> dict | None:
     bucket = _load().get(corpus_user_id) or {}
     found = bucket.get(key)

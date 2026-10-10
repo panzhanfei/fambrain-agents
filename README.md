@@ -14,7 +14,7 @@ cp .env.example .env
 pnpm run db:migrate
 pnpm run db:generate
 # Chat 用 openai（DeepSeek）时配 OPENAI_API_KEY 或 DEEPSEEK_API_KEY，并设 CHAT_PROVIDER=openai
-# embed / OCR 仍需 Ollama，例如：ollama pull nomic-embed-text
+# embed / OCR 仍需 Ollama，例如：ollama pull bge-m3
 # 本地 Qdrant：pnpm run qdrant:server（或 pnpm dev 自动 docker compose up qdrant）
 pnpm run dev    # 一键：Qdrant + Redis + Web + Brain Service
 ```

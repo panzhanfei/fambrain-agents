@@ -3,7 +3,7 @@ from __future__ import annotations
 import httpx
 from fambrain_kernel.config import get_settings
 
-from fambrain_corpus.qdrant import EMBEDDING_MODEL
+from fambrain_corpus.qdrant import DENSE_VECTOR_SIZE, EMBEDDING_MODEL
 
 
 def _model() -> str:
@@ -22,9 +22,16 @@ def embed_texts(texts: list[str], *, timeout: float = 60) -> list[list[float]]:
     )
     response.raise_for_status()
     vectors = response.json().get("embeddings") or []
-    return [list(vector) for vector in vectors]
+    embedded = [list(vector) for vector in vectors]
+    model = _model()
+    for vector in embedded:
+        if len(vector) != DENSE_VECTOR_SIZE:
+            raise RuntimeError(
+                f"模型 {model} 返回 {len(vector)} 维，集合需要 {DENSE_VECTOR_SIZE} 维"
+            )
+    return embedded
 
 
-def embed_query(text: str, *, timeout: float = 20) -> list[float]:
+def embed_query(text: str, *, timeout: float = 120) -> list[float]:
     vectors = embed_texts([text], timeout=timeout)
     return vectors[0] if vectors else []

@@ -12,10 +12,36 @@ from fambrain_corpus.qdrant import (
 from fambrain_kernel.config import get_settings
 
 
+def _dense_size(client: httpx.Client, collection: str) -> int | None:
+    response = client.get(f"{get_settings().resolved_qdrant_url}/collections/{collection}")
+    if response.status_code != 200:
+        return None
+    vectors = response.json().get("result", {}).get("config", {}).get("params", {}).get("vectors")
+    if not isinstance(vectors, dict):
+        return None
+    if "size" in vectors:
+        return int(vectors["size"])
+    named = vectors.get(DENSE_VECTOR_NAME)
+    if isinstance(named, dict) and "size" in named:
+        return int(named["size"])
+    return None
+
+
+def reset_memory_collection() -> None:
+    collection = memory_collection_name()
+    httpx.delete(
+        f"{get_settings().resolved_qdrant_url}/collections/{collection}",
+        timeout=30,
+    )
+
+
 def _ensure(client: httpx.Client, collection: str) -> None:
-    if collection_exists(collection):
+    size = _dense_size(client, collection) if collection_exists(collection) else None
+    if size == DENSE_VECTOR_SIZE:
         return
     base = get_settings().resolved_qdrant_url
+    if size is not None:
+        client.delete(f"{base}/collections/{collection}")
     created = client.put(
         f"{base}/collections/{collection}",
         json={"vectors": {DENSE_VECTOR_NAME: {"size": DENSE_VECTOR_SIZE, "distance": "Cosine"}}},

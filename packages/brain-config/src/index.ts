@@ -36,7 +36,7 @@ const envSchema = z
                 (s) => s === undefined || s.length > 0,
                 "if set, must be non-empty"
             ),
-        /** 向量嵌入模型（RAG / 入库）；不设置则用 nomic-embed-text */
+        /** 向量嵌入模型（RAG / 入库）；不设置则用 bge-m3（1024 维） */
         OLLAMA_MODEL_EMBED: z
             .string()
             .optional()
@@ -158,7 +158,7 @@ const buildConfig = (parsed: z.infer<typeof envSchema>): BrainServiceConfig => {
     const baseUrl = parsed.OLLAMA_BASE_URL.replace(/\/+$/, "");
     const defaultModel = parsed.OLLAMA_MODEL;
     const intake = parsed.OLLAMA_MODEL_INTAKE_COORDINATOR || defaultModel;
-    const embed = parsed.OLLAMA_MODEL_EMBED || "nomic-embed-text";
+    const embed = parsed.OLLAMA_MODEL_EMBED || "bge-m3";
     let openai: OpenAiCompatChatConfig | null = null;
     if (parsed.CHAT_PROVIDER === "openai") {
         const openaiBase = (

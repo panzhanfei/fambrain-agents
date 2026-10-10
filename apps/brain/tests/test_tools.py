@@ -31,4 +31,4 @@ def test_invoke_registered_transport():
 
 def test_corpus_collection_name():
     assert corpus_collection_name("user-1") == "fambrain_corpus_user-1"
-    assert EMBEDDING_MODEL == "nomic-embed-text"
+    assert EMBEDDING_MODEL == "bge-m3"

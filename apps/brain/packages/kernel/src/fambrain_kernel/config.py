@@ -59,7 +59,7 @@ class Settings(BaseSettings):
     ollama_port: Annotated[int, Field(validation_alias="OLLAMA_PORT")] = 11434
     ollama_model: Annotated[str, Field(validation_alias="OLLAMA_MODEL")] = "qwen2.5:14b"
     ollama_embed_model: Annotated[str, Field(validation_alias="OLLAMA_MODEL_EMBED")] = (
-        "nomic-embed-text"
+        "bge-m3"
     )
     mem0_enabled: Annotated[str, Field(validation_alias="MEM0_ENABLED")] = "true"
     mem0_collection: Annotated[str, Field(validation_alias="MEM0_COLLECTION")] = (
@@ -70,6 +70,9 @@ class Settings(BaseSettings):
     qdrant_url: Annotated[str, Field(validation_alias="QDRANT_URL")] = ""
     qdrant_host: Annotated[str, Field(validation_alias="QDRANT_HOST")] = "127.0.0.1"
     qdrant_port: Annotated[int, Field(validation_alias="QDRANT_PORT")] = 6333
+    docling_serve_url: Annotated[str, Field(validation_alias="DOCLING_SERVE_URL")] = (
+        "http://127.0.0.1:5001"
+    )
     langsmith_api_key: Annotated[str, Field(validation_alias="LANGSMITH_API_KEY")] = ""
     langchain_api_key: Annotated[str, Field(validation_alias="LANGCHAIN_API_KEY")] = ""
     langsmith_project: Annotated[str, Field(validation_alias="LANGSMITH_PROJECT")] = "fambrain"

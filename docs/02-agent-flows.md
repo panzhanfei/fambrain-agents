@@ -234,7 +234,7 @@ flowchart TD
 | 4 | 读正文 | UTF-8 读全文 | `index-one-user.ts` | `readFile()` |
 | 5 | 分块 | 按 `##` 切；无 `##` 整篇 1 块；`id_`=user:path:index | `split-markdown.ts` | `splitMarkdownToDocuments()` |
 | 6 | metadata | path / title / chunkIndex / corpusUserId | `chunk-metadata.ts` | `chunkMetadataSchema.parse()` |
-| 7 | embed | `OLLAMA_MODEL_EMBED`（默认 nomic-embed-text）；**p-limit** 限制并发批次数 | `embed-batches.ts`, `index-one-user.ts` | `mapEmbedBatches()`, `getEmbedIndexOptions()` |
+| 7 | embed | `OLLAMA_MODEL_EMBED`（默认 bge-m3，1024 维）；**p-limit** 限制并发批次数 | `embed-batches.ts`, `index-one-user.ts` | `mapEmbedBatches()`, `getEmbedIndexOptions()` |
 | 8 | 存 Qdrant | collection=`fambrain_corpus_<userId>`；named vectors `dense`+`sparse`；跳过 README/模板 | `index-one-user.ts`、`packages/corpus` | `indexCorpusDocuments()` |
 | 9 | 日志 | JSON 结构化 | `index.ts` | `indexerLogger`（pino） |
 

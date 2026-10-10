@@ -93,13 +93,12 @@ pnpm eval:brain
 cd apps/brain && uv run python scripts/run_eval.py --case G1,G2,K1
 ```
 
-Taskiq 任务 `index_corpus` 按 `##` 切 markdown，用 `OLLAMA_MODEL_EMBED`（默认 `nomic-embed-text`，768 维，和现有集合一致）写入 `fambrain_corpus_<userId>` 的 dense + sparse。
+Taskiq 任务 `index_corpus` 按 `##` 切 markdown，用 `OLLAMA_MODEL_EMBED`（默认 `bge-m3`，1024 维）写入 `fambrain_corpus_<userId>` 的 dense + sparse。换模型后要删掉旧集合再整库重嵌。
 
 ## 还没做完的部分
 
-- 嵌入模型跟现有集合走 `nomic-embed-text`（768）。换成 bge-m3 要整库重嵌入，维度对不上。
 - 用户事实的精确召回仍以 JSON 为准；向量记忆是同一条 remember 的第二份，不是 mem0 SDK 的抽取链路。
-- PDF / Office 解析会走 Docling；当前环境没装 Docling，markdown 和 txt 可以直接读。
+- PDF / Office 走 Docling Serve（`docker compose up -d docling`，默认 `http://127.0.0.1:5001`）。markdown 和 txt 直接读原文。本机 Intel Mac 的 Python 3.13 没有 PyTorch 轮子，所以不把 docling 装进 venv。
 - 文件 HITL 还没有 `jobId` 暂停后恢复，所以 golden 里的 vaultWorkspace 探测没跑。`POST /pipeline/pause` 只把当前 turn 标成暂停。
 - 同问缓存、列举「更多」续页游标、`synthesize_merge` 的 free 夹具探测也没跑。
 - 网页对话打到 `BRAIN_SERVICE_URL`。Python 监听同一个 `BRAIN_SERVICE_PORT`，现有账号不用迁。

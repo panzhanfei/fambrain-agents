@@ -71,7 +71,7 @@ cp .env.example .env
 pnpm run db:migrate
 pnpm run db:generate
 # Chat 走 openai（DeepSeek）时：CHAT_PROVIDER=openai + OPENAI_API_KEY（或 DEEPSEEK_API_KEY）
-# embed / OCR 仍需 Ollama，例如：ollama pull nomic-embed-text
+# embed / OCR 仍需 Ollama，例如：ollama pull bge-m3
 # 仅本地 Chat：CHAT_PROVIDER=ollama 且 ollama pull qwen2.5:14b
 # 本地 Qdrant：pnpm run qdrant:server，或让 pnpm dev 自动 docker compose up qdrant
 # pnpm dev 会自动启动/等待 Qdrant、Redis（可 Docker 拉起），并起 Web + Brain Service
@@ -148,7 +148,7 @@ pnpm run dev
 | `OPENAI_BASE_URL` | `CHAT_PROVIDER=openai` 时建议 | OpenAI 兼容根地址，默认 `https://api.deepseek.com` |
 | `OPENAI_API_KEY` / `DEEPSEEK_API_KEY` | `CHAT_PROVIDER=openai` 时必填 | 二选一；DeepSeek 用同一套 Chat Completions |
 | `OPENAI_MODEL` | 否 | openai 时 Intake 模型，默认 `deepseek-v4-flash` |
-| `OLLAMA_MODEL_EMBED` | 否 | 嵌入模型；不配则 `nomic-embed-text`（知识入库师 embed 用） |
+| `OLLAMA_MODEL_EMBED` | 否 | 嵌入模型；不配则 `bge-m3`（1024 维，入库和检索用） |
 | `INDEX_EMBED_CONCURRENCY` | 否 | 入库 embed 同时进行的批次数，默认 `3`（上限 16） |
 | `INDEX_EMBED_BATCH_SIZE` | 否 | 每批 chunk 数，默认 `8`（上限 64） |
 | `QDRANT_URL` | 否 | Qdrant HTTP 地址；不设则由 `QDRANT_HOST` + `QDRANT_PORT` 拼接 |
