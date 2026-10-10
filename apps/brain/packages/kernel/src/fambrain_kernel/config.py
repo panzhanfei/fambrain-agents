@@ -30,7 +30,7 @@ def _env_file() -> Path | None:
 
 
 class Settings(BaseSettings):
-    """Process settings. Postgres URL is `FAMBRAIN_DATABASE_URL`, not Prisma's `DATABASE_URL`."""
+    """Process settings. Accounts live in Prisma SQLite via `DATABASE_URL`."""
 
     model_config = SettingsConfigDict(
         env_file=_env_file(),
@@ -39,10 +39,6 @@ class Settings(BaseSettings):
     )
 
     environment: Annotated[str, Field(validation_alias="FAMBRAIN_ENV")] = "development"
-    database_url: Annotated[str, Field(validation_alias="FAMBRAIN_DATABASE_URL")] = (
-        "postgresql+psycopg://fambrain:fambrain@127.0.0.1:5432/fambrain"
-    )
-    db_create_all: Annotated[bool, Field(validation_alias="FAMBRAIN_DB_CREATE_ALL")] = False
     jwt_secret: Annotated[str, Field(validation_alias="JWT_SECRET")] = ""
     auth_cookie_name: str = "fambrain_token"
     auth_cookie_secure: Annotated[str, Field(validation_alias="AUTH_COOKIE_SECURE")] = ""

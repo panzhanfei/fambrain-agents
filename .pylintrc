@@ -1,0 +1,8 @@
+[MAIN]
+# orjson is a C extension. Pylint only sees dumps after the module is loaded.
+extension-pkg-allow-list=orjson
+max-line-length=120
+
+[TYPECHECK]
+# alembic.context and alembic.op inject their members through a module proxy.
+ignored-modules=alembic.context,alembic.op

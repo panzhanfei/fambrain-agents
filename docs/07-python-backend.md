@@ -11,16 +11,14 @@
 | 语言 / 工具 | Python 3.13、uv、ruff |
 | HTTP | FastAPI、uvicorn。SSE 帧与 Node 一致：`event` / `data` / `\n\n` |
 | 配置 | pydantic-settings，读仓库根 `.env` |
-| 数据 | PostgreSQL、SQLAlchemy 2 异步、Alembic、psycopg 3 |
+| 数据 | Prisma SQLite（`DATABASE_URL`），与网站同一份库 |
 | 缓存 / 队列 | Redis、Taskiq |
-| 认证 | 现有账号 bcrypt，新注册 Argon2id；PyJWT（HS256）；cookie 名 `fambrain_token` |
+| 认证 | bcrypt；PyJWT（HS256）；cookie 名 `fambrain_token` |
 | 日志 | structlog |
 | 编排 | Intake JSON → PathPlan。聊天走 `CHAT_PROVIDER=ollama\|openai`，openai 默认 DeepSeek |
 | 检索 | 按 `queryType` / topics 收窄文档类型后做词法检索。Qdrant collection 名仍是 `fambrain_corpus_<userId>` |
 
-Postgres 连接串用 `FAMBRAIN_DATABASE_URL`。Prisma 的 `DATABASE_URL` 仍是 SQLite，不要拿去给 SQLAlchemy。
-
-网页登录、会话、成员审核仍走 Next.js + Prisma。Python 用同一把 `JWT_SECRET` 验 token，再按 id 读 SQLite 里的 `User`（cuid、bcrypt）。Postgres 里的 UUID 只给 Python 自己的 `/auth/register`。
+账号和会话只在 Prisma SQLite，环境变量是 `DATABASE_URL`。网站和 Python 读写同一份 `User`、`Conversation`。新密码用 bcrypt，网站登录可以直接验。
 
 ## 目录
 
@@ -28,12 +26,11 @@ Postgres 连接串用 `FAMBRAIN_DATABASE_URL`。Prisma 的 `DATABASE_URL` 仍是
 apps/brain/
 ├── apps/api/                 # fambrain_api：HTTP
 ├── apps/worker/              # fambrain_worker：Taskiq，语料入库
-├── packages/kernel/          # 配置、Postgres、认证、Redis（对应 packages/auth、db、brain-config、infra）
+├── packages/kernel/          # 配置、认证、Redis
 ├── packages/corpus/          # 路径、文档类型、Qdrant hybrid、切分入库
 ├── packages/memory/          # 结构化事实 + Qdrant 记忆
 ├── packages/agentflow/       # Intake、PathPlan 执行、工具
 ├── scripts/run_eval.py
-├── alembic/
 └── tests/
 ```
 
@@ -61,16 +58,7 @@ pnpm eval:brain
 pnpm dev:brain
 ```
 
-Postgres：
-
-```bash
-docker compose --profile python up -d postgres
-# .env
-# FAMBRAIN_DATABASE_URL=postgresql+psycopg://fambrain:fambrain@127.0.0.1:5432/fambrain
-pnpm db:migrate:py
-```
-
-`FAMBRAIN_DB_CREATE_ALL=1` 会在启动时 `create_all`，只给测试和空库用。正式库走 Alembic。
+账号库就是仓库里的 Prisma SQLite（`.env` 的 `DATABASE_URL`）。不需要再起一份 Postgres。
 
 ## 已接通
 

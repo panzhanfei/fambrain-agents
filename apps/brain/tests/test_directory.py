@@ -1,7 +1,7 @@
 import sqlite3
 
 from fambrain_kernel.auth.directory import lookup_user
-from fambrain_kernel.db.models import UserStatus
+from fambrain_kernel.auth.roles import UserStatus
 
 
 def test_lookup_cuid_from_prisma_sqlite(tmp_path, monkeypatch):

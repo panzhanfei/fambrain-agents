@@ -23,8 +23,8 @@ def upgrade() -> None:
         sa.Column("corpus_user_id", sa.Uuid(), nullable=True),
         sa.Column("role", sa.String(16), nullable=False),
         sa.Column("status", sa.String(16), nullable=False),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now()),
-        sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.func.now()),
+        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("CURRENT_TIMESTAMP")),
+        sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.text("CURRENT_TIMESTAMP")),
     )
     op.create_table(
         "conversations",
@@ -34,8 +34,8 @@ def upgrade() -> None:
         sa.Column("pinned", sa.Boolean(), nullable=False),
         sa.Column("session_summary", sa.Text(), nullable=True),
         sa.Column("session_summary_at", sa.DateTime(timezone=True), nullable=True),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now()),
-        sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.func.now()),
+        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("CURRENT_TIMESTAMP")),
+        sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.text("CURRENT_TIMESTAMP")),
     )
     op.create_index("ix_conversations_user_id", "conversations", ["user_id"])
     op.create_table(
@@ -50,7 +50,7 @@ def upgrade() -> None:
         sa.Column("role", sa.String(16), nullable=False),
         sa.Column("content", sa.Text(), nullable=False),
         sa.Column("metadata", sa.JSON(), nullable=True),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now()),
+        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("CURRENT_TIMESTAMP")),
     )
     op.create_index("ix_messages_conversation_id", "messages", ["conversation_id"])
     op.create_table(
@@ -71,8 +71,8 @@ def upgrade() -> None:
         sa.Column("status", sa.String(32), nullable=False),
         sa.Column("result", sa.JSON(), nullable=True),
         sa.Column("paused_answer", sa.Text(), nullable=True),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now()),
-        sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.func.now()),
+        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("CURRENT_TIMESTAMP")),
+        sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.text("CURRENT_TIMESTAMP")),
     )
     op.create_index("ix_file_jobs_conversation_id", "file_jobs", ["conversation_id"])
     op.create_table(
@@ -93,8 +93,8 @@ def upgrade() -> None:
         sa.Column("entries", sa.JSON(), nullable=False),
         sa.Column("steps", sa.JSON(), nullable=False),
         sa.Column("error", sa.Text(), nullable=True),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now()),
-        sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.func.now()),
+        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("CURRENT_TIMESTAMP")),
+        sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.text("CURRENT_TIMESTAMP")),
     )
     op.create_index("ix_turn_traces_user_id", "turn_traces", ["user_id"])
     op.create_index("ix_turn_traces_conversation_id", "turn_traces", ["conversation_id"])

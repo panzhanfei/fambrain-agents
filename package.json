@@ -11,7 +11,6 @@
     "dev:brain": "cd apps/brain && uv run fambrain-api",
     "test:brain": "cd apps/brain && uv run pytest -q",
     "eval:brain": "cd apps/brain && uv run python scripts/run_eval.py",
-    "db:migrate:py": "cd apps/brain && uv run alembic upgrade head",
     "dev:brain-worker": "cd apps/brain && uv run taskiq worker fambrain_worker.broker:broker",
     "qdrant:server": "docker compose up -d qdrant",
     "redis:server": "docker compose up -d redis",

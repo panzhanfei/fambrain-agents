@@ -25,16 +25,14 @@ def _apply_cookie(response: JSONResponse, request: Request, token: str) -> None:
 @router.post("/register")
 async def register(request: Request) -> JSONResponse:
     raw = await request.json()
-    async with request.app.state.session_factory() as session:
-        result = await register_user(session, request.app.state.settings, raw, client_ip(request))
+    result = await register_user(request.app.state.settings, raw, client_ip(request))
     return _auth_response(request, result)
 
 
 @router.post("/login")
 async def login(request: Request) -> JSONResponse:
     raw = await request.json()
-    async with request.app.state.session_factory() as session:
-        result = await login_user(session, request.app.state.settings, raw, client_ip(request))
+    result = await login_user(request.app.state.settings, raw, client_ip(request))
     return _auth_response(request, result)
 
 

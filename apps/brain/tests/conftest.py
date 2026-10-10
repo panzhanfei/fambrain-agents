@@ -6,6 +6,7 @@ import pytest
 from fambrain_agentflow.chat.client import ScriptedChat
 from fambrain_agentflow.types import IntakeDecision
 from fambrain_api.main import create_app
+from fambrain_kernel.auth.directory import ensure_account_db
 from fambrain_kernel.auth.national_id import is_valid_chinese_resident_id
 from fambrain_kernel.config import Settings
 from httpx import ASGITransport, AsyncClient
@@ -30,11 +31,12 @@ def alt_national_id() -> str:
 
 
 @pytest.fixture
-async def app(tmp_path):
+async def app(tmp_path, monkeypatch):
+    database = tmp_path / "dev.db"
+    monkeypatch.setenv("DATABASE_URL", f"file:{database}")
+    ensure_account_db()
     settings = Settings(
         environment="test",
-        database_url=f"sqlite+aiosqlite:///{tmp_path / 'test.db'}",
-        db_create_all=True,
         jwt_secret="test-secret-key-must-be-32-bytes-long",
         auth_failure_jitter_min_ms=0,
         auth_failure_jitter_max_ms=0,

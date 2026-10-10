@@ -6,7 +6,7 @@ This version has breaking changes — APIs, conventions, and file structure may 
 ## Monorepo 布局
 
 - **Web + BFF**：`apps/web/`（Next.js，`output: standalone`）
-- **Brain 服务**：`apps/brain/`（uv workspace，FastAPI）。监听 `BRAIN_SERVICE_PORT`（默认仍可由 `BRAIN_PY_PORT` 覆盖）。Web 通过 `BRAIN_SERVICE_URL` 调用。账号认 Prisma SQLite 里的 cuid 和同一把 `JWT_SECRET`。Postgres 只用 `FAMBRAIN_DATABASE_URL`。评测：`pnpm eval:brain`。说明见 `docs/07-python-backend.md`
+- **Brain 服务**：`apps/brain/`（uv workspace，FastAPI）。监听 `BRAIN_SERVICE_PORT`（默认仍可由 `BRAIN_PY_PORT` 覆盖）。Web 通过 `BRAIN_SERVICE_URL` 调用。账号、会话都在 Prisma SQLite（`DATABASE_URL`），和网站同一份库、同一把 `JWT_SECRET`。评测：`pnpm eval:brain`。说明见 `docs/07-python-backend.md`
 - **DB / Auth / Brain 公共包**：`packages/*`
 - **环境变量**：仓库根目录 `.env` 唯一来源；端口用 `PORT` / `OLLAMA_HOST`+`OLLAMA_PORT` / `QDRANT_HOST`+`QDRANT_PORT`（完整 URL 变量可覆盖）
 - **Chat**：`CHAT_PROVIDER=ollama|openai` **须显式切换**；openai 默认 DeepSeek。失败不静默回落 14b。embed / OCR / Mem0 仍走 Ollama。**不接入 Dify**

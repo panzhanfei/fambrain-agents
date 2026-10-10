@@ -4,7 +4,9 @@ _HASHER = PasswordHash.recommended()
 
 
 def hash_password(plain: str) -> str:
-    return _HASHER.hash(plain)
+    import bcrypt
+
+    return bcrypt.hashpw(plain.encode(), bcrypt.gensalt()).decode()
 
 
 def verify_password(plain: str, hashed: str) -> bool:
