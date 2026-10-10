@@ -40,19 +40,6 @@ async def require_actor(request: Request) -> DirectoryUser:
     return directory
 
 
-async def require_user(request: Request) -> DirectoryUser:
-    return await require_actor(request)
-
-
-def client_ip(request: Request) -> str:
-    forwarded = request.headers.get("x-forwarded-for")
-    if forwarded:
-        return forwarded.split(",")[0].strip()
-    if request.client is None:
-        return "local"
-    return request.client.host
-
-
 def new_turn_id() -> str:
     return str(uuid.uuid4())
 

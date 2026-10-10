@@ -41,10 +41,7 @@ class Settings(BaseSettings):
     environment: Annotated[str, Field(validation_alias="FAMBRAIN_ENV")] = "development"
     jwt_secret: Annotated[str, Field(validation_alias="JWT_SECRET")] = ""
     auth_cookie_name: str = "fambrain_token"
-    auth_cookie_secure: Annotated[str, Field(validation_alias="AUTH_COOKIE_SECURE")] = ""
     token_max_age_sec: int = 60 * 60 * 24 * 14
-    auth_failure_jitter_min_ms: int = 180
-    auth_failure_jitter_max_ms: int = 520
     brain_py_host: Annotated[str, Field(validation_alias="FAMBRAIN_HOST")] = "127.0.0.1"
     brain_py_port: Annotated[
         int,
@@ -88,13 +85,6 @@ class Settings(BaseSettings):
         if self.environment == "production":
             raise RuntimeError("JWT_SECRET 长度至少 24（生产环境必需）")
         return "fambrain-dev-only-secret-change-me!!"
-
-    @property
-    def cookie_secure(self) -> bool:
-        """Whether the auth cookie should be marked Secure."""
-        if self.auth_cookie_secure.strip() == "0":
-            return False
-        return self.environment == "production"
 
     @property
     def resolved_openai_api_key(self) -> str:

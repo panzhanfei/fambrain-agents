@@ -11,8 +11,6 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
-from fambrain_api.routes.auth import router as auth_router
-from fambrain_api.routes.conversations import router as conversations_router
 from fambrain_api.routes.documents import router as documents_router
 from fambrain_api.routes.enumeration import router as enumeration_router
 from fambrain_api.routes.health import router as health_router
@@ -43,8 +41,6 @@ def create_app(settings: Settings | None = None, chat: ChatCompleter | None = No
         return JSONResponse({"error": "字段校验失败"}, status_code=400)
 
     app.include_router(health_router)
-    app.include_router(auth_router)
-    app.include_router(conversations_router)
     app.include_router(documents_router)
     app.include_router(enumeration_router)
     app.include_router(pipeline_router)

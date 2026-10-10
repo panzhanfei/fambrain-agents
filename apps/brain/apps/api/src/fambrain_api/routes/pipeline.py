@@ -3,7 +3,6 @@ from __future__ import annotations
 import orjson
 from fambrain_agentflow.pipeline.stream import iter_pipeline_events
 from fambrain_agentflow.types import PipelineStreamBody
-from fambrain_kernel.auth.service import format_validation_error
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel, Field, ValidationError
@@ -11,6 +10,18 @@ from pydantic import BaseModel, Field, ValidationError
 from fambrain_api.deps import ensure_active, require_actor
 
 router = APIRouter(prefix="/pipeline")
+
+
+def format_validation_error(exc: ValidationError) -> str:
+    """Join field validation messages into one string."""
+    parts: list[str] = []
+    for item in exc.errors():
+        message = str(item["msg"])
+        prefix = "Value error, "
+        if message.startswith(prefix):
+            message = message[len(prefix) :]
+        parts.append(message)
+    return "；".join(parts) or "字段校验失败"
 
 
 class CancelBody(BaseModel):

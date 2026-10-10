@@ -1,33 +1,35 @@
 from __future__ import annotations
 
 import json
+import sqlite3
 
 import pytest
 from fambrain_agentflow.chat.client import ScriptedChat
 from fambrain_agentflow.types import IntakeDecision
 from fambrain_api.main import create_app
-from fambrain_kernel.auth.directory import ensure_account_db
-from fambrain_kernel.auth.national_id import is_valid_chinese_resident_id
+from fambrain_kernel.auth.directory import ensure_account_db, prisma_sqlite_path
+from fambrain_kernel.auth.jwt import sign_auth_token
 from fambrain_kernel.config import Settings
 from httpx import ASGITransport, AsyncClient
 
 
-def valid_national_id() -> str:
-    base = "11010119900101001"
-    for char in "0123456789X":
-        candidate = base + char
-        if is_valid_chinese_resident_id(candidate):
-            return candidate
-    raise RuntimeError("no valid national id")
+def seed_active_user(user_id: str = "user-1") -> str:
+    path = prisma_sqlite_path()
+    assert path is not None
+    with sqlite3.connect(path) as connection:
+        connection.execute(
+            """
+            INSERT INTO User (id, username, passwordHash, displayName, role, status, corpusUserId)
+            VALUES (?, ?, '', '展飞', 'ADMIN', 'ACTIVE', ?)
+            """,
+            (user_id, user_id, user_id),
+        )
+    return user_id
 
 
-def alt_national_id() -> str:
-    base = "11010119920202001"
-    for char in "0123456789X":
-        candidate = base + char
-        if is_valid_chinese_resident_id(candidate):
-            return candidate
-    raise RuntimeError("no valid national id")
+def bearer(app, user_id: str) -> dict[str, str]:
+    token = sign_auth_token(app.state.settings, user_id)
+    return {"Authorization": f"Bearer {token}"}
 
 
 @pytest.fixture
@@ -38,8 +40,6 @@ async def app(tmp_path, monkeypatch):
     settings = Settings(
         environment="test",
         jwt_secret="test-secret-key-must-be-32-bytes-long",
-        auth_failure_jitter_min_ms=0,
-        auth_failure_jitter_max_ms=0,
         redis_url="",
         chat_provider="ollama",
     )
@@ -54,16 +54,6 @@ async def client(app):
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as http:
         yield http
-
-
-def register_payload(username: str, national_id: str) -> dict:
-    return {
-        "username": username,
-        "password": "password-1",
-        "nationalId": national_id,
-        "displayName": "展飞",
-        "relationToPrincipal": "本人",
-    }
 
 
 def parse_sse(raw: str) -> list[tuple[str, dict]]:

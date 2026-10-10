@@ -13,12 +13,12 @@
 | 配置 | pydantic-settings，读仓库根 `.env` |
 | 数据 | Prisma SQLite（`DATABASE_URL`），与网站同一份库 |
 | 缓存 / 队列 | Redis、Taskiq |
-| 认证 | bcrypt；PyJWT（HS256）；cookie 名 `fambrain_token` |
+| 认证 | 只校验网站签发的 JWT（HS256，cookie 名 `fambrain_token`），再按 id 读 SQLite 里的用户 |
 | 日志 | structlog |
 | 编排 | Intake JSON → PathPlan。聊天走 `CHAT_PROVIDER=ollama\|openai`，openai 默认 DeepSeek |
 | 检索 | 按 `queryType` / topics 收窄文档类型后做词法检索。Qdrant collection 名仍是 `fambrain_corpus_<userId>` |
 
-账号和会话只在 Prisma SQLite，环境变量是 `DATABASE_URL`。网站和 Python 读写同一份 `User`、`Conversation`。新密码用 bcrypt，网站登录可以直接验。
+账号和会话由网站写在 Prisma SQLite（`DATABASE_URL`）。Python 只按 JWT 里的用户 id 读取 `User`，不提供注册、登录或会话接口。
 
 ## 目录
 
@@ -65,9 +65,6 @@ pnpm dev:brain
 | 接口 | 行为 |
 |---|---|
 | `GET /health` | 进程、数据库 `SELECT 1`、Redis（配了才 ping） |
-| `POST /auth/register` | 第一个用户是 `ADMIN` + `ACTIVE`，其余 `MEMBER` + `PENDING`。身份证校验与现网同一套 |
-| `POST /auth/login` / `POST /auth/logout` / `GET /auth/me` | cookie `fambrain_token` |
-| `GET/POST /conversations` | 当前用户的会话 |
 | `POST /pipeline/stream` | Bearer JWT。`actorUserId` 必须等于 token 里的用户。SSE 事件含 `step`、`assistant`、`assistant_message`、`pipeline_timing`、`pipeline_done` |
 | `POST /pipeline/cancel` | 按 `turnId` 取消；没有这个 turn 时 `aborted: false` |
 | `POST /pipeline/pause` | 按 `turnId` 暂停；没有这个 turn 时 `paused: false` |

@@ -2,7 +2,7 @@ from fambrain_agentflow.chat.client import ScriptedChat
 from fambrain_agentflow.pipeline.graph import build_pipeline
 from fambrain_agentflow.types import IntakeDecision
 
-from tests.conftest import parse_sse, register_payload, valid_national_id
+from tests.conftest import bearer, parse_sse, seed_active_user
 
 
 async def test_clarify_uses_model_reply():
@@ -19,14 +19,11 @@ async def test_empty_question_clarifies_without_model_text():
     assert result["answer"] == "请把问题说得更具体一些。"
 
 
-async def test_pipeline_stream_matches_sse_contract(client):
-    await client.post("/auth/register", json=register_payload("alice", valid_national_id()))
-    me = await client.get("/auth/me")
-    user_id = me.json()["id"]
-    token = client.cookies.get("fambrain_token")
+async def test_pipeline_stream_matches_sse_contract(client, app):
+    user_id = seed_active_user()
     response = await client.post(
         "/pipeline/stream",
-        headers={"Authorization": f"Bearer {token}"},
+        headers=bearer(app, user_id),
         json={
             "history": [{"role": "user", "content": "家里的情况"}],
             "context": {
@@ -52,12 +49,11 @@ async def test_pipeline_stream_matches_sse_contract(client):
     assert assistant
 
 
-async def test_pipeline_rejects_other_actor(client):
-    await client.post("/auth/register", json=register_payload("alice", valid_national_id()))
-    token = client.cookies.get("fambrain_token")
+async def test_pipeline_rejects_other_actor(client, app):
+    user_id = seed_active_user()
     response = await client.post(
         "/pipeline/stream",
-        headers={"Authorization": f"Bearer {token}"},
+        headers=bearer(app, user_id),
         json={
             "history": [{"role": "user", "content": "家里的情况"}],
             "context": {
@@ -71,12 +67,11 @@ async def test_pipeline_rejects_other_actor(client):
     assert response.status_code == 403
 
 
-async def test_cancel_unknown_turn(client):
-    await client.post("/auth/register", json=register_payload("alice", valid_national_id()))
-    token = client.cookies.get("fambrain_token")
+async def test_cancel_unknown_turn(client, app):
+    user_id = seed_active_user()
     response = await client.post(
         "/pipeline/cancel",
-        headers={"Authorization": f"Bearer {token}"},
+        headers=bearer(app, user_id),
         json={"turnId": "11111111-1111-1111-1111-111111111111", "reason": "cancelled"},
     )
     assert response.status_code == 200
