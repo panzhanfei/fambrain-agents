@@ -16,6 +16,7 @@ class ResumePayload(BaseModel):
     job_id: str = Field(alias="jobId", min_length=1)
     prompt: str | None = None
     name: str | None = Field(default=None, max_length=120)
+    after_content: str | None = Field(default=None, alias="afterContent", max_length=200_000)
 
     model_config = {"populate_by_name": True}
 

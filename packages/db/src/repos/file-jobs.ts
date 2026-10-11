@@ -71,6 +71,7 @@ const mapRow = (row: {
 });
 
 export const createFileJob = async (input: {
+  id?: string;
   conversationId: string;
   corpusUserId: string;
   fileThreadId: string;
@@ -81,6 +82,7 @@ export const createFileJob = async (input: {
 }): Promise<FileJobRow> => {
   const row = await prisma.fileJob.create({
     data: {
+      ...(input.id ? { id: input.id } : {}),
       conversationId: input.conversationId,
       corpusUserId: input.corpusUserId,
       fileThreadId: input.fileThreadId,
@@ -88,7 +90,7 @@ export const createFileJob = async (input: {
       sourceTurnId: input.sourceTurnId ?? null,
       task: input.task,
       envelope: input.envelope,
-      status: "running",
+      status: "paused",
     },
   });
   return mapRow(row);

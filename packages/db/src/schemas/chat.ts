@@ -50,6 +50,7 @@ export const postConversationMessageBodySchema = z.object({
             jobId: z.string().min(1),
             prompt: z.string().optional(),
             name: z.string().max(120).optional(),
+            afterContent: z.string().max(200_000).optional(),
         })
         .optional(),
 });

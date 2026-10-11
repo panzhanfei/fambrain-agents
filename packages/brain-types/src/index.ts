@@ -52,6 +52,8 @@ export type AgentPipelineContext = {
         prompt?: string;
         /** 写回闸门：弹窗确认的文件基名（不含 .txt） */
         name?: string;
+        /** 编辑弹窗保存的全文；有则把打开改成写入 */
+        afterContent?: string;
     };
     /** /documents/extract 返回的批次 id（入库时取原件） */
     attachmentBatchId?: string;

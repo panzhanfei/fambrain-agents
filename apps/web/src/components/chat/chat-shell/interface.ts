@@ -36,7 +36,18 @@ export type PatchConversationOk = {
   updatedAt: string;
 };
 
+export type VaultEditorModalState = {
+  path: string;
+  prompt: string;
+  sourceMessageId?: string;
+  text: string;
+  error: string | null;
+  loading: boolean;
+};
+
 export type VaultSaveNameModalState = {
+  /** save：写回闸门；file / folder：工作台新建，确认后才落盘 */
+  purpose: "save" | "file" | "folder";
   prompt: string;
   displayText: string;
   sourceMessageId?: string;
@@ -118,6 +129,10 @@ export type ChatShellModel = {
   setVaultSaveNameDraft: (name: string) => void;
   closeVaultSaveNameModal: () => void;
   confirmVaultSaveName: () => void;
+  vaultEditor: VaultEditorModalState | null;
+  setVaultEditorText: (text: string) => void;
+  closeVaultEditor: () => void;
+  confirmVaultEditor: () => void;
   staleActionKeys: Set<string>;
   turnInFlight: boolean;
   hasLiveStreamUi: boolean;

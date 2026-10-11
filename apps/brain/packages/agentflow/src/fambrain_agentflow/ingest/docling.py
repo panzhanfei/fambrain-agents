@@ -17,19 +17,21 @@ def parse_to_markdown(path: Path) -> str:
         return path.read_text(encoding="utf-8", errors="ignore")
     settings = get_settings()
     url = f"{settings.docling_serve_url.rstrip('/')}/v1/convert/file"
+    # httpx 0.28 在带 files 时仍把 list[tuple] 当成原始 body。
+    # 不传 ocr_lang：当前 CPU 镜像没有中文 OCR 权重，强制 zh+en 会让整单失败。
+    # 有文字层的 PDF 直接抽文本；扫描页走镜像里已装的默认识别。
+    form = {
+        "to_formats": "md",
+        "image_export_mode": "placeholder",
+        "include_images": "false",
+        "do_ocr": "true",
+    }
     try:
         with path.open("rb") as handle:
             response = httpx.post(
                 url,
                 files={"files": (path.name, handle, "application/octet-stream")},
-                data=[
-                    ("to_formats", "md"),
-                    ("image_export_mode", "placeholder"),
-                    ("include_images", "false"),
-                    ("do_ocr", "true"),
-                    ("ocr_lang", "zh"),
-                    ("ocr_lang", "en"),
-                ],
+                data=form,
                 timeout=180,
             )
     except httpx.HTTPError as exc:

@@ -14,7 +14,16 @@ from fambrain_api.deps import ensure_active, require_actor
 
 router = APIRouter(prefix="/documents")
 
-_CATEGORIES = {"personal", "projects", "experience"}
+_CATEGORIES = ("personal", "projects", "experience")
+
+
+def _category_summary(files: list[dict]) -> dict[str, int]:
+    summary = {name: 0 for name in _CATEGORIES}
+    for item in files:
+        category = item.get("category")
+        if item.get("ok") and category in summary:
+            summary[category] += 1
+    return summary
 
 
 def _safe_name(name: str) -> str:
@@ -140,6 +149,6 @@ async def upload(request: Request) -> JSONResponse:
             "files": files,
             "indexed": indexed,
             "indexError": index_error,
-            "categorySummary": {category: sum(1 for item in files if item["ok"])},
+            "categorySummary": _category_summary(files),
         }
     )

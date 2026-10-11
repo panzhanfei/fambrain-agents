@@ -17,10 +17,15 @@ export type DocUploadBatchResult = {
     files: DocUploadFileResult[];
 };
 
+const countOf = (value: number | undefined): number =>
+    typeof value === "number" && Number.isFinite(value) ? value : 0;
+
 export const formatDocUploadSummary = (result: DocUploadBatchResult): string => {
     const okCount = result.files.filter((f) => f.ok).length;
     const failedCount = result.files.length - okCount;
-    const { personal, projects, experience } = result.categorySummary;
+    const personal = countOf(result.categorySummary?.personal);
+    const projects = countOf(result.categorySummary?.projects);
+    const experience = countOf(result.categorySummary?.experience);
     let msg = `已导入 ${okCount} 个文件：个人 ${personal} · 项目 ${projects} · 经历 ${experience}`;
     if (result.indexed)
         msg += "，向量库已更新";
@@ -59,9 +64,9 @@ const mergeBatchResults = (parts: DocUploadBatchResult[]): DocUploadBatchResult 
     const files: DocUploadFileResult[] = [];
     let indexed = false;
     for (const part of parts) {
-        categorySummary.personal += part.categorySummary.personal;
-        categorySummary.projects += part.categorySummary.projects;
-        categorySummary.experience += part.categorySummary.experience;
+        categorySummary.personal += countOf(part.categorySummary?.personal);
+        categorySummary.projects += countOf(part.categorySummary?.projects);
+        categorySummary.experience += countOf(part.categorySummary?.experience);
         files.push(...part.files);
         indexed = indexed || part.indexed;
     }

@@ -85,6 +85,24 @@ export const chatActionStaleGroupKey = (prompt: string): string | null => {
   return null;
 };
 
+/** 新建 txt / 文件夹要先弹窗填名字，确认后才 Resume。 */
+export const vaultCreatePromptKind = (
+  prompt: string
+): "file" | "folder" | null => {
+  const t = prompt.trim();
+  if (t.startsWith(VAULT_WS.createFilePrefix)) return "file";
+  if (t.startsWith(VAULT_WS.createFolderPrefix)) return "folder";
+  return null;
+};
+
+/** 打开/编辑按钮里的原文相对路径；不是文件按钮则 null。 */
+export const vaultOpenPath = (prompt: string): string | null => {
+  const t = prompt.trim();
+  if (!t.startsWith(VAULT_WS.openPrefix)) return null;
+  const rel = t.slice(VAULT_WS.openPrefix.length).trim();
+  return rel || null;
+};
+
 export const isVaultWorkspaceActionPrompt = (prompt: string): boolean => {
   const t = prompt.trim();
   if (t === "我的原文库") return true;
@@ -120,6 +138,26 @@ export const isChatActionExpired = (
         : Date.parse(createdAt);
   if (!Number.isFinite(ms)) return false;
   return Date.now() - ms > CHAT_ACTION_PENDING_TTL_MS;
+};
+
+/** 新的一屏工作台出来后，上一轮的新建/目录/结束标记不再禁用这屏按钮。 */
+export const withoutVaultBoardStaleKeys = (
+  keys: ReadonlySet<string>
+): Set<string> => {
+  let changed = false;
+  const next = new Set<string>();
+  for (const key of keys) {
+    if (
+      key === "vault:done" ||
+      key.startsWith("vault:create:") ||
+      key.startsWith("vault:cwd:")
+    ) {
+      changed = true;
+      continue;
+    }
+    next.add(key);
+  }
+  return changed ? next : (keys as Set<string>);
 };
 
 export const actionIsStale = (

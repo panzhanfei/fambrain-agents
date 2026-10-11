@@ -11,6 +11,9 @@ import {
   isVaultWorkspaceActionPrompt,
   messageActionStaleKey,
   sanitizeClientVaultSaveBasename,
+  vaultCreatePromptKind,
+  vaultOpenPath,
+  withoutVaultBoardStaleKeys,
   type ChatActionPayload,
 } from "@/lib/chat/action-lifecycle";
 import {
@@ -51,6 +54,7 @@ import type {
   MessageTiming,
   PatchConversationOk,
   PendingAttachment,
+  VaultEditorModalState,
   VaultSaveNameModalState,
 } from "./interface";
 import { STEP_RUNNING_LABELS } from "./timing";
@@ -82,6 +86,9 @@ export const useChatShell = ({
   );
   const [vaultSaveNameModal, setVaultSaveNameModal] =
     useState<VaultSaveNameModalState | null>(null);
+  const [vaultEditor, setVaultEditor] = useState<VaultEditorModalState | null>(
+    null
+  );
   const [staleActionConvId, setStaleActionConvId] = useState(
     activeConversationId
   );
@@ -493,6 +500,14 @@ export const useChatShell = ({
     }
     return null;
   }, [messages]);
+  useEffect(() => {
+    const latest = messages.find((m) => m.id === latestAssistantMessageId);
+    if (latest?.pauseKind !== "vault_wait") return;
+    setStaleActionKeys((prev) => {
+      const next = withoutVaultBoardStaleKeys(prev);
+      return next === prev ? prev : next;
+    });
+  }, [latestAssistantMessageId, messages]);
   const turnInFlight = sendBusy || streamingTurnId != null;
   const hasLiveStreamUi =
     Boolean(streamAnswerPreview.trim()) || streamBlocks.length > 0;
@@ -651,6 +666,7 @@ export const useChatShell = ({
           jobId: string;
           prompt?: string;
           name?: string;
+          afterContent?: string;
         };
         omitUserBubble?: boolean;
       }
@@ -1285,15 +1301,62 @@ export const useChatShell = ({
 
   const handleChatAction = useCallback(
     (action: ChatActionPayload) => {
-      if (action.clientHandler === "open_editor") {
+      if (action.clientHandler === "open_editor" || vaultOpenPath(action.prompt)) {
+        const rel = vaultOpenPath(action.prompt);
+        if (!rel) return;
+        setVaultEditor({
+          path: rel,
+          prompt: action.prompt,
+          sourceMessageId: action.sourceMessageId,
+          text: "",
+          error: null,
+          loading: true,
+        });
+        void fetch(`/api/vault/file?path=${encodeURIComponent(rel)}`, {
+          credentials: "same-origin",
+        })
+          .then(async (res) => {
+            const body = (await res.json()) as { text?: string; error?: string };
+            setVaultEditor((prev) => {
+              if (!prev || prev.path !== rel) return prev;
+              if (!res.ok) {
+                return {
+                  ...prev,
+                  loading: false,
+                  error: body.error || "读不到这个文件",
+                };
+              }
+              return { ...prev, loading: false, text: body.text ?? "" };
+            });
+          })
+          .catch(() => {
+            setVaultEditor((prev) =>
+              prev && prev.path === rel
+                ? { ...prev, loading: false, error: "读不到这个文件" }
+                : prev
+            );
+          });
         return;
       }
       if (action.clientHandler === "vault_save_name") {
         setVaultSaveNameModal({
+          purpose: "save",
           prompt: action.prompt,
           displayText: action.displayText ?? action.label,
           sourceMessageId: action.sourceMessageId,
           name: `untitled-${Date.now().toString(36)}`,
+          error: null,
+        });
+        return;
+      }
+      const createKind = vaultCreatePromptKind(action.prompt);
+      if (createKind) {
+        setVaultSaveNameModal({
+          purpose: createKind,
+          prompt: action.prompt,
+          displayText: action.displayText ?? action.label,
+          sourceMessageId: action.sourceMessageId,
+          name: "",
           error: null,
         });
         return;
@@ -1307,6 +1370,7 @@ export const useChatShell = ({
         displayContent: action.displayText ?? action.label,
         staleGroupKey: chatActionStaleGroupKey(action.prompt),
         staleMessageId: action.sourceMessageId ?? null,
+        ...(resumeVault ? { omitUserBubble: true } : {}),
         ...(resumeVault && jobId
           ? {
               resume: {
@@ -1338,7 +1402,10 @@ export const useChatShell = ({
     if (!name) {
       setVaultSaveNameModal({
         ...modal,
-        error: "请填写文件名（不要含 / 或 ..）",
+        error:
+          modal.purpose === "folder"
+            ? "请填写文件夹名（不要含 / 或 ..）"
+            : "请填写文件名（不要含 / 或 ..）",
       });
       return;
     }
@@ -1346,12 +1413,19 @@ export const useChatShell = ({
       ? messagesRef.current.find((m) => m.id === modal.sourceMessageId)
           ?.fileJobId
       : undefined;
-    if (!jobId) return;
+    if (!jobId) {
+      setVaultSaveNameModal({
+        ...modal,
+        error: "请先重新打开原文库",
+      });
+      return;
+    }
     setVaultSaveNameModal(null);
     void sendMessageWithContent(modal.prompt, {
-      displayContent: modal.displayText,
+      displayContent: modal.purpose === "save" ? modal.displayText : name,
       staleGroupKey: chatActionStaleGroupKey(modal.prompt),
       staleMessageId: modal.sourceMessageId ?? null,
+      omitUserBubble: true,
       resume: {
         kind: "vault_action",
         jobId,
@@ -1360,6 +1434,40 @@ export const useChatShell = ({
       },
     });
   }, [sendMessageWithContent, vaultSaveNameModal]);
+
+  const setVaultEditorText = useCallback((text: string) => {
+    setVaultEditor((prev) => (prev ? { ...prev, text, error: null } : prev));
+  }, []);
+
+  const closeVaultEditor = useCallback(() => {
+    setVaultEditor(null);
+  }, []);
+
+  const confirmVaultEditor = useCallback(() => {
+    const modal = vaultEditor;
+    if (!modal || modal.loading) return;
+    const jobId = modal.sourceMessageId
+      ? messagesRef.current.find((m) => m.id === modal.sourceMessageId)
+          ?.fileJobId
+      : undefined;
+    if (!jobId) {
+      setVaultEditor({ ...modal, error: "请先重新打开原文库" });
+      return;
+    }
+    setVaultEditor(null);
+    void sendMessageWithContent(modal.prompt, {
+      displayContent: `保存 ${modal.path}`,
+      staleGroupKey: chatActionStaleGroupKey(modal.prompt),
+      staleMessageId: modal.sourceMessageId ?? null,
+      omitUserBubble: true,
+      resume: {
+        kind: "vault_action",
+        jobId,
+        prompt: modal.prompt,
+        afterContent: modal.text,
+      },
+    });
+  }, [sendMessageWithContent, vaultEditor]);
 
   const sendMessage = useCallback(async () => {
     await sendMessageWithContent(draft);
@@ -1937,6 +2045,10 @@ export const useChatShell = ({
     setVaultSaveNameDraft,
     closeVaultSaveNameModal,
     confirmVaultSaveName,
+    vaultEditor,
+    setVaultEditorText,
+    closeVaultEditor,
+    confirmVaultEditor,
     staleActionKeys,
     turnInFlight,
     hasLiveStreamUi,

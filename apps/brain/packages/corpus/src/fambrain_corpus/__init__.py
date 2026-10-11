@@ -12,6 +12,7 @@ from fambrain_corpus.qdrant import (
 )
 from fambrain_corpus.retrieve import search_corpus
 from fambrain_corpus.sparse import text_to_sparse_vector, tokenize_for_recall
+from fambrain_corpus.workspace import materialize_workspace_txt, purge_workspace_txts
 
 __all__ = [
     "EMBEDDING_MODEL",
@@ -19,6 +20,8 @@ __all__ = [
     "collection_exists",
     "corpus_collection_name",
     "index_user_corpus",
+    "materialize_workspace_txt",
+    "purge_workspace_txts",
     "infer_doc_kind",
     "is_relations_roster",
     "kinds_for_query",

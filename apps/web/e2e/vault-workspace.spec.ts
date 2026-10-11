@@ -85,7 +85,11 @@ test.describe("vault workspace UI", () => {
       .getByRole("button", { name: /新建 txt/i, disabled: false })
       .last()
       .click();
-    const created = page.getByText(/已新建\s+\S+\.txt|Created\s+\S+\.txt/i).first();
+    const dialog = page.getByRole("dialog");
+    await expect(dialog.getByRole("heading", { name: "新建 txt" })).toBeVisible();
+    await dialog.getByLabel("文件名").fill(`pw-${stamp}`);
+    await dialog.getByRole("button", { name: "确定" }).click();
+    const created = page.getByText(new RegExp(`已新建\\s+pw-${stamp}\\.txt`)).first();
     await expect(created).toBeVisible({ timeout: 90_000 });
     await expect(page.getByRole("button", { name: "停止" })).toHaveCount(0, {
       timeout: 60_000,

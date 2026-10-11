@@ -20,6 +20,11 @@ from fambrain_agentflow.tools.execute import (
     run_weather,
 )
 from fambrain_agentflow.types import ChatTurn, PipelineContext, latest_user_text
+from fambrain_agentflow.vault.workspace import (
+    is_direct_vault_turn,
+    iter_workspace_events,
+    vault_request_from_turn,
+)
 
 _ANALYST = (
     "你是 FamBrain 的归纳回答。只用下面给出的检索、列举、记忆和工具结果作答，使用简体中文。"
@@ -165,6 +170,26 @@ async def iter_full_turn(
     answer = ""
     hit_paths: list[str] = []
     try:
+        direct = (
+            vault_request_from_turn(question, context.resume, None)
+            if is_direct_vault_turn(question, context.resume)
+            else None
+        )
+        if direct is not None:
+            resume_job_id = (
+                context.resume.job_id
+                if context.resume is not None and context.resume.kind == "vault_action"
+                else None
+            )
+            for event in iter_workspace_events(
+                turn_id,
+                context.corpus_user_id,
+                direct,
+                steps_done,
+                job_id=resume_job_id,
+            ):
+                yield event
+            return
         for name in ("prepare_turn_start", "intake"):
             yield _step_event(name, "running")
             yield _step_event(name, "done")
@@ -178,6 +203,12 @@ async def iter_full_turn(
                 json_mode=True,
             )
             plan = parse_intake(raw)
+        vault_step = next((step for step in plan.steps if step.kind == "vault_workspace"), None)
+        vault_request = vault_request_from_turn(question, None, vault_step) if vault_step else None
+        if vault_request is not None:
+            for event in iter_workspace_events(turn_id, context.corpus_user_id, vault_request, steps_done):
+                yield event
+            return
         if plan.user_fact_key and plan.user_fact_value:
             remember_fact(
                 context.corpus_user_id,

@@ -131,13 +131,23 @@ export const ChatShell = (props: ChatShellProps) => {
                 id="vault-save-name-title"
                 className="text-[15px] font-semibold text-[#111827]"
               >
-                写入原文库
+                {model.vaultSaveNameModal.purpose === "file"
+                  ? "新建 txt"
+                  : model.vaultSaveNameModal.purpose === "folder"
+                    ? "新建文件夹"
+                    : "写入原文库"}
               </h2>
               <p className="mt-1 text-[13px] text-[#6b7280]">
-                文件会保存为 .txt。关闭弹窗不会取消本轮确认。
+                {model.vaultSaveNameModal.purpose === "folder"
+                  ? "确定后在当前目录新建文件夹。"
+                  : model.vaultSaveNameModal.purpose === "file"
+                    ? "确定后保存为 .txt。"
+                    : "文件会保存为 .txt。关闭弹窗不会写入。"}
               </p>
               <label className="mt-3 block text-[12px] text-[#6b7280]">
-                文件名
+                {model.vaultSaveNameModal.purpose === "folder"
+                  ? "文件夹名"
+                  : "文件名"}
                 <input
                   autoFocus
                   value={model.vaultSaveNameModal.name}
@@ -153,7 +163,11 @@ export const ChatShell = (props: ChatShellProps) => {
                     }
                   }}
                   className="mt-1 w-full rounded-lg border border-[#e5e7eb] px-3 py-2 text-[14px] text-[#111827] outline-none focus:border-[#818cf8]"
-                  placeholder="untitled"
+                  placeholder={
+                    model.vaultSaveNameModal.purpose === "folder"
+                      ? "例如 notes"
+                      : "例如 备忘"
+                  }
                 />
               </label>
               {model.vaultSaveNameModal.error ? (
@@ -167,14 +181,64 @@ export const ChatShell = (props: ChatShellProps) => {
                   onClick={model.closeVaultSaveNameModal}
                   className="rounded-full px-3 py-1.5 text-[13px] text-[#6b7280] hover:bg-[#f3f4f6]"
                 >
-                  关闭
+                  取消
                 </button>
                 <button
                   type="button"
                   onClick={model.confirmVaultSaveName}
                   className="rounded-full bg-[#4f46e5] px-3 py-1.5 text-[13px] font-medium text-white hover:bg-[#4338ca]"
                 >
-                  确认
+                  确定
+                </button>
+              </div>
+            </div>
+          </div>
+        ) : null}
+        {model.vaultEditor ? (
+          <div
+            className="absolute inset-0 z-30 flex items-center justify-center bg-black/30 p-4"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="vault-editor-title"
+          >
+            <div className="flex max-h-[80vh] w-full max-w-lg flex-col rounded-2xl bg-white p-4 shadow-xl">
+              <h2
+                id="vault-editor-title"
+                className="text-[15px] font-semibold text-[#111827]"
+              >
+                编辑 {model.vaultEditor.path}
+              </h2>
+              <p className="mt-1 text-[13px] text-[#6b7280]">
+                保存后写回原文库，工作台仍停在这一条。
+              </p>
+              <textarea
+                autoFocus
+                value={model.vaultEditor.text}
+                disabled={model.vaultEditor.loading}
+                onChange={(e) => model.setVaultEditorText(e.target.value)}
+                className="mt-3 min-h-40 w-full flex-1 resize-y rounded-lg border border-[#e5e7eb] px-3 py-2 text-[14px] leading-relaxed text-[#111827] outline-none focus:border-[#818cf8] disabled:bg-[#f9fafb]"
+                placeholder={model.vaultEditor.loading ? "正在读取…" : "在这里写正文"}
+              />
+              {model.vaultEditor.error ? (
+                <p className="mt-2 text-[12px] text-red-600">
+                  {model.vaultEditor.error}
+                </p>
+              ) : null}
+              <div className="mt-4 flex justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={model.closeVaultEditor}
+                  className="rounded-full px-3 py-1.5 text-[13px] text-[#6b7280] hover:bg-[#f3f4f6]"
+                >
+                  取消
+                </button>
+                <button
+                  type="button"
+                  onClick={model.confirmVaultEditor}
+                  disabled={model.vaultEditor.loading}
+                  className="rounded-full bg-[#4f46e5] px-3 py-1.5 text-[13px] font-medium text-white hover:bg-[#4338ca] disabled:opacity-40"
+                >
+                  保存
                 </button>
               </div>
             </div>

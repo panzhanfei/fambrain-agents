@@ -11,8 +11,10 @@ import {
   appendAssistantMessage,
   appendUserMessage,
   attachFileJobFollowup,
+  createFileJob,
   disableConversationActionBlocks,
   getFileJob,
+  markFileJobTerminal,
   maybeUpdateConversationTitle,
   pausedSaveOfferJobIds,
   updateAssistantMessage,
@@ -138,10 +140,18 @@ const runTurnPipeline = async (input: {
     console.error("disableConversationActionBlocks failed", e);
   }
 
+  const silentVaultResume = resume?.kind === "vault_action";
   let userRow: { id: string; role: string; content: string };
   if (options.existingUserMessageId) {
     userRow = {
       id: options.existingUserMessageId,
+      role: "user",
+      content: options.userContent,
+    };
+    inflight.userMessageId = userRow.id;
+  } else if (silentVaultResume) {
+    userRow = {
+      id: `vault-resume:${turnId}`,
       role: "user",
       content: options.userContent,
     };
@@ -158,14 +168,16 @@ const runTurnPipeline = async (input: {
       options.userContent
     );
   }
-  send("meta", {
-    turnId,
-    userMessage: {
-      id: userRow.id,
-      role: mapRole(userRow.role),
-      content: userRow.content,
-    },
-  });
+  if (!silentVaultResume) {
+    send("meta", {
+      turnId,
+      userMessage: {
+        id: userRow.id,
+        role: mapRole(userRow.role),
+        content: userRow.content,
+      },
+    });
+  }
 
   // 编辑重跑：history 已含末条 user；普通发送：再拼当前问
   const historyWithUser: DbChatTurn[] = options.existingUserMessageId
@@ -252,7 +264,23 @@ const runTurnPipeline = async (input: {
       send("paused", ev);
       const jobId = ev.jobId;
       if (jobId && !followupCommitted) {
-        const existing = await getFileJob(jobId);
+        let existing = await getFileJob(jobId);
+        if (!existing) {
+          try {
+            existing = await createFileJob({
+              id: jobId,
+              conversationId: options.conversationId,
+              corpusUserId: options.pipelineContext.corpusUserId,
+              fileThreadId: `fambrain-file:${options.conversationId}:1`,
+              fileGeneration: 1,
+              sourceTurnId: turnId,
+              task: "workspace",
+              envelope: { task: "workspace" },
+            });
+          } catch (e) {
+            console.error("createFileJob failed", e);
+          }
+        }
         const meta = {
           taskPaused: true,
           pauseKind: "vault_wait" as const,
@@ -339,6 +367,32 @@ const runTurnPipeline = async (input: {
   }
 
   const isPaused = Boolean(pipelineResult?.paused);
+  if (
+    !followupCommitted &&
+    silentVaultResume &&
+    resume?.jobId &&
+    !isPaused
+  ) {
+    const existing = await getFileJob(resume.jobId);
+    if (existing?.followupMessageId) {
+      const closing = pipelineResult?.answer ?? "";
+      await updateAssistantMessage(existing.followupMessageId, closing, {
+        taskPaused: false,
+        fileJobId: resume.jobId,
+      });
+      try {
+        await markFileJobTerminal({
+          id: resume.jobId,
+          status: "completed",
+          answer: closing,
+        });
+      } catch (e) {
+        console.error("markFileJobTerminal failed", e);
+      }
+      followupRowId = existing.followupMessageId;
+      followupCommitted = true;
+    }
+  }
   if (followupCommitted && followupRowId) {
     inflight.finalized = true;
     send("ready", {
